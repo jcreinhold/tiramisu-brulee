@@ -44,7 +44,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
     ],
     description="A 2D and 3D PyTorch implementation of the Tiramisu CNN",
     install_requires=requirements,
