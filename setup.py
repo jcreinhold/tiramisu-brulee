@@ -20,13 +20,14 @@ setup_requirements = [
 
 test_requirements = [
     'nibabel',
+    'pandas',
     'pytest>=3',
     'pytorch-lightning',
     'torchio',
 ]
 
 extras_requirements = {
-    'medical': ['nibabel', 'torchio'],
+    'medical': ['nibabel', 'pandas', 'torchio'],
     'lightning': ['pytorch-lightning']
 }
 

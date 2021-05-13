@@ -17,9 +17,27 @@
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 #
+import mock
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath('..'))
+
+MOCK_MODULES = [
+    'nibabel',
+    'numpy',
+    'pandas',
+    'pytorch_lightning',
+    'pytorch_lightning.utilities',
+    'pytorch_lightning.utilities.parsing',
+    'torch',
+    'torch.nn',
+    'torch.nn.functional',
+    'torchio',
+]
+
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.Mock()
 
 import tiramisu_brulee
 
@@ -77,7 +95,6 @@ pygments_style = 'sphinx'
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
 
-
 # -- Options for HTML output -------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
@@ -96,12 +113,10 @@ html_theme = 'alabaster'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-
 # -- Options for HTMLHelp output ---------------------------------------
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'tiramisu_bruleedoc'
-
 
 # -- Options for LaTeX output ------------------------------------------
 
@@ -132,7 +147,6 @@ latex_documents = [
      'Jacob Reinhold', 'manual'),
 ]
 
-
 # -- Options for manual page output ------------------------------------
 
 # One entry per manual page. List of tuples
@@ -142,7 +156,6 @@ man_pages = [
      'tiramisu-brulee Documentation',
      [author], 1)
 ]
-
 
 # -- Options for Texinfo output ----------------------------------------
 
@@ -157,6 +170,3 @@ texinfo_documents = [
      'One line description of project.',
      'Miscellaneous'),
 ]
-
-
-
