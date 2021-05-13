@@ -7,7 +7,7 @@ tiramisu-brûlée
         :target: https://pypi.python.org/pypi/tiramisu_brulee
 
 .. image:: https://img.shields.io/travis/jcreinhold/tiramisu_brulee.svg
-        :target: https://travis-ci.com/jcreinhold/tiramisu_brulee
+        :target: https://travis-ci.com/jcreinhold/tiramisu-brulee
 
 .. image:: https://readthedocs.org/projects/tiramisu-brulee/badge/?version=latest
         :target: https://tiramisu-brulee.readthedocs.io/en/latest/?version=latest
