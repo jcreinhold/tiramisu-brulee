@@ -35,6 +35,8 @@ Alternatively, you can download the source and run::
 Basic Usage
 -----------
 
+Import the 2D or 3D version with::
+
     from tiramisu_brulee import Tiramisu2D, Tiramisu3D
 
 
