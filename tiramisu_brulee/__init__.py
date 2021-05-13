@@ -2,7 +2,7 @@
 
 __author__ = """Jacob Reinhold"""
 __email__ = 'jcreinhold@gmail.com'
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 from .loss import *
 from .model import *
