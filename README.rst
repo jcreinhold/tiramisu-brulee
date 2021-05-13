@@ -37,7 +37,7 @@ Basic Usage
 
 Import the 2D or 3D version with::
 
-    from tiramisu_brulee import Tiramisu2D, Tiramisu3D
+    from tiramisu_brulee import Tiramisu2d, Tiramisu3d
 
 
 References
