@@ -1,12 +1,12 @@
 ===============
-tiramisu-brûlée
+tiramisù-brûlée
 ===============
 
 
 .. image:: https://img.shields.io/pypi/v/tiramisu_brulee.svg
-        :target: https://pypi.python.org/pypi/tiramisu_brulee
+        :target: https://pypi.python.org/pypi/tiramisu-brulee
 
-.. image:: https://img.shields.io/travis/jcreinhold/tiramisu_brulee.svg
+.. image:: https://img.shields.io/travis/jcreinhold/tiramisu-brulee.svg
         :target: https://travis-ci.com/jcreinhold/tiramisu-brulee
 
 .. image:: https://readthedocs.org/projects/tiramisu-brulee/badge/?version=latest
@@ -35,16 +35,27 @@ Alternatively, you can download the source and run::
 Basic Usage
 -----------
 
-Import the 2D or 3D version with::
+Import the 2D or 3D version with:
+
+.. code-block:: python
 
     from tiramisu_brulee import Tiramisu2d, Tiramisu3d
 
 
 References
----------------
+----------
 
 [1] Jégou, Simon, et al. "The one hundred layers tiramisu: Fully convolutional densenets for semantic segmentation."
 CVPR. 2017.
 
 [2] Zhang, Huahong, et al. "Multiple sclerosis lesion segmentation with Tiramisu and 2.5D stacked slices." International
 Conference on Medical Image Computing and Computer-Assisted Intervention. Springer, Cham, 2019.
+
+Miscellaneous
+-------------
+
+Why is the name tiramisù-brûlée? Well, tiramisù is named after the neural network [1] whose name is inspired by
+the dessert; however, tiramisu—by itself—was already taken as a package on PyPI. I added brûlée to get around the
+existence of that package and because this package is written in PyTorch (torch -> burnt). Plus brûlée in English is
+often associated with the dessert crème brûlée. Why combine an Italian word (tiramisù) with a French word (brûlée)?
+Because I didn't think about it until after I already deployed the package to PyPI.

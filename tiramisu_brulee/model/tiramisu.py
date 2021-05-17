@@ -48,7 +48,7 @@ class Tiramisu(nn.Module):
                  up_blocks: List[int] = (5, 5, 5, 5, 5),
                  bottleneck_layers: int = 5,
                  growth_rate: int = 16,
-                 out_chans_first_conv: int = 48,
+                 first_conv_out_channels: int = 48,
                  dropout_rate: float = 0.2):
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
@@ -60,9 +60,9 @@ class Tiramisu(nn.Module):
 
         self.first_conv = nn.Sequential(
             self._pad(first_kernel_size // 2),
-            self._conv(in_channels, out_chans_first_conv,
+            self._conv(in_channels, first_conv_out_channels,
                        first_kernel_size, bias=False))
-        cur_channels_count = out_chans_first_conv
+        cur_channels_count = first_conv_out_channels
 
         ## Downsampling path ##
         self.dense_down = nn.ModuleList([])

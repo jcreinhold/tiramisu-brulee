@@ -27,8 +27,17 @@ test_requirements = [
 ]
 
 extras_requirements = {
-    'medical': ['nibabel', 'pandas', 'torchio'],
-    'lightning': ['pytorch-lightning']
+    'medical': [
+        'lesion-metrics',
+        'nibabel',
+        'pandas',
+        'scikit-image',
+        'torchio',
+    ],
+    'lightning': [
+        'pytorch-lightning',
+        'torchmetrics',
+    ]
 }
 
 setup(
@@ -46,11 +55,11 @@ setup(
     ],
     description="A 2D and 3D PyTorch implementation of the Tiramisu CNN",
     install_requires=requirements,
-    extras_requires=requirements,
+    extras_requires=extras_requirements,
     license="Apache Software License 2.0",
     long_description=readme + '\n\n' + history,
     include_package_data=True,
-    keywords='tiramisu_brulee',
+    keywords='tiramisu, segmentation, neural network, convolutional, pytorch',
     name='tiramisu_brulee',
     packages=find_packages(include=['tiramisu_brulee', 'tiramisu_brulee.*']),
     setup_requires=setup_requirements,

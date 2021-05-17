@@ -14,38 +14,39 @@ __all__ = ['csv_to_subjectlist',
 
 from typing import *
 
-import contextlib
 from glob import glob
-import os
+from logging import getLogger
 from os.path import join
 
 import pandas as pd
 import torch
-
-with open(os.devnull, "w") as f:
-    with contextlib.redirect_stdout(f):
-        import torchio
-
-Type = Union[torchio.LABEL, torchio.INTENSITY, None]
+import torchio
 
 VALID_NAMES = ('ct', 'flair', 'label', 'pd',
                't1', 't1c', 't2', 'weight', 'div')
+
+logger = getLogger(__name__)
+
+
+def _get_type(name: str):
+    name_ = name.lower()
+    if name_ == "label":
+        type = torchio.LABEL
+    elif name_ == "weight" or name_ == "div":
+        type = 'float'
+    elif name_ in VALID_NAMES:
+        type = torchio.INTENSITY
+    else:
+        logger.warning(f"{name} not in known {VALID_NAMES}. "
+                       f"Assuming an non-label image type.")
+        type = torchio.INTENSITY
+    return type
 
 
 def glob_ext(path: str, ext: str = '*.nii*') -> List[str]:
     """ grab all `ext` files in a directory and sort them for consistency """
     fns = sorted(glob(join(path, ext)))
     return fns
-
-
-def _check_type(name: str) -> Type:
-    if name == "label":
-        type = torchio.LABEL
-    elif name == "weight":
-        type = None
-    else:
-        type = torchio.INTENSITY
-    return type
 
 
 def csv_to_subjectlist(filename: str) -> List[torchio.Subject]:
@@ -75,9 +76,9 @@ def csv_to_subjectlist(filename: str) -> List[torchio.Subject]:
         subject_name = row[0]
         data = {}
         for name in names:
-            type = _check_type(name)
+            type = _get_type(name)
             val = row[1][name]
-            if name == "weight" or name == "div":
+            if type == 'float':
                 data[name] = torch.tensor(val, dtype=torch.float32)
             else:
                 data[name] = torchio.Image(val, type=type)
