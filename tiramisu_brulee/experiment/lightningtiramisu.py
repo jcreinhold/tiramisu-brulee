@@ -70,9 +70,5 @@ class LightningTiramisu(pl.LightningModule):
         err_msg = f"Network dim. {self.network_dim} invalid."
         return ValueError(err_msg)
 
-    @staticmethod
-    def criterion(x: Tensor, y: Tensor) -> Tensor:
-        raise NotImplementedError
-
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)

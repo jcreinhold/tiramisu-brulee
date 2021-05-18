@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.experiment.msseg
+tiramisu_brulee.experiment.lesion_seg.util
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 16, 2021
@@ -9,15 +9,15 @@ Created on: May 16, 2021
 
 __all__ = [
     'bbox3D',
-    'l1_segmentation_loss',
+    'extract_and_average',
     'minmax_scale_batch',
-    'mse_segmentation_loss',
+    'reshape_for_broadcasting',
     'to_np',
     'setup_log',
     'split_filename',
 ]
 
-from typing import Tuple
+from typing import List, Tuple
 
 import logging
 import os
@@ -25,7 +25,6 @@ import os
 import numpy as np
 import torch
 from torch import Tensor
-from torch.nn import functional as F
 
 
 def minmax_scale_batch(x: Tensor) -> Tensor:
@@ -41,14 +40,8 @@ def to_np(x: Tensor) -> np.ndarray:
     return x.detach().cpu().numpy()
 
 
-def l1_segmentation_loss(pred: Tensor, target: Tensor, reduction: str = 'mean') -> Tensor:
-    pred = torch.sigmoid(pred)
-    return F.l1_loss(pred, target, reduction=reduction)
-
-
-def mse_segmentation_loss(pred: Tensor, target: Tensor, reduction: str = 'mean') -> Tensor:
-    pred = torch.sigmoid(pred)
-    return F.mse_loss(pred, target, reduction=reduction)
+def extract_and_average(dicts: List[dict], field: str) -> list:
+    return torch.cat([d[field] for d in dicts]).mean()
 
 
 def bbox3D(img: np.ndarray, pad: int = 0) -> Tuple[int, int, int, int, int, int]:
@@ -63,6 +56,11 @@ def bbox3D(img: np.ndarray, pad: int = 0) -> Tuple[int, int, int, int, int, int]
     return (max(rmin - pad, 0), min(rmax + pad, i),
             max(cmin - pad, 0), min(cmax + pad, j),
             max(zmin - pad, 0), min(zmax + pad, k))
+
+
+def reshape_for_broadcasting(x: Tensor, ndim: int) -> Tensor:
+    dims = [1 for _ in range(ndim - 1)]
+    return x.view(-1, *dims)
 
 
 def split_filename(filepath: str) -> Tuple[str, str, str]:

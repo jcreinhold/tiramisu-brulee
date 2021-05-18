@@ -35,7 +35,7 @@ extras_requirements = {
         'torchio',
     ],
     'lightning': [
-        'pytorch-lightning',
+        'pytorch-lightning[all]',
         'torchmetrics',
     ]
 }
@@ -54,6 +54,11 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     description="A 2D and 3D PyTorch implementation of the Tiramisu CNN",
+    entry_points={
+        'console_scripts': [
+            'lesion-seg=tiramisu_brulee.experiment.lesion_seg.seg:main',
+        ],
+    },
     install_requires=requirements,
     extras_requires=extras_requirements,
     license="Apache Software License 2.0",

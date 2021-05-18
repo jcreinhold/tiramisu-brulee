@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-msseg.tests._test_configs
+tiramisu_brulee.tests._test_configs
 
 Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 03, 2020

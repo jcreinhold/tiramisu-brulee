@@ -17,10 +17,14 @@ Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 01, 2020
 """
 
-__all__ = ['binary_combo_loss',
-           'binary_focal_loss',
-           'deeply_supervised_loss',
-           'dice_loss']
+__all__ = [
+    'binary_combo_loss',
+    'binary_focal_loss',
+    'deeply_supervised_loss',
+    'dice_loss',
+    'l1_segmentation_loss',
+    'mse_segmentation_loss',
+]
 
 from typing import *
 
@@ -103,6 +107,16 @@ def deeply_supervised_loss(xs: List[Tensor], y: Tensor, loss_func: Callable,
     for lw, x in zip(level_weights, xs):
         loss += lw * loss_func(x, y, **loss_func_kwargs)
     return loss
+
+
+def l1_segmentation_loss(pred: Tensor, target: Tensor, reduction: str = 'mean') -> Tensor:
+    pred = torch.sigmoid(pred)
+    return F.l1_loss(pred, target, reduction=reduction)
+
+
+def mse_segmentation_loss(pred: Tensor, target: Tensor, reduction: str = 'mean') -> Tensor:
+    pred = torch.sigmoid(pred)
+    return F.mse_loss(pred, target, reduction=reduction)
 
 
 if __name__ == "__main__":

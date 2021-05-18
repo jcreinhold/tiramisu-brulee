@@ -84,7 +84,8 @@ def csv_to_subjectlist(filename: str) -> List[torchio.Subject]:
                 data[name] = torchio.Image(val, type=type)
         subject = torchio.Subject(
             name=subject_name,
-            **data)
+            **data
+        )
         subject_list.append(subject)
 
     return subject_list
