@@ -20,22 +20,24 @@ from tiramisu_brulee.util import init_weights
 
 class LightningTiramisu(pl.LightningModule):
 
-    def __init__(self,
-                 network_dim: int,
-                 in_channels: int = 1,
-                 out_channels: int = 1,
-                 down_blocks: List[int] = (4, 4, 4, 4, 4),
-                 up_blocks: List[int] = (4, 4, 4, 4, 4),
-                 bottleneck_layers: int = 4,
-                 growth_rate: int = 16,
-                 first_conv_out_channels: int = 48,
-                 dropout_rate: float = 0.2,
-                 init_type: str = 'normal',
-                 gain: float = 0.02,
-                 n_epochs: int = 1,
-                 lr: float = 3e-4,
-                 betas: Tuple[int, int] = (0.9, 0.99),
-                 weight_decay: float = 1e-7):
+    def __init__(
+        self,
+        network_dim: int,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        down_blocks: List[int] = (4, 4, 4, 4, 4),
+        up_blocks: List[int] = (4, 4, 4, 4, 4),
+        bottleneck_layers: int = 4,
+        growth_rate: int = 16,
+        first_conv_out_channels: int = 48,
+        dropout_rate: float = 0.2,
+        init_type: str = 'normal',
+        gain: float = 0.02,
+        n_epochs: int = 1,
+        lr: float = 3e-4,
+        betas: Tuple[int, int] = (0.9, 0.99),
+        weight_decay: float = 1e-7
+    ):
         super().__init__()
         self.save_hyperparameters()
         if self._use_2d_network:

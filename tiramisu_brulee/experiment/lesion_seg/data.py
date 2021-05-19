@@ -31,7 +31,12 @@ from torch.utils.data.dataloader import default_collate
 import torch.distributions as D
 import torchio as tio
 
-from tiramisu_brulee.experiment.lesion_seg.parse import *
+from tiramisu_brulee.experiment.lesion_seg.parse import (
+    file_path,
+    nonnegative_int,
+    positive_float,
+    positive_int,
+)
 from tiramisu_brulee.experiment.lesion_seg.util import reshape_for_broadcasting
 
 VALID_NAMES = ('ct', 'flair', 'pd', 't1', 't1c', 't2',
@@ -42,9 +47,11 @@ logger = getLogger(__name__)
 
 class LesionSegDataModuleBase(pl.LightningDataModule):
 
-    def _determine_input(self,
-                         subject_list: List[tio.Subject],
-                         other_subject_list: Optional[List[tio.Subject]] = None):
+    def _determine_input(
+        self,
+        subject_list: List[tio.Subject],
+        other_subject_list: Optional[List[tio.Subject]] = None
+    ):
         """ assume all columns except `name`, `label`, `div`, `weight`, or `out` is an image type """
         exclude = ('name', 'label', 'div', 'weight', 'out')
         subject = subject_list[0]  # arbitrarily pick the first element
@@ -60,16 +67,20 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             other_subject = other_subject_list[0]
             for key in inputs:
                 if key not in other_subject:
-                    msg = f'Validation CSV has different fields than training CSV.'
+                    msg = 'Validation CSV fields not the same as training CSV'
                     raise ValueError(msg)
             if 'label' not in subject or 'label' not in other_subject:
-                raise ValueError('`label` field expected in both training and validation CSV.')
+                msg = ('`label` field expected in both '
+                       'training and validation CSV.')
+                raise ValueError(msg)
             if ('div' in subject) ^ ('div' in other_subject):
-                msg = ('If `div` present in one of the training or validation CSVs, '
-                       'it is expected in both training and validation CSV.')
+                msg = ('If `div` present in one of the training '
+                       'or validation CSVs, it is expected in '
+                       'both training and validation CSV.')
                 raise ValueError(msg)
         if 'div' in subject and len(inputs) > 1:
-            raise ValueError(f'If using `div`, expect only 1 input. Got {inputs}.')
+            msg = f'If using `div`, expect only 1 input. Got {inputs}.'
+            raise ValueError(msg)
         self._use_div = 'div' in subject
         self._input_fields = tuple(sorted(inputs))
 
@@ -173,8 +184,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _get_train_sampler(self):
         ps = self.train_patch_size
-        sampler = tio.LabelSampler(ps) if self.label_sampler else tio.UniformSampler(ps)
-        return sampler
+        if self.label_sampler:
+            return tio.LabelSampler(ps)
+        else:
+            return tio.UniformSampler(ps)
 
     def _setup_train_dataset(self):
         transform = self._get_train_augmentation()
@@ -284,6 +297,7 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         )
         return out
 
+    # flake8: noqa: E501
     @staticmethod
     def add_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Data")
@@ -321,6 +335,7 @@ class Mixup:
             tgt = lam * tgt + (1 - lam) * tgt[perm]
         return src, tgt
 
+    # flake8: noqa: E501
     @staticmethod
     def add_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Mixup")

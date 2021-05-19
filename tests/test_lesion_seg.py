@@ -89,7 +89,7 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     args = []
     args += f'--default_root_dir {temp_dir}'.split()
     args += f'--predict-csv {predict_csv}'.split()
-    args += f'--num-workers 0'.split()
+    args += '--num-workers 0'.split()
     args += ['--fast_dev_run']
     return args
 

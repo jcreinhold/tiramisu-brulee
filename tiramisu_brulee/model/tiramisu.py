@@ -26,13 +26,21 @@ __all__ = [
     'Tiramisu3d',
 ]
 
-from typing import *
+from typing import List
 
-import torch
 from torch import Tensor
 from torch import nn
 
-from tiramisu_brulee.model.dense import *
+from tiramisu_brulee.model.dense import (
+    Bottleneck2d,
+    Bottleneck3d,
+    DenseBlock2d,
+    DenseBlock3d,
+    TransitionDown2d,
+    TransitionDown3d,
+    TransitionUp2d,
+    TransitionUp3d,
+)
 
 
 class Tiramisu(nn.Module):
@@ -43,15 +51,17 @@ class Tiramisu(nn.Module):
     _trans_down = None
     _trans_up = None
 
-    def __init__(self,
-                 in_channels: int = 3,
-                 out_channels: int = 1,
-                 down_blocks: List[int] = (5, 5, 5, 5, 5),
-                 up_blocks: List[int] = (5, 5, 5, 5, 5),
-                 bottleneck_layers: int = 5,
-                 growth_rate: int = 16,
-                 first_conv_out_channels: int = 48,
-                 dropout_rate: float = 0.2):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        out_channels: int = 1,
+        down_blocks: List[int] = (5, 5, 5, 5, 5),
+        up_blocks: List[int] = (5, 5, 5, 5, 5),
+        bottleneck_layers: int = 5,
+        growth_rate: int = 16,
+        first_conv_out_channels: int = 48,
+        dropout_rate: float = 0.2
+    ):
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
         self.down_blocks = down_blocks
@@ -62,47 +72,75 @@ class Tiramisu(nn.Module):
 
         self.first_conv = nn.Sequential(
             self._pad(first_kernel_size // 2),
-            self._conv(in_channels, first_conv_out_channels,
-                       first_kernel_size, bias=False))
+            self._conv(
+                in_channels,
+                first_conv_out_channels,
+                first_kernel_size,
+                bias=False
+            )
+        )
         cur_channels_count = first_conv_out_channels
 
-        ## Downsampling path ##
+        # Downsampling path
         self.dense_down = nn.ModuleList([])
         self.trans_down = nn.ModuleList([])
         for n_layers in down_blocks:
-            self.dense_down.append(self._denseblock(
-                cur_channels_count, growth_rate, n_layers,
-                upsample=False, dropout_rate=dropout_rate))
+            block = self._denseblock(
+                cur_channels_count,
+                growth_rate,
+                n_layers,
+                upsample=False,
+                dropout_rate=dropout_rate
+            )
+            self.dense_down.append(block)
             cur_channels_count += (growth_rate * n_layers)
             skip_connection_channel_counts.insert(0, cur_channels_count)
-            self.trans_down.append(self._trans_down(
-                cur_channels_count, cur_channels_count,
-                dropout_rate=dropout_rate))
+            block = self._trans_down(
+                cur_channels_count,
+                cur_channels_count,
+                dropout_rate=dropout_rate
+            )
+            self.trans_down.append(block)
 
-        ## Bottleneck ##
+        # Bottleneck
         self.bottleneck = self._bottleneck(
-            cur_channels_count, growth_rate, bottleneck_layers,
-            dropout_rate=dropout_rate)
+            cur_channels_count,
+            growth_rate,
+            bottleneck_layers,
+            dropout_rate=dropout_rate
+        )
         prev_block_channels = growth_rate * bottleneck_layers
         cur_channels_count += prev_block_channels
 
-        ## Upsampling path ##
+        # Upsampling path
         self.dense_up = nn.ModuleList([])
         self.trans_up = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
-            self.trans_up.append(self._trans_up(
-                prev_block_channels, prev_block_channels))
+            block = self._trans_up(
+                prev_block_channels,
+                prev_block_channels
+            )
+            self.trans_up.append(block)
             cur_channels_count = prev_block_channels + sccc
             upsample = i < len(up_blocks)  # do not upsample on last block
-            self.dense_up.append(self._denseblock(
-                cur_channels_count, growth_rate, n_layers,
-                upsample=upsample, dropout_rate=dropout_rate))
+            block = self._denseblock(
+                cur_channels_count,
+                growth_rate,
+                n_layers,
+                upsample=upsample,
+                dropout_rate=dropout_rate
+            )
+            self.dense_up.append(block)
             prev_block_channels = growth_rate * n_layers
             cur_channels_count += prev_block_channels
 
-        self.final_conv = self._conv(cur_channels_count, out_channels,
-                                     final_kernel_size, bias=True)
+        self.final_conv = self._conv(
+            cur_channels_count,
+            out_channels,
+            final_kernel_size,
+            bias=True
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         out = self.first_conv(x)
@@ -136,17 +174,3 @@ class Tiramisu3d(Tiramisu):
     _pad = nn.ReplicationPad3d
     _trans_down = TransitionDown3d
     _trans_up = TransitionUp3d
-
-
-if __name__ == "__main__":
-    net_kwargs = dict(in_channels=1, out_channels=1,
-                      down_blocks=[2, 2], up_blocks=[2, 2],
-                      bottleneck_layers=2, p_shakedrop=0.5)
-    x = torch.randn(1, 1, 32, 32)
-    net2d = Tiramisu2d(**net_kwargs)
-    y = net2d(x)
-    assert x.shape == y.shape
-    x = torch.randn(1, 1, 32, 32, 32)
-    net3d = Tiramisu3d(**net_kwargs)
-    y = net3d(x)
-    assert x.shape == y.shape

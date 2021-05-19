@@ -17,12 +17,12 @@ import torchio
 import tiramisu_brulee
 from tiramisu_brulee.experiment.lesion_seg.data import csv_to_subjectlist
 from tiramisu_brulee.loss import binary_combo_loss
-from tiramisu_brulee.util import n_dirname
 
 from ._test_configs import test_lightningtiramisu3d_config
 from ._test_lightningtiramisu import (
     create_test_csv,
-    LightningTiramisuTester
+    LightningTiramisuTester,
+    n_dirname,
 )
 
 seed_everything(1337)

@@ -43,7 +43,8 @@ class file_path(_ParseType):
     def __call__(self, string: str) -> Path:
         path = Path(string)
         if not path.is_file():
-            raise ArgumentTypeError(f'{string} is not a valid path.')
+            msg = f'{string} is not a valid path.'
+            raise ArgumentTypeError(msg)
         return path
 
 
@@ -51,7 +52,8 @@ class positive_float(_ParseType):
     def __call__(self, string: str) -> float:
         num = float(string)
         if num <= 0.:
-            raise ArgumentTypeError(f'{string} needs to be a positive float.')
+            msg = f'{string} needs to be a positive float.'
+            raise ArgumentTypeError(msg)
         return num
 
 
@@ -59,7 +61,8 @@ class positive_int(_ParseType):
     def __call__(self, string: str) -> int:
         num = int(string)
         if num <= 0:
-            raise ArgumentTypeError(f'{string} needs to be a positive integer.')
+            msg = f'{string} needs to be a positive integer.'
+            raise ArgumentTypeError(msg)
         return num
 
 
@@ -67,7 +70,8 @@ class nonnegative_int(_ParseType):
     def __call__(self, string: str) -> int:
         num = int(string)
         if num < 0:
-            raise ArgumentTypeError(f'{string} needs to be a nonnegative integer.')
+            msg = f'{string} needs to be a nonnegative integer.'
+            raise ArgumentTypeError(msg)
         return num
 
 
@@ -75,11 +79,15 @@ class probability_float(_ParseType):
     def __call__(self, string: str) -> float:
         num = float(string)
         if num <= 0. or num >= 1.:
-            raise ArgumentTypeError(f'{string} needs to be between 0 and 1.')
+            msg = f'{string} needs to be between 0 and 1.'
+            raise ArgumentTypeError(msg)
         return num
 
 
-def get_best_model_path(checkpoint_callback, only_best: bool = False) -> Path:
+def get_best_model_path(
+    checkpoint_callback,
+    only_best: bool = False
+) -> Path:
     """ gets the best model path from a ModelCheckpoint instance """
     best_model_path = checkpoint_callback.best_model_path
     if only_best and not best_model_path:
@@ -94,11 +102,13 @@ def get_experiment_directory(model_path: Path) -> Path:
     return model_path.parents[1]
 
 
-def _generate_config_yaml(exp_dir: Path,
-                          parser: ArgumentParser,
-                          dict_args: dict,
-                          best_model_path: Path,
-                          stage: str):
+def _generate_config_yaml(
+    exp_dir: Path,
+    parser: ArgumentParser,
+    dict_args: dict,
+    best_model_path: Path,
+    stage: str
+):
     assert stage in ('train', 'predict')
     config = vars(parser.get_defaults())
     for k, v in dict_args.items():
@@ -117,20 +127,30 @@ def _generate_config_yaml(exp_dir: Path,
     )
 
 
-def generate_train_config_yaml(exp_dir: Path,
-                               parser: ArgumentParser,
-                               dict_args: dict,
-                               **kwargs):
+def generate_train_config_yaml(
+    exp_dir: Path,
+    parser: ArgumentParser,
+    dict_args: dict,
+    **kwargs
+):
     if dict_args['config'] is not None:
         return  # user used config file, so we do not need to generate one
     _generate_config_yaml(exp_dir, parser, dict_args, None, 'train')
 
 
-def generate_predict_config_yaml(exp_dir: Path,
-                                 parser: ArgumentParser,
-                                 dict_args: dict,
-                                 best_model_path: Optional[Path] = None):
-    _generate_config_yaml(exp_dir, parser, dict_args, best_model_path, 'predict')
+def generate_predict_config_yaml(
+    exp_dir: Path,
+    parser: ArgumentParser,
+    dict_args: dict,
+    best_model_path: Optional[Path] = None
+):
+    _generate_config_yaml(
+        exp_dir,
+        parser,
+        dict_args,
+        best_model_path,
+        'predict'
+    )
 
 
 def remove_args(parser: ArgumentParser, args: List[str]):

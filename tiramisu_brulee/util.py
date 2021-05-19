@@ -13,8 +13,6 @@ __all__ = [
     'init_weights',
 ]
 
-import os
-
 from torch.nn import init
 
 
@@ -42,7 +40,7 @@ def init_weights(net, init_type: str = 'normal', gain: float = 0.02):
             elif init_type == 'orthogonal':
                 init.orthogonal_(layer.weight.data, gain=gain)
             else:
-                err_msg = f'initialization type [{init_type}] is not implemented'
+                err_msg = f'initialization type [{init_type}] not implemented'
                 raise NotImplementedError(err_msg)
             if hasattr(layer, 'bias') and layer.bias is not None:
                 init.constant_(layer.bias.data, 0.0)
@@ -51,19 +49,3 @@ def init_weights(net, init_type: str = 'normal', gain: float = 0.02):
             init.constant_(layer.bias.data, 0.0)
 
     net.apply(init_func)
-
-
-def n_dirname(path: str, n: int) -> str:
-    """ return n-th dirname from basename """
-    dirname = path
-    for _ in range(n):
-        dirname = os.path.dirname(dirname)
-    return dirname
-
-
-if __name__ == "__main__":
-    from torch import nn
-
-    net = nn.Sequential(nn.Conv1d(1, 1, 1),
-                        nn.BatchNorm1d(1))
-    init_weights(net)

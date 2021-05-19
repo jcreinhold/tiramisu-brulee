@@ -17,7 +17,7 @@ from functools import partial
 import inspect
 import logging
 from pathlib import Path
-from typing import *
+from typing import List, Optional, Tuple
 
 from jsonargparse import (
     ArgumentParser,
@@ -33,10 +33,33 @@ from torch import Tensor
 from torch.optim import AdamW, RMSprop, lr_scheduler
 
 from tiramisu_brulee.experiment.lightningtiramisu import LightningTiramisu
-from tiramisu_brulee.experiment.lesion_seg.data import *
-from tiramisu_brulee.experiment.lesion_seg.lesion_tools import *
-from tiramisu_brulee.experiment.lesion_seg.parse import *
-from tiramisu_brulee.experiment.lesion_seg.util import *
+from tiramisu_brulee.experiment.lesion_seg.data import (
+    Mixup,
+    LesionSegDataModulePredict,
+    LesionSegDataModuleTrain,
+)
+from tiramisu_brulee.experiment.lesion_seg.lesion_tools import (
+    almost_isbi15_score,
+    clean_segmentation,
+)
+from tiramisu_brulee.experiment.lesion_seg.parse import (
+    file_path,
+    generate_predict_config_yaml,
+    generate_train_config_yaml,
+    get_best_model_path,
+    get_experiment_directory,
+    nonnegative_int,
+    positive_float,
+    positive_int,
+    probability_float,
+    remove_args,
+)
+from tiramisu_brulee.experiment.lesion_seg.util import (
+    BoundingBox3D,
+    minmax_scale_batch,
+    setup_log,
+    to_np,
+)
 from tiramisu_brulee.loss import (
     binary_combo_loss,
     l1_segmentation_loss,
@@ -49,32 +72,34 @@ set_config_read_mode(fsspec_enabled=True)
 
 class LesionSegLightningTiramisu(LightningTiramisu):
 
-    def __init__(self,
-                 in_channels: int = 1,
-                 out_channels: int = 1,
-                 down_blocks: List[int] = (4, 4, 4, 4, 4),
-                 up_blocks: List[int] = (4, 4, 4, 4, 4),
-                 bottleneck_layers: int = 4,
-                 growth_rate: int = 16,
-                 first_conv_out_channels: int = 48,
-                 dropout_rate: float = 0.2,
-                 init_type: str = 'normal',
-                 gain: float = 0.02,
-                 n_epochs: int = 1,
-                 lr: float = 1e-3,
-                 betas: Tuple[int, int] = (0.9, 0.99),
-                 weight_decay: float = 1e-7,
-                 combo_weight: float = 0.6,
-                 decay_after: int = 8,
-                 loss_function: str = 'combo',
-                 rmsprop: bool = False,
-                 soft_labels: bool = False,
-                 threshold: float = 0.5,
-                 min_lesion_size: int = 3,
-                 fill_holes: bool = True,
-                 mixup: bool = False,
-                 mixup_alpha: float = 0.4,
-                 **kwargs):
+    def __init__(
+        self,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        down_blocks: List[int] = (4, 4, 4, 4, 4),
+        up_blocks: List[int] = (4, 4, 4, 4, 4),
+        bottleneck_layers: int = 4,
+        growth_rate: int = 16,
+        first_conv_out_channels: int = 48,
+        dropout_rate: float = 0.2,
+        init_type: str = 'normal',
+        gain: float = 0.02,
+        n_epochs: int = 1,
+        lr: float = 1e-3,
+        betas: Tuple[int, int] = (0.9, 0.99),
+        weight_decay: float = 1e-7,
+        combo_weight: float = 0.6,
+        decay_after: int = 8,
+        loss_function: str = 'combo',
+        rmsprop: bool = False,
+        soft_labels: bool = False,
+        threshold: float = 0.5,
+        min_lesion_size: int = 3,
+        fill_holes: bool = True,
+        mixup: bool = False,
+        mixup_alpha: float = 0.4,
+        **kwargs
+    ):
         network_dim = 3  # only support 3D input
         super().__init__(
             network_dim,
@@ -99,18 +124,18 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         if self.hparams.loss_function == 'combo':
             self.criterion = partial(
                 binary_combo_loss,
-                weight=self.hparams.combo_weight
+                combo_weight=self.hparams.combo_weight
             )
         elif self.hparams.loss_function == 'mse':
             self.criterion = mse_segmentation_loss
         elif self.hparams.loss_function == 'l1':
             self.criterion = l1_segmentation_loss
         else:
-            raise ValueError(f'{self.hparams.loss_function} not a supported loss function.')
+            raise ValueError(f'{self.hparams.loss_function} not supported.')
         if self.hparams.mixup:
             self._mix = Mixup(self.hparams.mixup_alpha)
 
-    def training_step(self, batch: dict, batch_idx: int) -> dict:
+    def training_step(self, batch: dict, batch_idx: int) -> Tensor:
         src, tgt = batch
         if self.hparams.mixup:
             src, tgt = self._mix(src, tgt)
@@ -119,7 +144,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         self.log('loss', loss)
         return loss
 
-    def validation_step(self, batch: dict, batch_idx: int) -> Tuple[dict, dict]:
+    def validation_step(self, batch: dict, batch_idx: int) -> dict:
         src, tgt = batch
         pred = self(src)
         loss = self.criterion(pred, tgt)
@@ -154,7 +179,12 @@ class LesionSegLightningTiramisu(LightningTiramisu):
     def validation_epoch_end(self, outputs: list):
         self._log_images(outputs[0]['images'])
 
-    def predict_step(self, batch: dict, batch_idx: int, dataloader_idx: Optional[int] = None) -> dict:
+    def predict_step(
+        self,
+        batch: dict,
+        batch_idx: int,
+        dataloader_idx: Optional[int] = None
+    ) -> Tensor:
         src = batch['src']
         bbox = BoundingBox3D.from_batch(src, pad=0)
         src = bbox(src)
@@ -164,13 +194,20 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         pred_seg = pred_seg.float()
         return pred_seg
 
-    def on_predict_batch_end(self, pred_step_outputs: Tensor, batch: dict, batch_idx: int, dataloader_idx: int):
+    def on_predict_batch_end(
+        self,
+        pred_step_outputs: Tensor,
+        batch: dict,
+        batch_idx: int,
+        dataloader_idx: int
+    ):
         pred_step_outputs = to_np(pred_step_outputs).squeeze()
         for pred_seg in pred_step_outputs:
             clean_segmentation(pred_seg, )
         affine_matrices = batch['affine']
         out_fns = batch['out']
-        for pred, affine, fn in zip(pred_step_outputs, affine_matrices, out_fns):
+        nifti_attrs = zip(pred_step_outputs, affine_matrices, out_fns)
+        for pred, affine, fn in nifti_attrs:
             logging.info(f'Saving {fn}.')
             nib.Nifti1Image(pred, affine).to_filename(fn)
 
@@ -212,13 +249,20 @@ class LesionSegLightningTiramisu(LightningTiramisu):
                 if self.hparams.soft_labels and key == 'pred':
                     image_slice = torch.sigmoid(image_slice)
                 elif key == 'pred':
-                    image_slice = torch.sigmoid(image_slice) > self.hparams.threshold
+                    threshold = self.hparams.threshold
+                    image_slice = torch.sigmoid(image_slice) > threshold
                 elif key == 'truth':
                     image_slice = image_slice > 0.
                 else:
                     image_slice = minmax_scale_batch(image_slice)
-            self.logger.experiment.add_images(key, image_slice, n, dataformats='NCHW')
+            self.logger.experiment.add_images(
+                key,
+                image_slice,
+                n,
+                dataformats='NCHW'
+            )
 
+    # flake8: noqa: E501
     @staticmethod
     def add_model_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Model")
@@ -247,6 +291,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
                             help='number of output channels in first conv')
         return parent_parser
 
+    # flake8: noqa: E501
     @staticmethod
     def add_training_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Training")
@@ -271,6 +316,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
                             help="use soft labels (i.e., non-binary labels) for training")
         return parent_parser
 
+    # flake8: noqa: E501
     @staticmethod
     def add_other_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Other")
@@ -280,6 +326,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
                             help='save model weights (checkpoint) every n epochs')
         return parent_parser
 
+    # flake8: noqa: E501
     @staticmethod
     def add_testing_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Testing")
@@ -290,6 +337,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return parent_parser
 
 
+# flake8: noqa: E501
 def train_parser():
     desc = 'Train a 3D Tiramisu CNN to segment lesions'
     parser = ArgumentParser(
@@ -368,6 +416,7 @@ def train(args=None, return_best_model_path=False):
         return 0
 
 
+# flake8: noqa: E501
 def predict_parser():
     desc = 'Use a Tiramisu CNN to segment lesions'
     parser = ArgumentParser(

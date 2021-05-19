@@ -7,12 +7,15 @@ Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 03, 2020
 """
 
-__all__ = ['create_test_csv',
-           'LightningTiramisuTester']
+__all__ = [
+    'create_test_csv',
+    'LightningTiramisuTester',
+    'n_dirname',
+]
 
-from typing import *
-
+import os
 from os.path import join
+from typing import List
 
 import torch
 from torch.nn import functional as F
@@ -108,3 +111,11 @@ def create_test_csv(path_to_csv: str, data_dir: str, weight: bool = False):
     with open(path_to_csv, "w") as f:
         f.write(headers)
         f.write(filenames)
+
+
+def n_dirname(path: str, n: int) -> str:
+    """ return n-th dirname from basename """
+    dirname = path
+    for _ in range(n):
+        dirname = os.path.dirname(dirname)
+    return dirname
