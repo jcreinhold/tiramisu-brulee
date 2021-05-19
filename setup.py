@@ -18,27 +18,25 @@ setup_requirements = [
     'pytest-runner',
 ]
 
-test_requirements = [
+_other_reqs = [
+    'jsonargparse',
+    'lesion-metrics',
     'nibabel',
     'pandas',
-    'pytest>=3',
     'pytorch-lightning',
+    'PyYAML',
+    'ruyaml',
+    'scikit-image',
     'torchio',
+    'torchmetrics',
+]
+
+test_requirements = _other_reqs + [
+    'pytest>=3',
 ]
 
 extras_requirements = {
-    'lesionseg': [
-        'jsonargparse',
-        'lesion-metrics',
-        'nibabel',
-        'pandas',
-        'pytorch-lightning',
-        'PyYAML',
-        'ruyaml',
-        'scikit-image',
-        'torchio',
-        'torchmetrics',
-    ]
+    'lesionseg': _other_reqs,
 }
 
 setup(
