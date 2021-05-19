@@ -24,16 +24,27 @@ import sys
 sys.path.insert(0, os.path.abspath('..'))
 
 MOCK_MODULES = [
+    'jsonargparse',
     'nibabel',
     'numpy',
     'pandas',
     'pytorch_lightning',
+    'pytorch_lightning.callbacks',
+    'pytorch_lightning.loggers',
     'pytorch_lightning.utilities',
     'pytorch_lightning.utilities.parsing',
+    'skimage.morphology',
+    'scipy.ndimage.morphology',
     'torch',
+    'torch.distributions',
     'torch.nn',
     'torch.nn.functional',
+    'torch.optim',
+    'torch.utils.data',
+    'torch.utils.data.dataloader',
     'torchio',
+    'torchmetrics.functional',
+    'yaml',
 ]
 
 for mod_name in MOCK_MODULES:

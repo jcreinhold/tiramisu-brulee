@@ -13,14 +13,6 @@ Subpackages
 Submodules
 ----------
 
-tiramisu\_brulee.data module
-----------------------------
-
-.. automodule:: tiramisu_brulee.data
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 tiramisu\_brulee.loss module
 ----------------------------
 
