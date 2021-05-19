@@ -44,10 +44,12 @@ from tiramisu_brulee.experiment.lesion_seg.lesion_tools import (
 )
 from tiramisu_brulee.experiment.lesion_seg.parse import (
     file_path,
+    fix_type_funcs,
     generate_predict_config_yaml,
     generate_train_config_yaml,
     get_best_model_path,
     get_experiment_directory,
+    none_string_to_none,
     nonnegative_int,
     positive_float,
     positive_int,
@@ -229,14 +231,14 @@ class LesionSegLightningTiramisu(LightningTiramisu):
                 weight_decay=self.hparams.weight_decay,
             )
 
-        def lambda_rule(epoch):
-            numerator = max(0, epoch - self.hparams.decay_after)
-            denominator = float(self.hparams.n_epochs + 1)
-            lr = 1.0 - numerator / denominator
-            return lr
-
-        scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
+        scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=self.decay_rule)
         return [optimizer], [scheduler]
+
+    def decay_rule(self, epoch: int) -> float:
+        numerator = max(0, epoch - self.hparams.decay_after)
+        denominator = float(self.hparams.n_epochs + 1)
+        lr = 1.0 - numerator / denominator
+        return lr
 
     def _log_images(self, images: dict):
         n = self.current_epoch
@@ -297,6 +299,8 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         parser = parent_parser.add_argument_group("Training")
         parser.add_argument('-bt', '--betas', type=positive_float(), default=[0.9, 0.99], nargs=2,
                             help='AdamW momentum parameters (or, for RMSprop, momentum and alpha params)')
+        parser.add_argument('-cen', '--checkpoint-every-n-epochs', type=positive_int(), default=1,
+                            help='save model weights (checkpoint) every n epochs')
         parser.add_argument('-cw', '--combo-weight', type=positive_float(), default=0.6,
                             help='weight of positive class in combo loss')
         parser.add_argument('-da', '--decay-after', type=positive_int(), default=8,
@@ -322,8 +326,6 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         parser = parent_parser.add_argument_group("Other")
         parser.add_argument('-th', '--threshold', type=probability_float(), default=0.5,
                             help='probability threshold for segmentation')
-        parser.add_argument('-cen', '--checkpoint-every-n-epochs', type=positive_int(), default=1,
-                            help='save model weights (checkpoint) every n epochs')
         return parent_parser
 
     # flake8: noqa: E501
@@ -359,20 +361,33 @@ def train_parser():
     parser = Trainer.add_argparse_args(parser)
     parser.link_arguments('n_epochs', 'min_epochs')  # noqa
     parser.link_arguments('n_epochs', 'max_epochs')  # noqa
-    remove_args(parser, ['logger', 'checkpoint_callback', 'weights_save_path'])
+    unnecessary_options = [
+        'checkpoint_callback',
+        'logger',
+        'min_steps',
+        'max_steps',
+        'truncated_bptt_steps',
+        'weights_save_path',
+    ]
+    remove_args(parser, unnecessary_options)
+    fix_type_funcs(parser)
     return parser
 
 
 def train(args=None, return_best_model_path=False):
     parser = train_parser()
     if args is None:
-        args = parser.parse_args()
+        args = parser.parse_args(_skip_check=True)  # noqa
     elif isinstance(args, list):
         args = parser.parse_args(args, _skip_check=True)  # noqa
+    args = none_string_to_none(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
-    root_dir = Path(args.default_root_dir).resolve()
+    if args.default_root_dir is not None:
+        root_dir = Path(args.default_root_dir).resolve()
+    else:
+        root_dir = Path.cwd()
     name = EXPERIMENT_NAME
     tb_logger = TensorBoardLogger(
         str(root_dir),
@@ -438,15 +453,17 @@ def predict_parser():
     trainer_options = set(inspect.signature(Trainer).parameters.keys())  # noqa
     unnecessary_options = trainer_options - {'gpus', 'fast_dev_run', 'default_root_dir'}
     remove_args(parser, unnecessary_options)
+    fix_type_funcs(parser)
     return parser
 
 
 def predict(args=None):
     parser = predict_parser()
     if args is None:
-        args = parser.parse_args()
+        args = parser.parse_args(_skip_check=True)  # noqa
     elif isinstance(args, list):
         args = parser.parse_args(args, _skip_check=True)  # noqa
+    args = none_string_to_none(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)

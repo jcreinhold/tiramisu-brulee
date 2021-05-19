@@ -12,10 +12,12 @@ Created on: May 17, 2021
 
 __all__ = [
     'file_path',
+    'fix_type_funcs',
     'get_best_model_path',
     'get_experiment_directory',
     'generate_train_config_yaml',
     'generate_predict_config_yaml',
+    'none_string_to_none',
     'nonnegative_int',
     'positive_float',
     'positive_int',
@@ -24,9 +26,10 @@ __all__ = [
 ]
 
 from argparse import ArgumentTypeError
+from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from jsonargparse import ArgumentParser
 import yaml
@@ -35,8 +38,13 @@ logger = getLogger(__name__)
 
 
 class _ParseType:
-    def __str__(self):
+
+    @property
+    def __name__(self):
         return self.__class__.__name__
+
+    def __str__(self):
+        return self.__name__
 
 
 class file_path(_ParseType):
@@ -158,17 +166,49 @@ def remove_args(parser: ArgumentParser, args: List[str]):
     # https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
     for arg in args:
         for action in parser._actions:
-            action_dict = vars(action)
-            opt_str = action_dict['option_strings'][0]
-            dest = action_dict['dest']
+            opt_str = action.option_strings[-1]
+            dest = action.dest
             if opt_str[0] == arg or dest == arg:
                 parser._remove_action(action)
                 break
 
         for action in parser._action_groups:
-            action_dict = vars(action)
-            group_actions = action_dict['_group_actions']
+            group_actions = action._group_actions
             for group_action in group_actions:
                 if group_action.dest == arg:
                     group_actions.remove(group_action)
                     break
+
+
+def fix_type_funcs(parser):
+    for action in parser._actions:
+        if action.type is not None:
+            type_func_name = action.type.__name__
+            if type_func_name.startswith('str_to_'):
+                func = deepcopy(action.type)
+                action.type = lambda val: func(str(val))
+            elif 'gpus' in type_func_name:
+                action.type = _gpus_allowed_type
+            elif action.dest == 'progress_bar_refresh_rate':
+                action.type = lambda val: val if val is None else int(val)
+
+
+def none_string_to_none(args):
+    """ goes through an instance of parsed args and maps 'None' -> None """
+    attrs = [a for a in dir(args) if not a.startswith('_')]
+    for attr in attrs:
+        val = getattr(args, attr)
+        if val == 'None':
+            setattr(args, attr, None)
+    return args
+
+
+def _gpus_allowed_type(
+    val: Union[None, str, float, int]
+) -> Union[None, float, int]:
+    if val is None:
+        return val
+    elif '.' in str(val):
+        return float(val)
+    else:
+        return int(val)
