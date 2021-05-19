@@ -27,10 +27,11 @@ import pytorch_lightning as pl
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
+from torch.utils.data.dataloader import default_collate
 import torch.distributions as D
 import torchio as tio
 
-from tiramisu_brulee.experiment.lesion_seg.parse import file_path, positive_float, positive_int
+from tiramisu_brulee.experiment.lesion_seg.parse import *
 from tiramisu_brulee.experiment.lesion_seg.util import reshape_for_broadcasting
 
 VALID_NAMES = ('ct', 'flair', 'pd', 't1', 't1c', 't2',
@@ -77,15 +78,16 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             batch /= reshape_for_broadcasting(div, batch.ndim)
         return batch
 
-    def _collate_fn(self, batch: dict) -> Tuple[Tensor, Tensor]:
+    def _collate_fn(self, batch: dict) -> Tensor:
+        if isinstance(batch, list):
+            batch = default_collate(batch)
         inputs = []
         for field in self._input_fields:
             inputs.append(batch[field][tio.DATA])
         src = torch.cat(inputs, dim=1)
         if self._use_div:
             src = self._div_batch(src, batch['div'])
-        tgt = batch['label'][tio.DATA]
-        return src, tgt
+        return src
 
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
@@ -196,6 +198,12 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         self.val_dataset = subjects_dataset
 
+    def _collate_fn(self, batch: dict) -> Tuple[Tensor, Tensor]:
+        batch = default_collate(batch)
+        src = super()._collate_fn(batch)
+        tgt = batch['label'][tio.DATA]
+        return src, tgt
+
     @staticmethod
     def add_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Data")
@@ -211,7 +219,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                             help='training/test patch size extracted from image')
         parser.add_argument('-vps', '--val-patch-size', type=positive_int(), nargs=3, default=[128, 128, 128],
                             help='validation patch size extracted from image')
-        parser.add_argument('-nw', '--num-workers', type=positive_int(), default=16,
+        parser.add_argument('-nw', '--num-workers', type=nonnegative_int(), default=16,
                             help='number of CPUs to use for loading data')
         parser.add_argument('-ql', '--queue-length', type=positive_int(), default=200,
                             help='queue length for torchio sampler')
@@ -264,18 +272,14 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         self.predict_dataset = subjects_dataset
 
     def _collate_fn(self, batch: dict) -> Tensor:
-        inputs = []
-        for field in self._input_fields:
-            inputs.append(batch[field][tio.DATA])
-        src = torch.cat(inputs, dim=1)
-        if self._use_div:
-            src = self._div_batch(src, batch['div'])
-        # assume affine same across modalities
+        batch = default_collate(batch)
+        src = super()._collate_fn(batch)
+        # assume affine matrices same across modalities
         # so arbitrarily choose first
-        _field = self._input_fields[0]
+        field = self._input_fields[0]
         out = dict(
             src=src,
-            affine=batch[_field][tio.AFFINE],
+            affine=batch[field][tio.AFFINE],
             out=batch['out'],  # path to save the prediction
         )
         return out
@@ -285,11 +289,9 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         parser = parent_parser.add_argument_group("Data")
         parser.add_argument('--predict-csv', type=file_path(), required=True,
                             help='path to csv of prediction images')
-        parser.add_argument('-bs', '--batch-size', type=positive_int(), default=None,
-                            help='batch size (if patch size specified)')
-        parser.add_argument('-ps', '--patch-size', type=positive_int(), nargs=3, default=None,
-                            help='patch size extracted from image (if specified, otherwise whole image)')
-        parser.add_argument('-nw', '--num-workers', type=positive_int(), default=16,
+        parser.add_argument('-bs', '--batch-size', type=positive_int(), default=1,
+                            help='number of images to run at a time')
+        parser.add_argument('-nw', '--num-workers', type=nonnegative_int(), default=16,
                             help='number of CPUs to use for loading data')
         return parent_parser
 

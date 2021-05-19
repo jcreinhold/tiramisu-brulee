@@ -16,9 +16,14 @@ __all__ = [
 from functools import partial
 import inspect
 import logging
+from pathlib import Path
 from typing import *
 
-from jsonargparse import ArgumentParser, ActionConfigFile
+from jsonargparse import (
+    ArgumentParser,
+    ActionConfigFile,
+    set_config_read_mode,
+)
 import nibabel as nib
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -39,6 +44,7 @@ from tiramisu_brulee.loss import (
 )
 
 EXPERIMENT_NAME = 'lesion_tiramisu_experiment'
+set_config_read_mode(fsspec_enabled=True)
 
 
 class LesionSegLightningTiramisu(LightningTiramisu):
@@ -87,16 +93,6 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             betas,
             weight_decay,
         )
-        # self.combo_weight = combo_weight
-        # self.decay_after = decay_after
-        # self.hparams.loss_function = loss_function
-        # self.hparams.rmsprop = rmsprop
-        # self.soft_labels = soft_labels
-        # self.hparams.threshold = threshold
-        # self.min_lesion_size = min_lesion_size
-        # self.fill_holes = fill_holes
-        # self.hparams.mixup = mixup
-        # self.hparams.mixup_alpha = mixup_alpha
         self.save_hyperparameters()
 
     def setup(self, stage: Optional[str] = None):
@@ -120,8 +116,8 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             src, tgt = self._mix(src, tgt)
         pred = self(src)
         loss = self.criterion(pred, tgt)
-        tensorboard_logs = dict(train_loss=loss)
-        return dict(loss=loss, log=tensorboard_logs)
+        self.log('loss', loss)
+        return loss
 
     def validation_step(self, batch: dict, batch_idx: int) -> Tuple[dict, dict]:
         src, tgt = batch
@@ -130,50 +126,37 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         with torch.no_grad():
             pred_seg = torch.sigmoid(pred) > self.hparams.threshold
         isbi15_score = almost_isbi15_score(pred_seg, tgt)
-        metrics = dict(
-            val_loss=loss,
-            val_isbi15_score=isbi15_score,
+        self.log(
+            'val_loss',
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True
         )
-        images = dict(
-            truth=tgt,
-            pred=pred,
+        self.log(
+            'val_isbi15_score',
+            isbi15_score,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False
         )
-        for i, field in enumerate(self._input_fields):
-            images[field] = src[:, i:i + 1, ...]
-        return metrics, images
+        if batch_idx == 0:
+            images = dict(
+                truth=tgt,
+                pred=pred,
+            )
+            for i in range(src.shape[1]):
+                images[f'input_channel_{i}'] = src[:, i:i + 1, ...]
+        else:
+            images = None
+        return dict(val_loss=loss, images=images)
 
-    def validation_step_end(self, val_step_outputs: dict) -> dict:
-        metrics, images = val_step_outputs
-        with torch.no_grad():
-            n = self.current_epoch
-            mid_slice = None
-            for field in self._input_fields + ('truth', 'pred'):
-                if mid_slice is None:
-                    mid_slice = images[field].shape[-1] // 2
-                img = images[field][..., mid_slice]
-                if self.hparams.soft_labels and field == 'pred':
-                    img = torch.sigmoid(img)
-                elif field == 'pred':
-                    img = torch.sigmoid(img) > self.hparams.threshold
-                elif field == 'truth':
-                    img = img > 0.
-                else:
-                    img = minmax_scale_batch(img)
-                self.logger.experiment.add_images(field, img, n, dataformats='NCHW')
-        return metrics
-
-    def validation_epoch_end(self, outputs: dict) -> dict:
-        avg_loss = extract_and_average(outputs, 'val_loss')
-        avg_isbi15_score = extract_and_average(outputs, 'val_isbi15_score')
-        tensorboard_logs = dict(
-            avg_val_loss=avg_loss,
-            avg_val_isbi15_score=avg_isbi15_score,
-        )
-        return dict(val_loss=avg_loss, log=tensorboard_logs)
+    def validation_epoch_end(self, outputs: list):
+        self._log_images(outputs[0]['images'])
 
     def predict_step(self, batch: dict, batch_idx: int, dataloader_idx: Optional[int] = None) -> dict:
         src = batch['src']
-        bbox = BoundingBox3D.from_batch(src)
+        bbox = BoundingBox3D.from_batch(src, pad=0)
         src = bbox(src)
         pred = self(src)
         pred_seg = torch.sigmoid(pred) > self.hparams.threshold
@@ -217,6 +200,24 @@ class LesionSegLightningTiramisu(LightningTiramisu):
 
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
         return [optimizer], [scheduler]
+
+    def _log_images(self, images: dict):
+        n = self.current_epoch
+        mid_slice = None
+        for key, image in images.items():
+            with torch.no_grad():
+                if mid_slice is None:
+                    mid_slice = image.shape[-1] // 2
+                image_slice = image[..., mid_slice]
+                if self.hparams.soft_labels and key == 'pred':
+                    image_slice = torch.sigmoid(image_slice)
+                elif key == 'pred':
+                    image_slice = torch.sigmoid(image_slice) > self.hparams.threshold
+                elif key == 'truth':
+                    image_slice = image_slice > 0.
+                else:
+                    image_slice = minmax_scale_batch(image_slice)
+            self.logger.experiment.add_images(key, image_slice, n, dataformats='NCHW')
 
     @staticmethod
     def add_model_arguments(parent_parser):
@@ -275,6 +276,8 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         parser = parent_parser.add_argument_group("Other")
         parser.add_argument('-th', '--threshold', type=probability_float(), default=0.5,
                             help='probability threshold for segmentation')
+        parser.add_argument('-cen', '--checkpoint-every-n-epochs', type=positive_int(), default=1,
+                            help='save model weights (checkpoint) every n epochs')
         return parent_parser
 
     @staticmethod
@@ -293,7 +296,8 @@ def train_parser():
         prog='lesion-train',
         description=desc,
     )
-    parser.add_argument('--config', action=ActionConfigFile)
+    parser.add_argument('--config', action=ActionConfigFile,
+                        help='path to a configuration file in json or yaml format')
     exp_parser = parser.add_argument_group('Experiment')
     exp_parser.add_argument('-sd', '--seed', type=int, default=0,
                             help='set seed for reproducibility')
@@ -307,49 +311,61 @@ def train_parser():
     parser = Trainer.add_argparse_args(parser)
     parser.link_arguments('n_epochs', 'min_epochs')  # noqa
     parser.link_arguments('n_epochs', 'max_epochs')  # noqa
-    remove_args(parser, ['logger'])
+    remove_args(parser, ['logger', 'checkpoint_callback', 'weights_save_path'])
     return parser
 
 
-def train(args=None):
+def train(args=None, return_best_model_path=False):
+    parser = train_parser()
     if args is None:
-        parser = train_parser()
         args = parser.parse_args()
+    elif isinstance(args, list):
+        args = parser.parse_args(args, _skip_check=True)  # noqa
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
+    root_dir = Path(args.default_root_dir).resolve()
+    name = EXPERIMENT_NAME
+    tb_logger = TensorBoardLogger(
+        str(root_dir),
+        name=name,
+    )
     checkpoint_callback = ModelCheckpoint(
-        monitor='avg_val_isbi15_score',
+        monitor='val_isbi15_score',
         save_top_k=3,
         save_last=True,
         mode='max',
-    )
-    tb_logger = TensorBoardLogger(
-        args.default_root_dir,
-        name=EXPERIMENT_NAME,
+        every_n_val_epochs=args.checkpoint_every_n_epochs,
     )
     trainer = Trainer.from_argparse_args(
         args,
         logger=tb_logger,
-        checkpoint_callback=checkpoint_callback,
+        checkpoint_callback=True,
+        callbacks=[checkpoint_callback],
     )
     dict_args = vars(args)
     dm = LesionSegDataModuleTrain.from_csv(
-        args.train_csv,
-        args.valid_csv,
         **dict_args,
     )
     dm.setup()
     model = LesionSegLightningTiramisu(**dict_args)
     logger.debug(model)
-    trainer.fit(model, dm)
+    trainer.fit(model, datamodule=dm)
     best_model_path = get_best_model_path(checkpoint_callback)
     exp_dir = get_experiment_directory(best_model_path)
     logger.info(f"Finished training.")
     logger.info(f"Best model path: {best_model_path}")
-    generate_train_config_yaml(exp_dir, dict_args)
-    generate_predict_config_yaml(exp_dir, dict_args, best_model_path)
-    return 0
+    config_kwargs = dict(
+        exp_dir=exp_dir,
+        dict_args=dict_args,
+        best_model_path=best_model_path,
+    )
+    generate_train_config_yaml(**config_kwargs, parser=parser)
+    generate_predict_config_yaml(**config_kwargs, parser=predict_parser())
+    if return_best_model_path:
+        return best_model_path
+    else:
+        return 0
 
 
 def predict_parser():
@@ -358,7 +374,8 @@ def predict_parser():
         prog='lesion-predict',
         description=desc,
     )
-    parser.add_argument('--config', action=ActionConfigFile)
+    parser.add_argument('--config', action=ActionConfigFile,
+                        help='path to a configuration file in json or yaml format')
     exp_parser = parser.add_argument_group('Experiment')
     exp_parser.add_argument('-mp', '--model-path', type=file_path(), required=True,
                             help='path to output the trained model')
@@ -376,16 +393,17 @@ def predict_parser():
 
 
 def predict(args=None):
+    parser = predict_parser()
     if args is None:
-        parser = predict_parser()
         args = parser.parse_args()
+    elif isinstance(args, list):
+        args = parser.parse_args(args, _skip_check=True)  # noqa
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
     trainer = Trainer.from_argparse_args(args)
     dict_args = vars(args)
     dm = LesionSegDataModulePredict.from_csv(
-        args.predict_csv,
         **dict_args,
     )
     dm.setup()
@@ -393,8 +411,8 @@ def predict(args=None):
         args.model_path,
     )
     logger.debug(model)
-    trainer.predict(model, dm)
+    trainer.predict(model, datamodule=dm)
     exp_dir = get_experiment_directory(args.model_path)
     logger.info(f"Finished prediction.")
-    generate_predict_config_yaml(exp_dir, dict_args)
+    generate_predict_config_yaml(exp_dir, parser, dict_args)
     return 0

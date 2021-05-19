@@ -42,7 +42,10 @@ def to_np(x: Tensor) -> np.ndarray:
 
 
 def extract_and_average(dicts: List[dict], field: str) -> list:
-    return torch.cat([d[field] for d in dicts]).mean()
+    if len(dicts) == 1:
+        return dicts[0][field]
+    else:
+        return torch.cat([d[field] for d in dicts]).mean()
 
 
 class BoundingBox3D:
@@ -60,7 +63,7 @@ class BoundingBox3D:
         self.original_shape = original_shape
 
     def crop_to_bbox(self, x: Tensor) -> Tensor:
-        return x[..., self.i, self.j, self.j]
+        return x[..., self.i, self.j, self.k]
 
     def __call__(self, x: Tensor) -> Tensor:
         return self.crop_to_bbox(x)
@@ -73,29 +76,29 @@ class BoundingBox3D:
 
     def uncrop_batch(self, batch: Tensor) -> Tensor:
         assert batch.ndim == 5, "uncrop_batch expects tensors with shape NxCxHxWxD"
-        batch_size, channel_size = batch.shape[2:]
+        batch_size, channel_size = batch.shape[:2]
         out_shape = (batch_size, channel_size) + self.original_shape
         out = torch.zeros(out_shape, dtype=batch.dtype, device=batch.device)
         out[..., self.i, self.j, self.k] = batch
         return out
 
     @staticmethod
-    def find_bbox(image: Tensor, pad: int = 0) -> Tuple[int, int, int, int, int, int]:
-        r = torch.any(torch.any(image, dim=1), dim=1)
-        c = torch.any(torch.any(image, dim=0), dim=1)
-        z = torch.any(torch.any(image, dim=0), dim=0)
-        rmin, rmax = torch.where(r)[0]
-        cmin, cmax = torch.where(c)[0]
-        zmin, zmax = torch.where(z)[0]
-        i, j, k = image.shape
-        return (max(rmin - pad, 0), min(rmax + pad, i),
-                max(cmin - pad, 0), min(cmax + pad, j),
-                max(zmin - pad, 0), min(zmax + pad, k))
+    def find_bbox(mask: Tensor, pad: int = 0) -> Tuple[int, int, int, int, int, int]:
+        h = torch.where(torch.any(torch.any(mask, dim=1), dim=1))[0]
+        w = torch.where(torch.any(torch.any(mask, dim=0), dim=1))[0]
+        d = torch.where(torch.any(torch.any(mask, dim=0), dim=0))[0]
+        h_low, h_high = h[0].item(), h[-1].item()
+        w_low, w_high = w[0].item(), w[-1].item()
+        d_low, d_high = d[0].item(), d[-1].item()
+        i, j, k = mask.shape
+        return (max(h_low - pad, 0), min(h_high + pad, i),
+                max(w_low - pad, 0), min(w_high + pad, j),
+                max(d_low - pad, 0), min(d_high + pad, k))
 
     @classmethod
-    def from_image(cls, image: Tensor, pad: int = 0):
+    def from_image(cls, image: Tensor, pad: int = 0, foreground_min: float = 1e-4):
         """ find a bounding box for a 3D tensor (with optional padding) """
-        bbox_idxs = cls.find_bbox(image, pad)
+        bbox_idxs = cls.find_bbox(image > foreground_min, pad)
         return cls(*bbox_idxs, original_shape=image.shape)
 
     @classmethod
@@ -107,12 +110,12 @@ class BoundingBox3D:
         assert batch.ndim == 5, "from_batch expects tensors with shape NxCxHxWxD"
         batch_size = batch.shape[0]
         image_shape = batch.shape[2:]
-        h_low, h_high = float('inf'), float('-inf')
-        w_low, w_high = float('inf'), float('-inf')
-        d_low, d_high = float('inf'), float('-inf')
+        h_low, h_high = image_shape[0], -1
+        w_low, w_high = image_shape[1], -1
+        d_low, d_high = image_shape[2], -1
         for i in range(batch_size):
             image = batch[i, channel, ...]
-            hl, hh, wl, wh, dl, dh = cls.find_bbox(image > foreground_min, pad=pad)
+            hl, hh, wl, wh, dl, dh = cls.find_bbox(image > foreground_min, pad)
             h_low, h_high = min(hl, h_low), max(hh, h_high)
             w_low, w_high = min(wl, w_low), max(wh, w_high)
             d_low, d_high = min(dl, d_low), max(dh, d_high)

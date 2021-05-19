@@ -17,6 +17,7 @@ __all__ = [
 import numpy as np
 from scipy.ndimage.morphology import binary_fill_holes, generate_binary_structure
 from skimage.morphology import remove_small_objects
+import torch
 from torch import Tensor
 from torchmetrics.functional import dice_score, precision, pearson_corrcoef
 
@@ -36,6 +37,8 @@ def clean_segmentation(label: np.ndarray,
 def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
     dice = dice_score(pred.int(), target.int())
+    if dice.isnan():
+        dice = torch.tensor(0., device=pred.device)
     ppv = precision(pred.int(), target.int(), mdmc_average='samplewise')
     corr = pearson_corrcoef(pred.flatten().float(), target.flatten().float())  # noqa
     return 0.25 * dice + 0.25 * ppv + 0.5 * corr

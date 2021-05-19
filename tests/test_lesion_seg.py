@@ -69,6 +69,18 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
     args += f'--default_root_dir {temp_dir}'.split()
     args += f'--train-csv {train_csv}'.split()
     args += f'--valid-csv {train_csv}'.split()
+    args += '--train-batch-size 1'.split()
+    args += '--val-batch-size 1'.split()
+    args += '--train-patch-size 16 16 16'.split()
+    args += '--val-patch-size 16 16 16'.split()
+    args += '--queue-length 1'.split()
+    args += '--samples-per-volume 1'.split()
+    args += '--n-epochs 10'.split()
+    args += '--down-blocks 2 2'.split()
+    args += '--up-blocks 2 2'.split()
+    args += '--bottleneck-layers 2'.split()
+    args += '--first-conv-out-channels 2'.split()
+    args += '--num-workers 0'.split()
     return args
 
 
@@ -76,11 +88,14 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
 def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     args = []
     args += f'--default_root_dir {temp_dir}'.split()
-    args += f'--predict-csv {train_csv}'.split()
-    args += f'--fast_dev {train_csv}'.split()
+    args += f'--predict-csv {predict_csv}'.split()
+    args += f'--num-workers 0'.split()
+    args += ['--fast_dev_run']
     return args
 
 
 def test_cli(cli_train_args, cli_predict_args):
-    retcode = train()
+    best_model_path = train(cli_train_args, True)
+    cli_predict_args += f'--model-path {best_model_path}'.split()
+    retcode = predict(cli_predict_args)
     assert retcode == 0
