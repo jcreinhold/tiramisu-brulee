@@ -33,12 +33,11 @@ class LightningTiramisu(pl.LightningModule):
                  init_type: str = 'normal',
                  gain: float = 0.02,
                  n_epochs: int = 1,
-                 lr: float = 1e-3,
+                 lr: float = 3e-4,
                  betas: Tuple[int, int] = (0.9, 0.99),
                  weight_decay: float = 1e-7):
         super().__init__()
         self.save_hyperparameters()
-        self.network_dim = self.network_dim
         if self._use_2d_network:
             net = Tiramisu2d
         elif self._use_3d_network:
@@ -46,28 +45,28 @@ class LightningTiramisu(pl.LightningModule):
         else:
             raise self._invalid_network_dim
         self.net = net(
-            self.in_channels,
-            self.out_channels,
-            self.down_blocks,
-            self.up_blocks,
-            self.bottleneck_layers,
-            self.growth_rate,
-            self.first_conv_out_channels,
-            self.dropout_rate
+            self.hparams.in_channels,
+            self.hparams.out_channels,
+            self.hparams.down_blocks,
+            self.hparams.up_blocks,
+            self.hparams.bottleneck_layers,
+            self.hparams.growth_rate,
+            self.hparams.first_conv_out_channels,
+            self.hparams.dropout_rate
         )
-        init_weights(self.net, self.init_type, self.gain)
+        init_weights(self.net, self.hparams.init_type, self.hparams.gain)
 
     @property
     def _use_2d_network(self):
-        return self.network_dim == 2
+        return self.hparams.network_dim == 2
 
     @property
     def _use_3d_network(self):
-        return self.network_dim == 3
+        return self.hparams.network_dim == 3
 
     @property
     def _invalid_network_dim(self):
-        err_msg = f"Network dim. {self.network_dim} invalid."
+        err_msg = f"Network dim. {self.hparams.network_dim} invalid."
         return ValueError(err_msg)
 
     def forward(self, x: Tensor) -> Tensor:

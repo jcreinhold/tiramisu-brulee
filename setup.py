@@ -27,15 +27,16 @@ test_requirements = [
 ]
 
 extras_requirements = {
-    'medical': [
+    'lesionseg': [
+        'jsonargparse',
         'lesion-metrics',
         'nibabel',
         'pandas',
+        'pytorch-lightning',
+        'PyYAML',
+        'ruyaml',
         'scikit-image',
         'torchio',
-    ],
-    'lightning': [
-        'pytorch-lightning[all]',
         'torchmetrics',
     ]
 }
@@ -56,7 +57,8 @@ setup(
     description="A 2D and 3D PyTorch implementation of the Tiramisu CNN",
     entry_points={
         'console_scripts': [
-            'lesion-seg=tiramisu_brulee.experiment.lesion_seg.seg:main',
+            'lesion-train=tiramisu_brulee.experiment.lesion_seg.seg:train',
+            'lesion-predict=tiramisu_brulee.experiment.lesion_seg.seg:predict',
         ],
     },
     install_requires=requirements,

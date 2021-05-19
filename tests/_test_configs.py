@@ -35,7 +35,7 @@ test_lightningtiramisu2d_config = adict(
         up_blocks=(2, 2),
         bottleneck_layers=2,
         growth_rate=16,
-        out_chans_first_conv=48,
+        first_conv_out_channels=48,
         dropout_rate=0.2,
     ),
     optim_params=adict(
@@ -68,7 +68,7 @@ test_lightningtiramisu3d_config = adict(
         up_blocks=(2, 2),
         bottleneck_layers=2,
         growth_rate=16,
-        out_chans_first_conv=48,
+        first_conv_out_channels=48,
         dropout_rate=0.2
     ),
     optim_params=adict(

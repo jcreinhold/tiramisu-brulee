@@ -9,10 +9,12 @@ Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 12, 2020
 """
 
-__all__ = ['GridAttentionBlock2d',
-           'GridAttentionBlock3d',
-           'AttentionTiramisu2d',
-           'AttentionTiramisu3d']
+__all__ = [
+    'GridAttentionBlock2d',
+    'GridAttentionBlock3d',
+    'AttentionTiramisu2d',
+    'AttentionTiramisu3d',
+]
 
 from typing import *
 

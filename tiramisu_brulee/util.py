@@ -9,8 +9,9 @@ Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 01, 2020
 """
 
-__all__ = ['init_weights',
-           'n_dirname']
+__all__ = [
+    'init_weights',
+]
 
 import os
 

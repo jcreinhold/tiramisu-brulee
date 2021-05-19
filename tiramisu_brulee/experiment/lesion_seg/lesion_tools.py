@@ -3,6 +3,8 @@
 """
 tiramisu_brulee.experiment.lesion_seg.lesion_tools
 
+functions specific to handling/processing lesion segmentations
+
 Author: Jacob Reinhold (jcreinhold)
 Created on: May 16, 2021
 """

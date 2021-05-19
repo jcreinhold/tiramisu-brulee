@@ -3,7 +3,7 @@
 """
 tiramisu_brulee.loss
 
-loss functions to support lesion segmentation
+various segmentation loss functions
 
 References:
     [1] https://gitlab.com/shan-deep-networks/pytorch-metrics/

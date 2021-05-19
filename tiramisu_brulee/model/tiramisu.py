@@ -21,8 +21,10 @@ Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 01, 2020
 """
 
-__all__ = ['Tiramisu2d',
-           'Tiramisu3d']
+__all__ = [
+    'Tiramisu2d',
+    'Tiramisu3d',
+]
 
 from typing import *
 

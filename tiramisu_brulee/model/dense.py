@@ -9,18 +9,19 @@ Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
 Created on: Jul 02, 2020
 """
 
-__all__ = ['Bottleneck2d',
-           'Bottleneck3d',
-           'DenseBlock2d',
-           'DenseBlock3d',
-           'TransitionDown2d',
-           'TransitionDown3d',
-           'TransitionUp2d',
-           'TransitionUp3d']
-
-from typing import *
+__all__ = [
+    'Bottleneck2d',
+    'Bottleneck3d',
+    'DenseBlock2d',
+    'DenseBlock3d',
+    'TransitionDown2d',
+    'TransitionDown3d',
+    'TransitionUp2d',
+    'TransitionUp3d',
+]
 
 from functools import partial
+from typing import *
 
 import torch
 from torch import Tensor

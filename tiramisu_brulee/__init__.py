@@ -4,6 +4,6 @@ __author__ = """Jacob Reinhold"""
 __email__ = 'jcreinhold@gmail.com'
 __version__ = '0.1.3'
 
-from .loss import *
-from .model import *
-from .util import *
+from tiramisu_brulee.loss import *
+from tiramisu_brulee.model import *
+from tiramisu_brulee.util import *
