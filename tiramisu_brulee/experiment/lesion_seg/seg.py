@@ -87,7 +87,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         init_type: str = 'normal',
         gain: float = 0.02,
         n_epochs: int = 1,
-        lr: float = 1e-3,
+        learning_rate: float = 1e-3,
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7,
         combo_weight: float = 0.6,
@@ -116,7 +116,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             init_type,
             gain,
             n_epochs,
-            lr,
+            learning_rate,
             betas,
             weight_decay,
         )
@@ -218,7 +218,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             momentum, alpha = self.hparams.betas
             optimizer = RMSprop(
                 self.parameters(),
-                lr=self.hparams.lr,
+                lr=self.hparams.learning_rate,
                 momentum=momentum,
                 alpha=alpha,
                 weight_decay=self.hparams.weight_decay,
@@ -226,7 +226,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         else:
             optimizer = AdamW(
                 self.parameters(),
-                lr=self.hparams.lr,
+                lr=self.hparams.learning_rate,
                 betas=self.hparams.betas,
                 weight_decay=self.hparams.weight_decay,
             )
@@ -413,6 +413,9 @@ def train(args=None, return_best_model_path=False):
     dm.setup()
     model = LesionSegLightningTiramisu(**dict_args)
     logger.debug(model)
+    if args.auto_scale_batch_size or args.auto_lr_find:
+        tuning_output = trainer.tune(model, datamodule=dm)
+        logger.info(tuning_output)
     trainer.fit(model, datamodule=dm)
     best_model_path = get_best_model_path(checkpoint_callback)
     exp_dir = get_experiment_directory(best_model_path)

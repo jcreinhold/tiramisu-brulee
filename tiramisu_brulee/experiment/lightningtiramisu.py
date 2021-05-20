@@ -34,7 +34,7 @@ class LightningTiramisu(pl.LightningModule):
         init_type: str = 'normal',
         gain: float = 0.02,
         n_epochs: int = 1,
-        lr: float = 3e-4,
+        learning_rate: float = 3e-4,
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7
     ):
