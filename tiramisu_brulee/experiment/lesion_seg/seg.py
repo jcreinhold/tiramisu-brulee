@@ -420,14 +420,15 @@ def train(args=None, return_best_model_path=False):
     best_model_path = get_best_model_path(checkpoint_callback)
     exp_dir = get_experiment_directory(best_model_path)
     logger.info(f"Finished training.")
-    logger.info(f"Best model path: {best_model_path}")
-    config_kwargs = dict(
-        exp_dir=exp_dir,
-        dict_args=dict_args,
-        best_model_path=best_model_path,
-    )
-    generate_train_config_yaml(**config_kwargs, parser=parser)
-    generate_predict_config_yaml(**config_kwargs, parser=predict_parser())
+    if not args.fast_dev_run:
+        logger.info(f"Best model path: {best_model_path}")
+        config_kwargs = dict(
+            exp_dir=exp_dir,
+            dict_args=dict_args,
+            best_model_path=best_model_path,
+        )
+        generate_train_config_yaml(**config_kwargs, parser=parser)
+        generate_predict_config_yaml(**config_kwargs, parser=predict_parser())
     if return_best_model_path:
         return best_model_path
     else:
@@ -483,5 +484,6 @@ def predict(args=None):
     trainer.predict(model, datamodule=dm)
     exp_dir = get_experiment_directory(args.model_path)
     logger.info(f"Finished prediction.")
-    generate_predict_config_yaml(exp_dir, parser, dict_args)
+    if not args.fast_dev_run:
+        generate_predict_config_yaml(exp_dir, parser, dict_args)
     return 0
