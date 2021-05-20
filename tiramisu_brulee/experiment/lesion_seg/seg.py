@@ -522,6 +522,7 @@ def train(args=None, return_best_model_paths=False):
     name = EXPERIMENT_NAME
     tb_logger = TensorBoardLogger(str(root_dir), name=name)
     checkpoint_callback = ModelCheckpoint(
+        filename="{epoch}-{val_loss:.2f}-{val_isbi15_score:.2f}",
         monitor="val_isbi15_score",
         save_top_k=3,
         save_last=True,
