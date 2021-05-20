@@ -107,10 +107,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self,
         train_subject_list: List[tio.Subject],
         val_subject_list: List[tio.Subject],
-        train_patch_size: List[int] = (96, 96, 96),
-        val_patch_size: List[int] = (128, 128, 128),
-        train_batch_size: int = 2,
-        val_batch_size: int = 2,
+        batch_size: int = 2,
+        patch_size: List[int] = (96, 96, 96),
         queue_length: int = 200,
         samples_per_volume: int = 10,
         num_workers: int = 16,
@@ -121,10 +119,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         super().__init__()
         self.train_subject_list = train_subject_list
         self.val_subject_list = val_subject_list
-        self.train_patch_size = train_patch_size
-        self.val_patch_size = val_patch_size
-        self.train_batch_size = train_batch_size
-        self.val_batch_size = val_batch_size
+        self.batch_size = batch_size
+        self.patch_size = patch_size
         self.queue_length = queue_length
         self.samples_per_volume = samples_per_volume
         self.num_workers = num_workers
@@ -155,7 +151,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         train_dataloader = DataLoader(
             patches_queue,
-            batch_size=self.train_batch_size,
+            batch_size=self.batch_size,
             collate_fn=self._collate_fn,
         )
         return train_dataloader
@@ -163,7 +159,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     def val_dataloader(self) -> DataLoader:
         val_dataloader = DataLoader(
             self.val_dataset,
-            batch_size=self.val_batch_size,
+            batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
             collate_fn=self._collate_fn,
@@ -183,7 +179,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return transform
 
     def _get_train_sampler(self):
-        ps = self.train_patch_size
+        ps = self.patch_size
         if self.label_sampler:
             return tio.LabelSampler(ps)
         else:
@@ -199,7 +195,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _get_val_augmentation(self):
         transform = tio.CropOrPad(
-            self.val_patch_size
+            self.patch_size
         )
         return transform
 
@@ -224,14 +220,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                             help='path to csv with training images')
         parser.add_argument('--valid-csv', type=file_path(), required=True,
                             help='path to csv with validation images')
-        parser.add_argument('-tbs', '--train-batch-size', type=positive_int(), default=2,
-                            help='training/test batch size')
-        parser.add_argument('-vbs', '--val-batch-size', type=positive_int(), default=2,
-                            help='validation batch size')
-        parser.add_argument('-tps', '--train-patch-size', type=positive_int(), nargs=3, default=[96, 96, 96],
-                            help='training/test patch size extracted from image')
-        parser.add_argument('-vps', '--val-patch-size', type=positive_int(), nargs=3, default=[128, 128, 128],
-                            help='validation patch size extracted from image')
+        parser.add_argument('-bs', '--batch-size', type=positive_int(), default=2,
+                            help='training/validation batch size')
+        parser.add_argument('-ps', '--patch-size', type=positive_int(), nargs=3, default=[96, 96, 96],
+                            help='training/validation patch size extracted from image')
         parser.add_argument('-nw', '--num-workers', type=nonnegative_int(), default=16,
                             help='number of CPUs to use for loading data')
         parser.add_argument('-ql', '--queue-length', type=positive_int(), default=200,
