@@ -51,6 +51,7 @@ from tiramisu_brulee.experiment.lesion_seg.parse import (
     get_experiment_directory,
     none_string_to_none,
     nonnegative_int,
+    path_to_str,
     positive_float,
     positive_int,
     probability_float,
@@ -400,6 +401,7 @@ def train(args=None, return_best_model_path=False):
         mode='max',
         every_n_val_epochs=args.checkpoint_every_n_epochs,
     )
+    args = path_to_str(args)
     trainer = Trainer.from_argparse_args(
         args,
         logger=tb_logger,
@@ -418,9 +420,9 @@ def train(args=None, return_best_model_path=False):
         logger.info(tuning_output)
     trainer.fit(model, datamodule=dm)
     best_model_path = get_best_model_path(checkpoint_callback)
-    exp_dir = get_experiment_directory(best_model_path)
     logger.info(f"Finished training.")
     if not args.fast_dev_run:
+        exp_dir = get_experiment_directory(best_model_path)
         logger.info(f"Best model path: {best_model_path}")
         config_kwargs = dict(
             exp_dir=exp_dir,
@@ -468,6 +470,7 @@ def predict(args=None):
     elif isinstance(args, list):
         args = parser.parse_args(args, _skip_check=True)  # noqa
     args = none_string_to_none(args)
+    args = path_to_str(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
@@ -482,8 +485,8 @@ def predict(args=None):
     )
     logger.debug(model)
     trainer.predict(model, datamodule=dm)
-    exp_dir = get_experiment_directory(args.model_path)
     logger.info(f"Finished prediction.")
     if not args.fast_dev_run:
+        exp_dir = get_experiment_directory(args.model_path)
         generate_predict_config_yaml(exp_dir, parser, dict_args)
     return 0

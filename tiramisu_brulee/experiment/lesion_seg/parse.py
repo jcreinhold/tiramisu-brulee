@@ -19,6 +19,7 @@ __all__ = [
     'generate_predict_config_yaml',
     'none_string_to_none',
     'nonnegative_int',
+    'path_to_str',
     'positive_float',
     'positive_int',
     'probability_float',
@@ -29,7 +30,7 @@ from argparse import ArgumentTypeError
 from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from jsonargparse import ArgumentParser
 import yaml
@@ -107,6 +108,8 @@ def get_best_model_path(
 
 def get_experiment_directory(model_path: Path) -> Path:
     """ gets the experiment directory from a checkpoint model path """
+    if isinstance(model_path, str):
+        model_path = Path(model_path).resolve()
     return model_path.parents[1]
 
 
@@ -194,13 +197,33 @@ def fix_type_funcs(parser):
                 action.type = lambda val: val if val is None else int(val)
 
 
-def none_string_to_none(args):
-    """ goes through an instance of parsed args and maps 'None' -> None """
+def _map_attrs(
+    args: ArgumentParser,
+    cond: Callable,
+    target: Callable
+) -> ArgumentParser:
+    """ map attributes to some func of the value if it satisfied a cond """
     attrs = [a for a in dir(args) if not a.startswith('_')]
     for attr in attrs:
         val = getattr(args, attr)
-        if val == 'None':
-            setattr(args, attr, None)
+        if cond(val):
+            setattr(args, attr, target(val))
+    return args
+
+
+def none_string_to_none(args: ArgumentParser):
+    """ goes through an instance of parsed args and maps 'None' -> None """
+    cond = lambda val: val == 'None'
+    target = lambda val: None
+    args = _map_attrs(args, cond, target)
+    return args
+
+
+def path_to_str(args):
+    """ goes through an instance of parsed args and maps Path -> str """
+    cond = lambda val: isinstance(val, Path)
+    target = lambda val: str(val)
+    args = _map_attrs(args, cond, target)
     return args
 
 
