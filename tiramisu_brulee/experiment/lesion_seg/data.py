@@ -167,18 +167,15 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return val_dataloader
 
     def _get_train_augmentation(self):
-        transform = None
+        transforms = [LabelToFloat()]
         if self.spatial_augmentation:
             spatial = tio.OneOf(
                 {tio.RandomAffine(): 0.8,
                  tio.RandomElasticDeformation(): 0.2},
                 p=0.75,
             )
-            transforms = [
-                spatial,
-                LabelToFloat(),
-            ]
-            transform = tio.Compose(transforms)
+            transforms.insert(0, spatial)
+        transform = tio.Compose(transforms)
         return transform
 
     def _get_train_sampler(self):
