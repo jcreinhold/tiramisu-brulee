@@ -65,10 +65,11 @@ def predict_csv(temp_dir: Path, data_dir: Path) -> Path:
 
 @pytest.fixture
 def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
+    csv_ = " ".join([str(csv) for csv in [train_csv, train_csv]])
     args = []
     args += f"--default_root_dir {temp_dir}".split()
-    args += f"--train-csv {train_csv}".split()
-    args += f"--valid-csv {train_csv}".split()
+    args += f"--train-csv {csv_}".split()
+    args += f"--valid-csv {csv_}".split()
     args += "--batch-size 1".split()
     args += "--patch-size 16 16 16".split()
     args += "--queue-length 1".split()
@@ -93,7 +94,8 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
 
 
 def test_cli(cli_train_args, cli_predict_args):
-    best_model_path = train(cli_train_args, True)
-    cli_predict_args += f"--model-path {best_model_path}".split()
+    best_model_paths = train(cli_train_args, True)
+    best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
+    cli_predict_args += f"--model-path {best_model_paths}".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0

@@ -110,42 +110,53 @@ def get_experiment_directory(model_path: Path) -> Path:
 
 
 def _generate_config_yaml(
-    exp_dir: Path,
+    exp_dirs: List[Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_path: Path,
+    best_model_paths: Union[List[Path], None],
     stage: str,
 ):
+    """ generate config yaml file(s) for `stage`, store in experiment dir """
     assert stage in ("train", "predict")
+    n_dirs = len(exp_dirs)
+    if best_model_paths is not None:
+        assert n_dirs == len(best_model_paths)
     config = vars(parser.get_defaults())
     for k, v in dict_args.items():
         if k in config:
             config[k] = v
-    config_filename = exp_dir / f"{stage}_config.yaml"
-    if best_model_path is not None:
-        config["model_path"] = str(best_model_path)
-    if stage == "predict":
-        config["predict_csv"] = "CHANGE ME!"
-    with open(config_filename, "w") as f:
-        yaml.dump(config, f)
-    logger.info(f"{stage} configuration file generated: " f"{config_filename}")
+    for exp_dir in exp_dirs:
+        config_filename = exp_dir / f"{stage}_config.yaml"
+        if best_model_paths is not None:
+            config["model_path"] = [str(bmp) for bmp in best_model_paths]
+        if stage == "predict":
+            config["predict_csv"] = "SET ME!"
+        with open(config_filename, "w") as f:
+            yaml.dump(config, f)
+        logger.info(f"{stage} configuration file generated: {config_filename}")
 
 
 def generate_train_config_yaml(
-    exp_dir: Path, parser: ArgumentParser, dict_args: dict, **kwargs
+    exp_dirs: List[Path], parser: ArgumentParser, dict_args: dict, **kwargs
 ):
+    """ generate config yaml file(s) for training, store in experiment dir """
     if dict_args["config"] is not None:
         return  # user used config file, so we do not need to generate one
-    _generate_config_yaml(exp_dir, parser, dict_args, None, "train")
+    if isinstance(exp_dirs, Path):
+        exp_dirs = [exp_dirs]
+    _generate_config_yaml(exp_dirs, parser, dict_args, None, "train")
 
 
 def generate_predict_config_yaml(
-    exp_dir: Path,
+    exp_dirs: List[Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_path: Optional[Path] = None,
+    best_model_paths: Optional[List[Path]] = None,
 ):
-    _generate_config_yaml(exp_dir, parser, dict_args, best_model_path, "predict")
+    """ generate config yaml file(s) for prediction, store in experiment dir """
+    if isinstance(exp_dirs, Path):
+        exp_dirs = [exp_dirs]
+    _generate_config_yaml(exp_dirs, parser, dict_args, best_model_paths, "predict")
 
 
 def remove_args(parser: ArgumentParser, args: List[str]):

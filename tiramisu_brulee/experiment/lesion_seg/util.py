@@ -10,6 +10,7 @@ Created on: May 16, 2021
 """
 
 __all__ = [
+    "append_num_to_filename",
     "BoundingBox3D",
     "extract_and_average",
     "minmax_scale_batch",
@@ -20,8 +21,8 @@ __all__ = [
 ]
 
 import logging
-import os
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -138,15 +139,23 @@ def reshape_for_broadcasting(x: Tensor, ndim: int) -> Tensor:
     return x.view(-1, *dims)
 
 
-def split_filename(filepath: str) -> Tuple[str, str, str]:
+def split_filename(filepath: Union[str, Path]) -> Tuple[Path, str, str]:
     """ split a filepath into the directory, base, and extension """
-    path = os.path.dirname(filepath)
-    filename = os.path.basename(filepath)
-    base, ext = os.path.splitext(filename)
+    filepath = Path(filepath).resolve()
+    path = filepath.parent
+    base = Path(filepath.stem)
+    ext = filepath.suffix
     if ext == ".gz":
-        base, ext2 = os.path.splitext(base)
+        ext2 = base.suffix
+        base = base.stem
         ext = ext2 + ext
-    return path, base, ext
+    return Path(path), base, ext
+
+
+def append_num_to_filename(filepath: Union[str, Path], num: int) -> Path:
+    path, base, ext = split_filename(filepath)
+    base += f"_{num}"
+    return path / (base + ext)
 
 
 def setup_log(verbosity: int):

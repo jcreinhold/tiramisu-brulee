@@ -216,14 +216,18 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         parser.add_argument(
             "--train-csv",
             type=file_path(),
+            nargs="+",
             required=True,
-            help="path to csv with training images",
+            default=["SET ME!"],
+            help="path(s) to csv(s) with training images",
         )
         parser.add_argument(
             "--valid-csv",
             type=file_path(),
+            nargs="+",
             required=True,
-            help="path to csv with validation images",
+            default=["SET ME!"],
+            help="path(s) to csv(s) with validation images",
         )
         parser.add_argument(
             "-bs",
@@ -336,6 +340,7 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
             "--predict-csv",
             type=file_path(),
             required=True,
+            default="SET ME!",
             help="path to csv of prediction images",
         )
         parser.add_argument(

@@ -13,6 +13,7 @@ __all__ = [
     "LesionSegLightningTiramisu",
 ]
 
+from collections import namedtuple
 from functools import partial
 import inspect
 import logging
@@ -25,6 +26,8 @@ from jsonargparse import (
     set_config_read_mode,
 )
 import nibabel as nib
+import numpy as np
+import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -58,6 +61,7 @@ from tiramisu_brulee.experiment.lesion_seg.parse import (
     remove_args,
 )
 from tiramisu_brulee.experiment.lesion_seg.util import (
+    append_num_to_filename,
     BoundingBox3D,
     minmax_scale_batch,
     setup_log,
@@ -69,6 +73,7 @@ from tiramisu_brulee.loss import (
     mse_segmentation_loss,
 )
 
+ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 set_config_read_mode(fsspec_enabled=True)
 
@@ -98,8 +103,10 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         threshold: float = 0.5,
         min_lesion_size: int = 3,
         fill_holes: bool = True,
+        predict_probability: bool = False,
         mixup: bool = False,
         mixup_alpha: float = 0.4,
+        _model_num: ModelNum = ModelNum(1, 1),  # internal param for ith of n models
         **kwargs,
     ):
         network_dim = 3  # only support 3D input
@@ -120,7 +127,8 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             betas,
             weight_decay,
         )
-        self.save_hyperparameters()
+        self._model_num = _model_num
+        self.save_hyperparameters(ignore="_model_num")
 
     def setup(self, stage: Optional[str] = None):
         if self.hparams.loss_function == "combo":
@@ -180,7 +188,9 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         bbox = BoundingBox3D.from_batch(src, pad=0)
         src = bbox(src)
         pred = self(src)
-        pred_seg = torch.sigmoid(pred) > self.hparams.threshold
+        pred_seg = torch.sigmoid(pred)
+        if not self.hparams.predict_probability:
+            pred_seg = pred_seg > self.hparams.threshold
         pred_seg = bbox.uncrop_batch(pred_seg)
         pred_seg = pred_seg.float()
         return pred_seg
@@ -192,15 +202,18 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         batch_idx: int,
         dataloader_idx: int,
     ):
-        pred_step_outputs = to_np(pred_step_outputs).squeeze()
-        for pred_seg in pred_step_outputs:
-            clean_segmentation(pred_seg,)
+        data = to_np(pred_step_outputs).squeeze()
+        if not self.hparams.predict_probability:
+            data = [clean_segmentation(seg) for seg in data]
+        data = [seg.astype(np.float32) for seg in data]
         affine_matrices = batch["affine"]
         out_fns = batch["out"]
-        nifti_attrs = zip(pred_step_outputs, affine_matrices, out_fns)
-        for pred, affine, fn in nifti_attrs:
+        nifti_attrs = zip(data, affine_matrices, out_fns)
+        for data, affine, fn in nifti_attrs:
+            if self._model_num != ModelNum(num=1, out_of=1):
+                fn = append_num_to_filename(fn, self._model_num.num)
             logging.info(f"Saving {fn}.")
-            nib.Nifti1Image(pred, affine).to_filename(fn)
+            nib.Nifti1Image(data, affine).to_filename(fn)
 
     def configure_optimizers(self):
         if self.hparams.rmsprop:
@@ -440,10 +453,18 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             default=False,
             help="in testing, preform binary hole filling",
         )
+        parser.add_argument(
+            "-pp",
+            "--predict-probability",
+            action="store_true",
+            default=False,
+            help="in testing, store the probability instead of the binary prediction",
+        )
         return parent_parser
 
 
 def train_parser():
+    """ argument parser for training a 3D Tiramisu CNN """
     desc = "Train a 3D Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-train", description=desc,)
     parser.add_argument(
@@ -470,7 +491,7 @@ def train_parser():
     parser = Trainer.add_argparse_args(parser)
     parser.link_arguments("n_epochs", "min_epochs")  # noqa
     parser.link_arguments("n_epochs", "max_epochs")  # noqa
-    unnecessary_options = [
+    unnecessary_args = [
         "checkpoint_callback",
         "logger",
         "min_steps",
@@ -478,12 +499,13 @@ def train_parser():
         "truncated_bptt_steps",
         "weights_save_path",
     ]
-    remove_args(parser, unnecessary_options)
+    remove_args(parser, unnecessary_args)
     fix_type_funcs(parser)
     return parser
 
 
-def train(args=None, return_best_model_path=False):
+def train(args=None, return_best_model_paths=False):
+    """ train a 3D Tiramisu CNN for segmentation """
     parser = train_parser()
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
@@ -498,7 +520,7 @@ def train(args=None, return_best_model_path=False):
     else:
         root_dir = Path.cwd()
     name = EXPERIMENT_NAME
-    tb_logger = TensorBoardLogger(str(root_dir), name=name,)
+    tb_logger = TensorBoardLogger(str(root_dir), name=name)
     checkpoint_callback = ModelCheckpoint(
         monitor="val_isbi15_score",
         save_top_k=3,
@@ -513,34 +535,52 @@ def train(args=None, return_best_model_path=False):
         checkpoint_callback=True,
         callbacks=[checkpoint_callback],
     )
+    n_models_to_train = len(args.train_csv)
+    if n_models_to_train != len(args.valid_csv):
+        raise ValueError(
+            "Number of training and validation CSVs must be equal.\n"
+            f"Got {n_models_to_train} != {len(args.valid_csv)}"
+        )
+    csvs = zip(args.train_csv, args.valid_csv)
+    best_model_paths = []
     dict_args = vars(args)
-    dm = LesionSegDataModuleTrain.from_csv(**dict_args,)
-    dm.setup()
-    model = LesionSegLightningTiramisu(**dict_args)
-    logger.debug(model)
-    if args.auto_scale_batch_size or args.auto_lr_find:
-        tuning_output = trainer.tune(model, datamodule=dm)
-        logger.info(tuning_output)
-    trainer.fit(model, datamodule=dm)
-    best_model_path = get_best_model_path(checkpoint_callback)
-    logger.info("Finished training.")
+    for i, (train_csv, valid_csv) in enumerate(csvs, 1):
+        nth_model = f" ({i}/{n_models_to_train})"
+        dict_args["train_csv"] = train_csv
+        dict_args["valid_csv"] = valid_csv
+        dm = LesionSegDataModuleTrain.from_csv(**dict_args)
+        dm.setup()
+        model = LesionSegLightningTiramisu(**dict_args)
+        logger.debug(model)
+        if args.auto_scale_batch_size or args.auto_lr_find:
+            tuning_output = trainer.tune(model, datamodule=dm)
+            msg = f"Tune output{nth_model}:\n{tuning_output}"
+            logger.info(msg)
+        trainer.fit(model, datamodule=dm)
+        best_model_path = get_best_model_path(checkpoint_callback)
+        best_model_paths.append(best_model_path)
+        msg = f"Best model path: {best_model_path}" + nth_model + "\n"
+        msg += "Finished training" + nth_model
+        logger.info(msg)
     if not args.fast_dev_run:
-        exp_dir = get_experiment_directory(best_model_path)
-        logger.info(f"Best model path: {best_model_path}")
+        exp_dirs = []
+        for bmp in best_model_paths:
+            exp_dirs.append(get_experiment_directory(bmp))
         config_kwargs = dict(
-            exp_dir=exp_dir, dict_args=dict_args, best_model_path=best_model_path,
+            exp_dirs=exp_dirs, dict_args=dict_args, best_model_paths=best_model_paths,
         )
         generate_train_config_yaml(**config_kwargs, parser=parser)
         generate_predict_config_yaml(**config_kwargs, parser=predict_parser())
-    if return_best_model_path:
-        return best_model_path
+    if return_best_model_paths:
+        return best_model_paths
     else:
         return 0
 
 
 def predict_parser():
+    """ argument parser for using a 3D Tiramisu CNN for prediction """
     desc = "Use a Tiramisu CNN to segment lesions"
-    parser = ArgumentParser(prog="lesion-predict", description=desc,)
+    parser = ArgumentParser(prog="lesion-predict", description=desc)
     parser.add_argument(
         "--config",
         action=ActionConfigFile,
@@ -551,7 +591,9 @@ def predict_parser():
         "-mp",
         "--model-path",
         type=file_path(),
+        nargs="+",
         required=True,
+        default=["SET ME!"],
         help="path to output the trained model",
     )
     exp_parser.add_argument(
@@ -564,17 +606,35 @@ def predict_parser():
         default=0,
         help="increase output verbosity (e.g., -vv is more than -v)",
     )
+    parser = LesionSegLightningTiramisu.add_other_arguments(parser)
     parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
     parser = LesionSegDataModulePredict.add_arguments(parser)
     parser = Trainer.add_argparse_args(parser)
-    trainer_options = set(inspect.signature(Trainer).parameters.keys())  # noqa
-    unnecessary_options = trainer_options - {"gpus", "fast_dev_run", "default_root_dir"}
-    remove_args(parser, unnecessary_options)
+    trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
+    unnecessary_args = trainer_args - {"gpus", "fast_dev_run", "default_root_dir"}
+    remove_args(parser, unnecessary_args)
     fix_type_funcs(parser)
     return parser
 
 
+def aggregate(predict_csv: str, n_models: int, threshold: float = 0.5):
+    """ aggregate output from multiple model predictions """
+    csv = pd.read_csv(predict_csv)
+    out_fns = csv["out"]
+    n_fns = len(out_fns)
+    for n, fn in enumerate(out_fns, 1):
+        data = []
+        for i in range(1, n_models + 1):
+            _fn = append_num_to_filename(fn, i)
+            nib_image = nib.load(_fn)
+            data.append(nib_image.get_fdata())
+        aggregated = (np.mean(data, axis=0) > threshold).astype(np.float32)
+        nib.Nifti1Image(aggregated, nib_image.affine).to_filename(fn)  # noqa
+        logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
+
+
 def predict(args=None):
+    """ use a 3D Tiramisu CNN for prediction """
     parser = predict_parser()
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
@@ -585,15 +645,26 @@ def predict(args=None):
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
-    trainer = Trainer.from_argparse_args(args)
+    n_models = len(args.model_path)
     dict_args = vars(args)
-    dm = LesionSegDataModulePredict.from_csv(**dict_args,)
-    dm.setup()
-    model = LesionSegLightningTiramisu.load_from_checkpoint(args.model_path,)
-    logger.debug(model)
-    trainer.predict(model, datamodule=dm)
-    logger.info("Finished prediction.")
+    dict_args["predict_probability"] = n_models > 1
+    for i, model_path in enumerate(args.model_path, 1):
+        model_num = ModelNum(num=i, out_of=n_models)
+        nth_model = f" ({i}/{n_models})"
+        trainer = Trainer.from_argparse_args(args)
+        dm = LesionSegDataModulePredict.from_csv(**dict_args)
+        dm.setup()
+        model = LesionSegLightningTiramisu.load_from_checkpoint(
+            model_path, _model_num=model_num
+        )
+        logger.debug(model)
+        trainer.predict(model, datamodule=dm)
+        logger.info("Finished prediction" + nth_model)
+    if n_models > 1:
+        aggregate(args.predict_csv, n_models, args.threshold)
     if not args.fast_dev_run:
-        exp_dir = get_experiment_directory(args.model_path)
-        generate_predict_config_yaml(exp_dir, parser, dict_args)
+        exp_dirs = []
+        for mp in enumerate(args.model_path):
+            exp_dirs.append(get_experiment_directory(mp))
+        generate_predict_config_yaml(exp_dirs, parser, dict_args)
     return 0
