@@ -174,7 +174,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                  tio.RandomElasticDeformation(): 0.2},
                 p=0.75,
             )
-            transforms = [spatial]
+            transforms = [
+                spatial,
+                LabelToFloat(),
+            ]
             transform = tio.Compose(transforms)
         return transform
 
@@ -194,9 +197,13 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.train_dataset = subjects_dataset
 
     def _get_val_augmentation(self):
-        transform = tio.CropOrPad(
+        crop = tio.CropOrPad(
             self.patch_size
         )
+        transform = tio.Compose([
+            crop,
+            LabelToFloat(),
+        ])
         return transform
 
     def _setup_val_dataset(self):
@@ -273,6 +280,7 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
     def _setup_predict_dataset(self):
         subjects_dataset = tio.SubjectsDataset(
             self.subject_list,
+            transform=LabelToFloat(),
         )
         self.predict_dataset = subjects_dataset
 
@@ -336,6 +344,13 @@ class Mixup:
         parser.add_argument('-ma', '--mixup-alpha', type=positive_float(), default=0.4,
                             help='mixup alpha parameter for beta distribution')
         return parent_parser
+
+
+def LabelToFloat():
+    return tio.Lambda(
+        lambda tensor: tensor.float(),
+        types_to_apply=[tio.LABEL]
+    )
 
 
 def _get_type(name: str):
