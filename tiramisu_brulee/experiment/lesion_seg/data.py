@@ -344,11 +344,12 @@ class Mixup:
 
 
 def _to_float(tensor: Tensor) -> Tensor:
-    """ create separate func b/c lambda not pickle-able"""
+    """ create separate func b/c lambda not pickle-able """
     return tensor.float()
 
 
 def LabelToFloat() -> tio.Transform:
+    """ cast a label image (usually uint8) to a float """
     return tio.Lambda(
         _to_float,
         types_to_apply=[tio.LABEL],
