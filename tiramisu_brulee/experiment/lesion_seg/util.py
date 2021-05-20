@@ -10,13 +10,13 @@ Created on: May 16, 2021
 """
 
 __all__ = [
-    'BoundingBox3D',
-    'extract_and_average',
-    'minmax_scale_batch',
-    'reshape_for_broadcasting',
-    'to_np',
-    'setup_log',
-    'split_filename',
+    "BoundingBox3D",
+    "extract_and_average",
+    "minmax_scale_batch",
+    "reshape_for_broadcasting",
+    "to_np",
+    "setup_log",
+    "split_filename",
 ]
 
 import logging
@@ -59,7 +59,7 @@ class BoundingBox3D:
         j_high: int,
         k_low: int,
         k_high: int,
-        original_shape: Optional[List[int]] = None
+        original_shape: Optional[List[int]] = None,
     ):
         """ bounding box indices and crop/uncrop func for 3d vols """
         self.i = slice(i_low, i_high)
@@ -96,28 +96,24 @@ class BoundingBox3D:
         w_low, w_high = w[0].item(), w[-1].item()
         d_low, d_high = d[0].item(), d[-1].item()
         i, j, k = mask.shape
-        return (max(h_low - pad, 0), min(h_high + pad, i),
-                max(w_low - pad, 0), min(w_high + pad, j),
-                max(d_low - pad, 0), min(d_high + pad, k))
+        return (
+            max(h_low - pad, 0),
+            min(h_high + pad, i),
+            max(w_low - pad, 0),
+            min(w_high + pad, j),
+            max(d_low - pad, 0),
+            min(d_high + pad, k),
+        )
 
     @classmethod
-    def from_image(
-        cls,
-        image: Tensor,
-        pad: int = 0,
-        foreground_min: float = 1e-4
-    ):
+    def from_image(cls, image: Tensor, pad: int = 0, foreground_min: float = 1e-4):
         """ find a bounding box for a 3D tensor (with optional padding) """
         bbox_idxs = cls.find_bbox(image > foreground_min, pad)
         return cls(*bbox_idxs, original_shape=image.shape)
 
     @classmethod
     def from_batch(
-        cls,
-        batch: Tensor,
-        pad: int = 0,
-        channel: int = 0,
-        foreground_min: float = 1e-4
+        cls, batch: Tensor, pad: int = 0, channel: int = 0, foreground_min: float = 1e-4
     ):
         """ create bbox that works for a batch of 3d vols """
         assert batch.ndim == 5, "expects tensors with shape NxCxHxWxD"
@@ -132,8 +128,9 @@ class BoundingBox3D:
             h_low, h_high = min(hl, h_low), max(hh, h_high)
             w_low, w_high = min(wl, w_low), max(wh, w_high)
             d_low, d_high = min(dl, d_low), max(dh, d_high)
-        return cls(h_low, h_high, w_low, w_high, d_low, d_high,
-                   original_shape=image_shape)
+        return cls(
+            h_low, h_high, w_low, w_high, d_low, d_high, original_shape=image_shape
+        )
 
 
 def reshape_for_broadcasting(x: Tensor, ndim: int) -> Tensor:
@@ -146,7 +143,7 @@ def split_filename(filepath: str) -> Tuple[str, str, str]:
     path = os.path.dirname(filepath)
     filename = os.path.basename(filepath)
     base, ext = os.path.splitext(filename)
-    if ext == '.gz':
+    if ext == ".gz":
         base, ext2 = os.path.splitext(base)
         ext = ext2 + ext
     return path, base, ext
@@ -155,10 +152,10 @@ def split_filename(filepath: str) -> Tuple[str, str, str]:
 def setup_log(verbosity: int):
     """ get logger with appropriate logging level and message """
     if verbosity == 1:
-        level = logging.getLevelName('INFO')
+        level = logging.getLevelName("INFO")
     elif verbosity >= 2:
-        level = logging.getLevelName('DEBUG')
+        level = logging.getLevelName("DEBUG")
     else:
-        level = logging.getLevelName('WARNING')
-    fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level = logging.getLevelName("WARNING")
+    fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(format=fmt, level=level)

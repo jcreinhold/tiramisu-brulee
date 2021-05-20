@@ -3,11 +3,11 @@
 """
 tiramisu_brulee.experiment.lightningtiramisu
 
-Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
+Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 03, 2020
 """
 
-__all__ = ['LightningTiramisu']
+__all__ = ["LightningTiramisu"]
 
 from typing import List, Tuple
 
@@ -19,7 +19,6 @@ from tiramisu_brulee.util import init_weights
 
 
 class LightningTiramisu(pl.LightningModule):
-
     def __init__(
         self,
         network_dim: int,
@@ -31,12 +30,12 @@ class LightningTiramisu(pl.LightningModule):
         growth_rate: int = 16,
         first_conv_out_channels: int = 48,
         dropout_rate: float = 0.2,
-        init_type: str = 'normal',
+        init_type: str = "normal",
         gain: float = 0.02,
         n_epochs: int = 1,
         learning_rate: float = 3e-4,
         betas: Tuple[int, int] = (0.9, 0.99),
-        weight_decay: float = 1e-7
+        weight_decay: float = 1e-7,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -54,7 +53,7 @@ class LightningTiramisu(pl.LightningModule):
             self.hparams.bottleneck_layers,
             self.hparams.growth_rate,
             self.hparams.first_conv_out_channels,
-            self.hparams.dropout_rate
+            self.hparams.dropout_rate,
         )
         init_weights(self.net, self.hparams.init_type, self.hparams.gain)
 

@@ -17,13 +17,13 @@ References:
       CVPR. 2017.
   [2] https://github.com/bfortuner/pytorch_tiramisu
 
-Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
+Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 01, 2020
 """
 
 __all__ = [
-    'Tiramisu2d',
-    'Tiramisu3d',
+    "Tiramisu2d",
+    "Tiramisu3d",
 ]
 
 from typing import List
@@ -60,7 +60,7 @@ class Tiramisu(nn.Module):
         bottleneck_layers: int = 5,
         growth_rate: int = 16,
         first_conv_out_channels: int = 48,
-        dropout_rate: float = 0.2
+        dropout_rate: float = 0.2,
     ):
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
@@ -73,11 +73,8 @@ class Tiramisu(nn.Module):
         self.first_conv = nn.Sequential(
             self._pad(first_kernel_size // 2),
             self._conv(
-                in_channels,
-                first_conv_out_channels,
-                first_kernel_size,
-                bias=False
-            )
+                in_channels, first_conv_out_channels, first_kernel_size, bias=False
+            ),
         )
         cur_channels_count = first_conv_out_channels
 
@@ -90,15 +87,13 @@ class Tiramisu(nn.Module):
                 growth_rate,
                 n_layers,
                 upsample=False,
-                dropout_rate=dropout_rate
+                dropout_rate=dropout_rate,
             )
             self.dense_down.append(block)
-            cur_channels_count += (growth_rate * n_layers)
+            cur_channels_count += growth_rate * n_layers
             skip_connection_channel_counts.insert(0, cur_channels_count)
             block = self._trans_down(
-                cur_channels_count,
-                cur_channels_count,
-                dropout_rate=dropout_rate
+                cur_channels_count, cur_channels_count, dropout_rate=dropout_rate
             )
             self.trans_down.append(block)
 
@@ -107,7 +102,7 @@ class Tiramisu(nn.Module):
             cur_channels_count,
             growth_rate,
             bottleneck_layers,
-            dropout_rate=dropout_rate
+            dropout_rate=dropout_rate,
         )
         prev_block_channels = growth_rate * bottleneck_layers
         cur_channels_count += prev_block_channels
@@ -117,10 +112,7 @@ class Tiramisu(nn.Module):
         self.trans_up = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
-            block = self._trans_up(
-                prev_block_channels,
-                prev_block_channels
-            )
+            block = self._trans_up(prev_block_channels, prev_block_channels)
             self.trans_up.append(block)
             cur_channels_count = prev_block_channels + sccc
             upsample = i < len(up_blocks)  # do not upsample on last block
@@ -129,17 +121,14 @@ class Tiramisu(nn.Module):
                 growth_rate,
                 n_layers,
                 upsample=upsample,
-                dropout_rate=dropout_rate
+                dropout_rate=dropout_rate,
             )
             self.dense_up.append(block)
             prev_block_channels = growth_rate * n_layers
             cur_channels_count += prev_block_channels
 
         self.final_conv = self._conv(
-            cur_channels_count,
-            out_channels,
-            final_kernel_size,
-            bias=True
+            cur_channels_count, out_channels, final_kernel_size, bias=True
         )
 
     def forward(self, x: Tensor) -> Tensor:

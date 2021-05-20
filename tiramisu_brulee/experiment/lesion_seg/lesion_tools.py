@@ -10,8 +10,8 @@ Created on: May 16, 2021
 """
 
 __all__ = [
-    'almost_isbi15_score',
-    'clean_segmentation',
+    "almost_isbi15_score",
+    "clean_segmentation",
 ]
 
 import numpy as np
@@ -30,9 +30,7 @@ from torchmetrics.functional import (
 
 
 def clean_segmentation(
-    label: np.ndarray,
-    fill_holes: bool = True,
-    minimum_lesion_size: int = 3
+    label: np.ndarray, fill_holes: bool = True, minimum_lesion_size: int = 3
 ) -> np.ndarray:
     """ clean binary array by removing small objs & filling holes """
     d = label.ndim
@@ -41,9 +39,7 @@ def clean_segmentation(
         label = binary_fill_holes(label, structure=structure)
     if minimum_lesion_size > 0:
         label = remove_small_objects(
-            label,
-            min_size=minimum_lesion_size,
-            connectivity=d
+            label, min_size=minimum_lesion_size, connectivity=d
         )
     return label
 
@@ -52,10 +48,9 @@ def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
     dice = dice_score(pred.int(), target.int())
     if dice.isnan():
-        dice = torch.tensor(0., device=pred.device)
-    ppv = precision(pred.int(), target.int(), mdmc_average='samplewise')
+        dice = torch.tensor(0.0, device=pred.device)
+    ppv = precision(pred.int(), target.int(), mdmc_average="samplewise")
     corr = pearson_corrcoef(
-        pred.flatten().float(),  # noqa
-        target.flatten().float()  # noqa
+        pred.flatten().float(), target.flatten().float()  # noqa  # noqa
     )
     return 0.25 * dice + 0.25 * ppv + 0.5 * corr

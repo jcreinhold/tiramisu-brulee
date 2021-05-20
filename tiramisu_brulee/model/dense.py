@@ -5,19 +5,19 @@ tiramisu_brulee.model.dense
 
 blocks/layers for densely-connected networks
 
-Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
+Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 02, 2020
 """
 
 __all__ = [
-    'Bottleneck2d',
-    'Bottleneck3d',
-    'DenseBlock2d',
-    'DenseBlock3d',
-    'TransitionDown2d',
-    'TransitionDown3d',
-    'TransitionUp2d',
-    'TransitionUp3d',
+    "Bottleneck2d",
+    "Bottleneck3d",
+    "DenseBlock2d",
+    "DenseBlock3d",
+    "TransitionDown2d",
+    "TransitionDown3d",
+    "TransitionUp2d",
+    "TransitionUp3d",
 ]
 
 from functools import partial
@@ -38,32 +38,22 @@ class ConvLayer(nn.Sequential):
     _norm = None
     _pad = None
 
-    def __init__(
-        self,
-        in_channels: int,
-        growth_rate: int,
-        dropout_rate: float = 0.2
-    ):
+    def __init__(self, in_channels: int, growth_rate: int, dropout_rate: float = 0.2):
         super().__init__()
         self.dropout_rate = dropout_rate
-        self.add_module('norm', self._norm(in_channels))
-        self.add_module('act', ACTIVATION())
+        self.add_module("norm", self._norm(in_channels))
+        self.add_module("act", ACTIVATION())
         if self._use_padding():
-            self.add_module('pad', self._pad(self._kernel_size // 2))
-        conv = self._conv(
-            in_channels,
-            growth_rate,
-            self._kernel_size,
-            bias=False
-        )
-        self.add_module('conv', conv)
+            self.add_module("pad", self._pad(self._kernel_size // 2))
+        conv = self._conv(in_channels, growth_rate, self._kernel_size, bias=False)
+        self.add_module("conv", conv)
         if self._use_dropout():
-            self.add_module('drop', self._dropout(dropout_rate))
+            self.add_module("drop", self._dropout(dropout_rate))
         if self._use_maxpool():
-            self.add_module('maxpool', self._maxpool(2))
+            self.add_module("maxpool", self._maxpool(2))
 
     def _use_dropout(self) -> bool:
-        return self.dropout_rate > 0.
+        return self.dropout_rate > 0.0
 
     def _use_padding(self) -> bool:
         return self._kernel_size > 2
@@ -99,7 +89,7 @@ class DenseBlock(nn.Module):
         growth_rate: int,
         n_layers: int,
         upsample: bool = False,
-        dropout_rate: float = 0.2
+        dropout_rate: float = 0.2,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -108,9 +98,7 @@ class DenseBlock(nn.Module):
         self.upsample = upsample
         self.dropout_rate = dropout_rate
         _layer = partial(
-            self._layer,
-            growth_rate=self.growth_rate,
-            dropout_rate=self.dropout_rate
+            self._layer, growth_rate=self.growth_rate, dropout_rate=self.dropout_rate
         )
         icr = self.in_channels_range
         self.layers = nn.ModuleList([_layer(ic) for ic in icr])
@@ -172,11 +160,7 @@ class TransitionUp(nn.Module):
         super().__init__()
         kernel_size = 3
         self.conv_trans = self._conv_trans(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=2,
-            bias=False
+            in_channels, out_channels, kernel_size, stride=2, bias=False
         )
 
     def forward(self, tensor: Tensor, skip: Tensor) -> Tensor:
@@ -228,7 +212,7 @@ class Bottleneck(nn.Sequential):
         in_channels: int,
         growth_rate: int,
         n_layers: int,
-        dropout_rate: float = 0.2
+        dropout_rate: float = 0.2,
     ):
         super().__init__()
         layer = self._layer(
@@ -238,7 +222,7 @@ class Bottleneck(nn.Sequential):
             upsample=True,
             dropout_rate=dropout_rate,
         )
-        self.add_module('bottleneck', layer)
+        self.add_module("bottleneck", layer)
 
 
 class Bottleneck2d(Bottleneck):

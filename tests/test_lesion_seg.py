@@ -3,7 +3,7 @@
 """
 tiramisu_brulee.tests.test_lesion_seg
 
-Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
+Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 18, 2021
 """
 
@@ -27,12 +27,12 @@ def cwd(file: Path) -> Path:
 
 @pytest.fixture
 def data_dir(cwd: Path) -> Path:
-    return cwd / 'test_data'
+    return cwd / "test_data"
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def temp_dir(tmpdir_factory) -> Path:
-    return Path(tmpdir_factory.mktemp('out'))
+    return Path(tmpdir_factory.mktemp("out"))
 
 
 def _create_csv(temp_dir: Path, data_dir: Path, stage: str) -> Path:
@@ -66,34 +66,34 @@ def predict_csv(temp_dir: Path, data_dir: Path) -> Path:
 @pytest.fixture
 def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
     args = []
-    args += f'--default_root_dir {temp_dir}'.split()
-    args += f'--train-csv {train_csv}'.split()
-    args += f'--valid-csv {train_csv}'.split()
-    args += '--batch-size 1'.split()
-    args += '--patch-size 16 16 16'.split()
-    args += '--queue-length 1'.split()
-    args += '--samples-per-volume 1'.split()
-    args += '--n-epochs 10'.split()
-    args += '--down-blocks 2 2'.split()
-    args += '--up-blocks 2 2'.split()
-    args += '--bottleneck-layers 2'.split()
-    args += '--first-conv-out-channels 2'.split()
-    args += '--num-workers 0'.split()
+    args += f"--default_root_dir {temp_dir}".split()
+    args += f"--train-csv {train_csv}".split()
+    args += f"--valid-csv {train_csv}".split()
+    args += "--batch-size 1".split()
+    args += "--patch-size 16 16 16".split()
+    args += "--queue-length 1".split()
+    args += "--samples-per-volume 1".split()
+    args += "--n-epochs 10".split()
+    args += "--down-blocks 2 2".split()
+    args += "--up-blocks 2 2".split()
+    args += "--bottleneck-layers 2".split()
+    args += "--first-conv-out-channels 2".split()
+    args += "--num-workers 0".split()
     return args
 
 
 @pytest.fixture
 def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     args = []
-    args += f'--default_root_dir {temp_dir}'.split()
-    args += f'--predict-csv {predict_csv}'.split()
-    args += '--num-workers 0'.split()
-    args += ['--fast_dev_run']
+    args += f"--default_root_dir {temp_dir}".split()
+    args += f"--predict-csv {predict_csv}".split()
+    args += "--num-workers 0".split()
+    args += ["--fast_dev_run"]
     return args
 
 
 def test_cli(cli_train_args, cli_predict_args):
     best_model_path = train(cli_train_args, True)
-    cli_predict_args += f'--model-path {best_model_path}'.split()
+    cli_predict_args += f"--model-path {best_model_path}".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0

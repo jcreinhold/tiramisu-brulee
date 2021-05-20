@@ -10,11 +10,11 @@ Created on: May 17, 2021
 """
 
 __all__ = [
-    'csv_to_subjectlist',
-    'glob_ext',
-    'LesionSegDataModulePredict',
-    'LesionSegDataModuleTrain',
-    'Mixup',
+    "csv_to_subjectlist",
+    "glob_ext",
+    "LesionSegDataModulePredict",
+    "LesionSegDataModuleTrain",
+    "Mixup",
 ]
 
 from glob import glob
@@ -39,49 +39,54 @@ from tiramisu_brulee.experiment.lesion_seg.parse import (
 )
 from tiramisu_brulee.experiment.lesion_seg.util import reshape_for_broadcasting
 
-VALID_NAMES = ('ct', 'flair', 'pd', 't1', 't1c', 't2',
-               'label', 'weight', 'div', 'out')
+VALID_NAMES = ("ct", "flair", "pd", "t1", "t1c", "t2", "label", "weight", "div", "out")
 
 logger = getLogger(__name__)
 
 
 class LesionSegDataModuleBase(pl.LightningDataModule):
-
     def _determine_input(
         self,
         subject_list: List[tio.Subject],
-        other_subject_list: Optional[List[tio.Subject]] = None
+        other_subject_list: Optional[List[tio.Subject]] = None,
     ):
-        """ assume all columns except `name`, `label`, `div`, `weight`, or `out` is an image type """
-        exclude = ('name', 'label', 'div', 'weight', 'out')
+        """
+        assume all columns except:
+            `name`, `label`, `div`, `weight`, or `out`
+        are some type of non-categorical image
+        """
+        exclude = ("name", "label", "div", "weight", "out")
         subject = subject_list[0]  # arbitrarily pick the first element
         inputs = []
         for key in subject:
             if key not in exclude:
                 inputs.append(key)
         if len(inputs) == 0:
-            msg = ('No inputs detected in CSV. Expect columns like '
-                   '`t1` with corresponding paths to NIfTI files.')
+            msg = (
+                "No inputs detected in CSV. Expect columns like "
+                "`t1` with corresponding paths to NIfTI files."
+            )
             raise ValueError(msg)
         if other_subject_list is not None:
             other_subject = other_subject_list[0]
             for key in inputs:
                 if key not in other_subject:
-                    msg = 'Validation CSV fields not the same as training CSV'
+                    msg = "Validation CSV fields not the same as training CSV"
                     raise ValueError(msg)
-            if 'label' not in subject or 'label' not in other_subject:
-                msg = ('`label` field expected in both '
-                       'training and validation CSV.')
+            if "label" not in subject or "label" not in other_subject:
+                msg = "`label` field expected in both " "training and validation CSV."
                 raise ValueError(msg)
-            if ('div' in subject) ^ ('div' in other_subject):
-                msg = ('If `div` present in one of the training '
-                       'or validation CSVs, it is expected in '
-                       'both training and validation CSV.')
+            if ("div" in subject) ^ ("div" in other_subject):
+                msg = (
+                    "If `div` present in one of the training "
+                    "or validation CSVs, it is expected in "
+                    "both training and validation CSV."
+                )
                 raise ValueError(msg)
-        if 'div' in subject and len(inputs) > 1:
-            msg = f'If using `div`, expect only 1 input. Got {inputs}.'
+        if "div" in subject and len(inputs) > 1:
+            msg = f"If using `div`, expect only 1 input. Got {inputs}."
             raise ValueError(msg)
-        self._use_div = 'div' in subject
+        self._use_div = "div" in subject
         self._input_fields = tuple(sorted(inputs))
 
     def _div_batch(self, batch: Tensor, div: Tensor) -> Tensor:
@@ -97,12 +102,11 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             inputs.append(batch[field][tio.DATA])
         src = torch.cat(inputs, dim=1)
         if self._use_div:
-            src = self._div_batch(src, batch['div'])
+            src = self._div_batch(src, batch["div"])
         return src
 
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
-
     def __init__(
         self,
         train_subject_list: List[tio.Subject],
@@ -150,9 +154,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             shuffle_patches=True,
         )
         train_dataloader = DataLoader(
-            patches_queue,
-            batch_size=self.batch_size,
-            collate_fn=self._collate_fn,
+            patches_queue, batch_size=self.batch_size, collate_fn=self._collate_fn,
         )
         return train_dataloader
 
@@ -170,9 +172,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         transforms = [LabelToFloat()]
         if self.spatial_augmentation:
             spatial = tio.OneOf(
-                {tio.RandomAffine(): 0.8,
-                 tio.RandomElasticDeformation(): 0.2},
-                p=0.75,
+                {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
             )
             transforms.insert(0, spatial)
         transform = tio.Compose(transforms)
@@ -188,61 +188,97 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     def _setup_train_dataset(self):
         transform = self._get_train_augmentation()
         subjects_dataset = tio.SubjectsDataset(
-            self.train_subject_list,
-            transform=transform,
+            self.train_subject_list, transform=transform,
         )
         self.train_dataset = subjects_dataset
 
     def _get_val_augmentation(self):
-        crop = tio.CropOrPad(
-            self.patch_size
-        )
-        transform = tio.Compose([
-            crop,
-            LabelToFloat(),
-        ])
+        crop = tio.CropOrPad(self.patch_size)
+        transform = tio.Compose([crop, LabelToFloat()])
         return transform
 
     def _setup_val_dataset(self):
         transform = self._get_val_augmentation()
         subjects_dataset = tio.SubjectsDataset(
-            self.val_subject_list,
-            transform=transform
+            self.val_subject_list, transform=transform
         )
         self.val_dataset = subjects_dataset
 
     def _collate_fn(self, batch: dict) -> Tuple[Tensor, Tensor]:
         batch = default_collate(batch)
         src = super()._collate_fn(batch)
-        tgt = batch['label'][tio.DATA]
+        tgt = batch["label"][tio.DATA]
         return src, tgt
 
     @staticmethod
     def add_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Data")
-        parser.add_argument('--train-csv', type=file_path(), required=True,
-                            help='path to csv with training images')
-        parser.add_argument('--valid-csv', type=file_path(), required=True,
-                            help='path to csv with validation images')
-        parser.add_argument('-bs', '--batch-size', type=positive_int(), default=2,
-                            help='training/validation batch size')
-        parser.add_argument('-ps', '--patch-size', type=positive_int(), nargs=3, default=[96, 96, 96],
-                            help='training/validation patch size extracted from image')
-        parser.add_argument('-nw', '--num-workers', type=nonnegative_int(), default=16,
-                            help='number of CPUs to use for loading data')
-        parser.add_argument('-ql', '--queue-length', type=positive_int(), default=200,
-                            help='queue length for torchio sampler')
-        parser.add_argument('-spv', '--samples-per-volume', type=positive_int(), default=10,
-                            help='samples per volume for torchio sampler')
-        parser.add_argument('-ls', '--label-sampler', action='store_true', default=False,
-                            help="use label sampler instead of uniform")
-        parser.add_argument('-sa', '--spatial-augmentation', action='store_true', default=False,
-                            help='use spatial (affine and elastic) data augmentation')
+        parser.add_argument(
+            "--train-csv",
+            type=file_path(),
+            required=True,
+            help="path to csv with training images",
+        )
+        parser.add_argument(
+            "--valid-csv",
+            type=file_path(),
+            required=True,
+            help="path to csv with validation images",
+        )
+        parser.add_argument(
+            "-bs",
+            "--batch-size",
+            type=positive_int(),
+            default=2,
+            help="training/validation batch size",
+        )
+        parser.add_argument(
+            "-ps",
+            "--patch-size",
+            type=positive_int(),
+            nargs=3,
+            default=[96, 96, 96],
+            help="training/validation patch size extracted from image",
+        )
+        parser.add_argument(
+            "-nw",
+            "--num-workers",
+            type=nonnegative_int(),
+            default=16,
+            help="number of CPUs to use for loading data",
+        )
+        parser.add_argument(
+            "-ql",
+            "--queue-length",
+            type=positive_int(),
+            default=200,
+            help="queue length for torchio sampler",
+        )
+        parser.add_argument(
+            "-spv",
+            "--samples-per-volume",
+            type=positive_int(),
+            default=10,
+            help="samples per volume for torchio sampler",
+        )
+        parser.add_argument(
+            "-ls",
+            "--label-sampler",
+            action="store_true",
+            default=False,
+            help="use label sampler instead of uniform",
+        )
+        parser.add_argument(
+            "-sa",
+            "--spatial-augmentation",
+            action="store_true",
+            default=False,
+            help="use spatial (affine and elastic) data augmentation",
+        )
         return parent_parser
 
 
 class LesionSegDataModulePredict(LesionSegDataModuleBase):
-
     def __init__(
         self,
         subject_list: List[tio.Subject],
@@ -276,8 +312,7 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
 
     def _setup_predict_dataset(self):
         subjects_dataset = tio.SubjectsDataset(
-            self.subject_list,
-            transform=LabelToFloat(),
+            self.subject_list, transform=LabelToFloat(),
         )
         self.predict_dataset = subjects_dataset
 
@@ -290,25 +325,37 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         out = dict(
             src=src,
             affine=batch[field][tio.AFFINE],
-            out=batch['out'],  # path to save the prediction
+            out=batch["out"],  # path to save the prediction
         )
         return out
 
-    # flake8: noqa: E501
     @staticmethod
     def add_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Data")
-        parser.add_argument('--predict-csv', type=file_path(), required=True,
-                            help='path to csv of prediction images')
-        parser.add_argument('-bs', '--batch-size', type=positive_int(), default=1,
-                            help='number of images to run at a time')
-        parser.add_argument('-nw', '--num-workers', type=nonnegative_int(), default=16,
-                            help='number of CPUs to use for loading data')
+        parser.add_argument(
+            "--predict-csv",
+            type=file_path(),
+            required=True,
+            help="path to csv of prediction images",
+        )
+        parser.add_argument(
+            "-bs",
+            "--batch-size",
+            type=positive_int(),
+            default=1,
+            help="number of images to run at a time",
+        )
+        parser.add_argument(
+            "-nw",
+            "--num-workers",
+            type=nonnegative_int(),
+            default=16,
+            help="number of CPUs to use for loading data",
+        )
         return parent_parser
 
 
 class Mixup:
-
     def __init__(self, alpha: float):
         self.alpha = alpha
 
@@ -332,14 +379,23 @@ class Mixup:
             tgt = lam * tgt + (1 - lam) * tgt[perm]
         return src, tgt
 
-    # flake8: noqa: E501
     @staticmethod
     def add_arguments(parent_parser):
         parser = parent_parser.add_argument_group("Mixup")
-        parser.add_argument('-mu', '--mixup', action='store_true', default=False,
-                            help='use mixup during training')
-        parser.add_argument('-ma', '--mixup-alpha', type=positive_float(), default=0.4,
-                            help='mixup alpha parameter for beta distribution')
+        parser.add_argument(
+            "-mu",
+            "--mixup",
+            action="store_true",
+            default=False,
+            help="use mixup during training",
+        )
+        parser.add_argument(
+            "-ma",
+            "--mixup-alpha",
+            type=positive_float(),
+            default=0.4,
+            help="mixup alpha parameter for beta distribution",
+        )
         return parent_parser
 
 
@@ -350,10 +406,7 @@ def _to_float(tensor: Tensor) -> Tensor:
 
 def LabelToFloat() -> tio.Transform:
     """ cast a label image (usually uint8) to a float """
-    return tio.Lambda(
-        _to_float,
-        types_to_apply=[tio.LABEL],
-    )
+    return tio.Lambda(_to_float, types_to_apply=[tio.LABEL],)
 
 
 def _get_type(name: str):
@@ -361,19 +414,20 @@ def _get_type(name: str):
     if name_ == "label":
         type_ = tio.LABEL
     elif name_ == "weight" or name_ == "div":
-        type_ = 'float'
-    elif name_ == 'out':
-        type_ = 'path'
+        type_ = "float"
+    elif name_ == "out":
+        type_ = "path"
     elif name_ in VALID_NAMES:
         type_ = tio.INTENSITY
     else:
-        logger.warning(f"{name} not in known {VALID_NAMES}. "
-                       f"Assuming an non-label image type.")
+        logger.warning(
+            f"{name} not in known {VALID_NAMES}. " f"Assuming an non-label image type."
+        )
         type_ = tio.INTENSITY
     return type_
 
 
-def glob_ext(path: str, ext: str = '*.nii*') -> List[str]:
+def glob_ext(path: str, ext: str = "*.nii*") -> List[str]:
     """ grab all `ext` files in a directory and sort them for consistency """
     fns = sorted(glob(join(path, ext)))
     return fns
@@ -396,10 +450,10 @@ def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
     Returns:
         subject_list (List[torchio.Subject]): list of torchio Subjects
     """
-    df = pd.read_csv(filename, index_col='subject')
+    df = pd.read_csv(filename, index_col="subject")
     names = df.columns.to_list()
     if any([name not in VALID_NAMES for name in names]):
-        raise ValueError(f'Column name needs to be in {VALID_NAMES}')
+        raise ValueError(f"Column name needs to be in {VALID_NAMES}")
 
     subject_list = []
     for row in df.iterrows():
@@ -408,16 +462,13 @@ def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
         for name in names:
             val_type = _get_type(name)
             val = row[1][name]
-            if val_type == 'float':
+            if val_type == "float":
                 data[name] = torch.tensor(val, dtype=torch.float32)
-            elif val_type == 'path':
+            elif val_type == "path":
                 data[name] = val
             else:
                 data[name] = tio.Image(val, type=val_type)
-        subject = tio.Subject(
-            name=subject_name,
-            **data
-        )
+        subject = tio.Subject(name=subject_name, **data)
         subject_list.append(subject)
 
     return subject_list

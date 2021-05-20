@@ -13,6 +13,8 @@ tiramisù-brûlée
         :target: https://tiramisu-brulee.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+    :target: https://github.com/psf/black
 
 A 2D and 3D PyTorch implementation of the Tiramisu CNN
 
@@ -51,7 +53,7 @@ CVPR. 2017.
 [2] Zhang, Huahong, et al. "Multiple sclerosis lesion segmentation with Tiramisu and 2.5D stacked slices." International
 Conference on Medical Image Computing and Computer-Assisted Intervention. Springer, Cham, 2019.
 
-Miscellaneous
+Why the name?
 -------------
 
 Why is the name tiramisù-brûlée? Well, tiramisù is named after the neural network [1] whose name is inspired by
