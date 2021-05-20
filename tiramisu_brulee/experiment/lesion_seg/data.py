@@ -343,10 +343,15 @@ class Mixup:
         return parent_parser
 
 
-def LabelToFloat():
+def _to_float(tensor: Tensor) -> Tensor:
+    """ create separate func b/c lambda not pickle-able"""
+    return tensor.float()
+
+
+def LabelToFloat() -> tio.Transform:
     return tio.Lambda(
-        lambda tensor: tensor.float(),
-        types_to_apply=[tio.LABEL]
+        _to_float,
+        types_to_apply=[tio.LABEL],
     )
 
 
