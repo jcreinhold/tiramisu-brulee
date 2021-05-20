@@ -181,6 +181,7 @@ def remove_args(parser: ArgumentParser, args: List[str]):
 
 
 def fix_type_funcs(parser):
+    """ fixes type functions in pytorch-lightning's `add_argparse_args` """
     for action in parser._actions:
         if action.type is not None:
             type_func_name = action.type.__name__
@@ -206,9 +207,12 @@ def none_string_to_none(args):
 def _gpus_allowed_type(
     val: Union[None, str, float, int]
 ) -> Union[None, float, int]:
+    """ replaces pytorch-lightning's version to work w/ parser """
     if val is None:
         return val
-    elif '.' in str(val):
-        return float(val)
+    elif isinstance(val, list):
+        return [int(v) for v in val]
+    elif ',' in str(val):
+        return str(val)
     else:
         return int(val)
