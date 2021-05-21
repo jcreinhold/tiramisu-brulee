@@ -34,14 +34,18 @@ Alternatively, you can download the source and run::
 
     python setup.py install
 
+If you want a CLI to train a 3D lesion segmentation model, install with::
+
+    pip install tiramisu-brulee[lesionseg]
+
 Basic Usage
 -----------
 
-Import the 2D or 3D version with:
+Import the 2D or 3D Tiramisu version with:
 
 .. code-block:: python
 
-    from tiramisu_brulee import Tiramisu2d, Tiramisu3d
+    from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
 
 
 References

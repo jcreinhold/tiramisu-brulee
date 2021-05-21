@@ -17,38 +17,24 @@
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 #
-import mock
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath('..'))
 
-MOCK_MODULES = [
+autodoc_mock_imports = [
     'jsonargparse',
     'nibabel',
     'numpy',
     'pandas',
     'pytorch_lightning',
-    'pytorch_lightning.callbacks',
-    'pytorch_lightning.loggers',
-    'pytorch_lightning.utilities',
-    'pytorch_lightning.utilities.parsing',
-    'skimage.morphology',
-    'scipy.ndimage.morphology',
+    'skimage',
+    'scipy',
     'torch',
-    'torch.distributions',
-    'torch.nn',
-    'torch.nn.functional',
-    'torch.optim',
-    'torch.utils.data',
-    'torch.utils.data.dataloader',
     'torchio',
-    'torchmetrics.functional',
+    'torchmetrics',
     'yaml',
 ]
-
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
 
 import tiramisu_brulee
 
