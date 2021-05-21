@@ -520,22 +520,7 @@ def train(args=None, return_best_model_paths=False):
     else:
         root_dir = Path.cwd()
     name = EXPERIMENT_NAME
-    tb_logger = TensorBoardLogger(str(root_dir), name=name)
-    checkpoint_callback = ModelCheckpoint(
-        filename="{epoch}-{val_loss:.2f}-{val_isbi15_score:.2f}",
-        monitor="val_isbi15_score",
-        save_top_k=3,
-        save_last=True,
-        mode="max",
-        every_n_val_epochs=args.checkpoint_every_n_epochs,
-    )
     args = path_to_str(args)
-    trainer = Trainer.from_argparse_args(
-        args,
-        logger=tb_logger,
-        checkpoint_callback=True,
-        callbacks=[checkpoint_callback],
-    )
     n_models_to_train = len(args.train_csv)
     if n_models_to_train != len(args.valid_csv):
         raise ValueError(
@@ -543,9 +528,25 @@ def train(args=None, return_best_model_paths=False):
             f"Got {n_models_to_train} != {len(args.valid_csv)}"
         )
     csvs = zip(args.train_csv, args.valid_csv)
+    checkpoint_kwargs = dict(
+        filename="{epoch}-{val_loss:.2f}-{val_isbi15_score:.2f}",
+        monitor="val_isbi15_score",
+        save_top_k=3,
+        save_last=True,
+        mode="max",
+        every_n_val_epochs=args.checkpoint_every_n_epochs,
+    )
     best_model_paths = []
     dict_args = vars(args)
     for i, (train_csv, valid_csv) in enumerate(csvs, 1):
+        tb_logger = TensorBoardLogger(str(root_dir), name=name)
+        checkpoint_callback = ModelCheckpoint(**checkpoint_kwargs)
+        trainer = Trainer.from_argparse_args(
+            args,
+            logger=tb_logger,
+            checkpoint_callback=True,
+            callbacks=[checkpoint_callback],
+        )
         nth_model = f" ({i}/{n_models_to_train})"
         dict_args["train_csv"] = train_csv
         dict_args["valid_csv"] = valid_csv
