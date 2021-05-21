@@ -11,6 +11,7 @@ Created on: May 17, 2021
 """
 
 __all__ = [
+    "dict_to_csv",
     "file_path",
     "fix_type_funcs",
     "get_best_model_path",
@@ -19,6 +20,7 @@ __all__ = [
     "generate_predict_config_yaml",
     "none_string_to_none",
     "nonnegative_int",
+    "parse_unknown_to_dict",
     "path_to_str",
     "positive_float",
     "positive_int",
@@ -30,9 +32,10 @@ from argparse import ArgumentTypeError
 from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
+from pprint import pformat
 from typing import Callable, List, Optional, Union
 
-from jsonargparse import ArgumentParser
+from jsonargparse import ArgumentParser, Namespace
 import yaml
 
 logger = getLogger(__name__)
@@ -179,7 +182,7 @@ def remove_args(parser: ArgumentParser, args: List[str]):
 
 
 # flake8: noqa: E731
-def fix_type_funcs(parser):
+def fix_type_funcs(parser: ArgumentParser):
     """ fixes type functions in pytorch-lightning's `add_argparse_args` """
     for action in parser._actions:
         if action.type is not None:
@@ -193,9 +196,7 @@ def fix_type_funcs(parser):
                 action.type = lambda val: val if val is None else int(val)
 
 
-def _map_attrs(
-    args: ArgumentParser, cond: Callable, target: Callable
-) -> ArgumentParser:
+def _map_attrs(args: Namespace, cond: Callable, target: Callable) -> Namespace:
     """ map attributes to some func of the value if it satisfied a cond """
     attrs = [a for a in dir(args) if not a.startswith("_")]
     for attr in attrs:
@@ -206,7 +207,7 @@ def _map_attrs(
 
 
 # flake8: noqa: E731
-def none_string_to_none(args: ArgumentParser):
+def none_string_to_none(args: Namespace) -> Namespace:
     """ goes through an instance of parsed args and maps 'None' -> None """
     cond = lambda val: val == "None"
     target = lambda val: None
@@ -215,7 +216,7 @@ def none_string_to_none(args: ArgumentParser):
 
 
 # flake8: noqa: E731
-def path_to_str(args):
+def path_to_str(args: Namespace) -> Namespace:
     """ goes through an instance of parsed args and maps Path -> str """
     cond = lambda val: isinstance(val, Path)
     target = lambda val: str(val)
@@ -233,3 +234,44 @@ def _gpus_allowed_type(val: Union[None, str, float, int]) -> Union[None, float, 
         return str(val)
     else:
         return int(val)
+
+
+def parse_unknown_to_dict(unknown: List[str]) -> dict:
+    """ parse unknown arguments (usually modalities and their path) to dict """
+    nargs = len(unknown)
+    if nargs % 2 != 0:
+        raise ValueError(
+            "Every modality needs a path. Check for typos in your arguments."
+        )
+    modality_path = {}
+    for i in range(0, nargs, 2):
+        modality = unknown[i]
+        path = unknown[i + 1]
+        if not modality.startswith("--"):
+            raise ValueError(
+                f"Each modality needs `--` before the name. Received {modality}."
+            )
+        if path.startswith("-"):
+            raise ValueError(
+                f"Each path must not contain `-` before the name. Received {path}."
+            )
+        modality = modality.lstrip("-")
+        modality_path[modality] = path
+    if "out" not in modality_path:
+        msg = "Output path required but not supplied.\n"
+        msg += f"Parsed modalities:\n{pformat(modality_path)}"
+        raise ValueError(msg)
+    return modality_path
+
+
+def dict_to_csv(modality_path: dict, open_file):
+    """ takes a dictionary of modalities and paths and open file and writes to csv """
+    headers, paths = ["subject"], ["pred_subj"]
+    for modality, path in modality_path.items():
+        headers.append(modality)
+        paths.append(path)
+    headers = ",".join(headers) + "\n"
+    paths = ",".join(paths)
+    open_file.write(headers)
+    open_file.write(paths)
+    open_file.flush()

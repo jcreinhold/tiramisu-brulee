@@ -57,6 +57,7 @@ setup(
         "console_scripts": [
             "lesion-train=tiramisu_brulee.experiment.lesion_seg.seg:train",
             "lesion-predict=tiramisu_brulee.experiment.lesion_seg.seg:predict",
+            "lesion-predict-image=tiramisu_brulee.experiment.lesion_seg.seg:predict_image",
         ],
     },
     install_requires=requirements,

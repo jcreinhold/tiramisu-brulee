@@ -13,6 +13,8 @@ __all__ = [
     "LesionSegLightningTiramisu",
 ]
 
+import argparse
+import tempfile
 from collections import namedtuple
 from functools import partial
 import inspect
@@ -46,6 +48,7 @@ from tiramisu_brulee.experiment.lesion_seg.lesion_tools import (
     clean_segmentation,
 )
 from tiramisu_brulee.experiment.lesion_seg.parse import (
+    dict_to_csv,
     file_path,
     fix_type_funcs,
     generate_predict_config_yaml,
@@ -54,6 +57,7 @@ from tiramisu_brulee.experiment.lesion_seg.parse import (
     get_experiment_directory,
     none_string_to_none,
     nonnegative_int,
+    parse_unknown_to_dict,
     path_to_str,
     positive_float,
     positive_int,
@@ -619,6 +623,45 @@ def predict_parser():
     return parser
 
 
+def predict_image_parser():
+    """ argument parser for using a 3D Tiramisu CNN for single-timepoint prediction """
+    desc = "Use a Tiramisu CNN to segment lesions for a single-timepoint prediction"
+    parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
+    exp_parser = parser.add_argument_group("Experiment")
+    exp_parser.add_argument(
+        "-mp",
+        "--model-path",
+        type=file_path(),
+        nargs="+",
+        required=True,
+        default=["SET ME!"],
+        help="path to output the trained model",
+    )
+    exp_parser.add_argument(
+        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
+    )
+    exp_parser.add_argument(
+        "-v",
+        "--verbosity",
+        action="count",
+        default=0,
+        help="increase output verbosity (e.g., -vv is more than -v)",
+    )
+    parser = LesionSegLightningTiramisu.add_other_arguments(parser)
+    parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
+    parser = LesionSegDataModulePredict.add_arguments(parser, add_csv=False)
+    parser = Trainer.add_argparse_args(parser)
+    trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
+    unnecessary_args = trainer_args - {
+        "gpus",
+        "fast_dev_run",
+        "default_root_dir",
+    }
+    remove_args(parser, unnecessary_args)
+    fix_type_funcs(parser)
+    return parser
+
+
 def aggregate(predict_csv: str, n_models: int, threshold: float = 0.5):
     """ aggregate output from multiple model predictions """
     csv = pd.read_csv(predict_csv)
@@ -635,13 +678,7 @@ def aggregate(predict_csv: str, n_models: int, threshold: float = 0.5):
         logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
 
 
-def predict(args=None):
-    """ use a 3D Tiramisu CNN for prediction """
-    parser = predict_parser()
-    if args is None:
-        args = parser.parse_args(_skip_check=True)  # noqa
-    elif isinstance(args, list):
-        args = parser.parse_args(args, _skip_check=True)  # noqa
+def _predict(args, parser: ArgumentParser):
     args = none_string_to_none(args)
     args = path_to_str(args)
     setup_log(args.verbosity)
@@ -669,4 +706,31 @@ def predict(args=None):
         for mp in enumerate(args.model_path):
             exp_dirs.append(get_experiment_directory(mp))
         generate_predict_config_yaml(exp_dirs, parser, dict_args)
+
+
+def predict(args=None):
+    """ use a 3D Tiramisu CNN for prediction """
+    parser = predict_parser()
+    if args is None:
+        args = parser.parse_args(_skip_check=True)  # noqa
+    elif isinstance(args, list):
+        args = parser.parse_args(args, _skip_check=True)  # noqa
+    _predict(args, parser)
+    return 0
+
+
+def predict_image(args=None):
+    """ use a 3D Tiramisu CNN for prediction for a single-timepoint """
+    parser = predict_image_parser()
+    if args is None:
+        args, unknown = parser.parse_known_args()
+    elif isinstance(args, list):
+        args, unknown = parser.parse_known_args(args)
+    else:
+        raise ValueError("input args must be None or a list of strings to parse")
+    modality_paths = parse_unknown_to_dict(unknown)
+    with tempfile.NamedTemporaryFile("w") as f:
+        dict_to_csv(modality_paths, f)  # noqa
+        args.predict_csv = f.name
+        _predict(args, parser)
     return 0

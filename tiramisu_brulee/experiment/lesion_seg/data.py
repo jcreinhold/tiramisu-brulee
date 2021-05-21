@@ -334,15 +334,16 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         return out
 
     @staticmethod
-    def add_arguments(parent_parser):
+    def add_arguments(parent_parser, add_csv=True):
         parser = parent_parser.add_argument_group("Data")
-        parser.add_argument(
-            "--predict-csv",
-            type=file_path(),
-            required=True,
-            default="SET ME!",
-            help="path to csv of prediction images",
-        )
+        if add_csv:
+            parser.add_argument(
+                "--predict-csv",
+                type=file_path(),
+                required=True,
+                default="SET ME!",
+                help="path to csv of prediction images",
+            )
         parser.add_argument(
             "-bs",
             "--batch-size",

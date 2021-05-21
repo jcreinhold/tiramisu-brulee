@@ -12,7 +12,7 @@ from typing import List
 
 import pytest
 
-from tiramisu_brulee.experiment.lesion_seg.seg import train, predict
+from tiramisu_brulee.experiment.lesion_seg.seg import train, predict, predict_image
 
 
 @pytest.fixture
@@ -98,4 +98,25 @@ def test_cli(cli_train_args, cli_predict_args):
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
     retcode = predict(cli_predict_args)
+    assert retcode == 0
+
+
+@pytest.fixture
+def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
+    image_path = data_dir / "img.nii.gz"
+    out_path = temp_dir / "out.nii.gz"
+    args = []
+    args += f"--default_root_dir {temp_dir}".split()
+    args += f"--t1 {image_path}".split()
+    args += f"--out {out_path}".split()
+    args += "--num-workers 0".split()
+    args += ["--fast_dev_run"]
+    return args
+
+
+def test_predict_image_cli(cli_train_args, cli_predict_image_args):
+    best_model_paths = train(cli_train_args, True)
+    best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
+    cli_predict_image_args += f"--model-path {best_model_paths}".split()
+    retcode = predict_image(cli_predict_image_args)
     assert retcode == 0
