@@ -533,7 +533,7 @@ def train(args=None, return_best_model_paths=False):
         )
     csvs = zip(args.train_csv, args.valid_csv)
     checkpoint_kwargs = dict(
-        filename="{epoch}-{val_loss:.2f}-{val_isbi15_score:.2f}",
+        filename="{epoch}-{val_loss:.3f}-{val_isbi15_score:.3f}",
         monitor="val_isbi15_score",
         save_top_k=3,
         save_last=True,
@@ -568,6 +568,7 @@ def train(args=None, return_best_model_paths=False):
         msg = f"Best model path: {best_model_path}" + nth_model + "\n"
         msg += "Finished training" + nth_model
         logger.info(msg)
+        del dm, model, trainer, tb_logger, checkpoint_callback
     if not args.fast_dev_run:
         exp_dirs = []
         for bmp in best_model_paths:
@@ -699,6 +700,7 @@ def _predict(args, parser: ArgumentParser):
         logger.debug(model)
         trainer.predict(model, datamodule=dm)
         logger.info("Finished prediction" + nth_model)
+        del dm, model, trainer
     if n_models > 1:
         aggregate(args.predict_csv, n_models, args.threshold)
     if not args.fast_dev_run:
