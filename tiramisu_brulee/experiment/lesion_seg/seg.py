@@ -207,6 +207,10 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         dataloader_idx: int,
     ):
         data = to_np(pred_step_outputs).squeeze()
+        if data.ndim == 5:
+            raise ValueError("Predictions should only have one channel.")
+        elif data.ndim == 3:
+            data = data[None, ...]
         if not self.hparams.predict_probability:
             data = [clean_segmentation(seg) for seg in data]
         data = [seg.astype(np.float32) for seg in data]
