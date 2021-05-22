@@ -691,7 +691,7 @@ def _predict(args, parser: ArgumentParser):
     seed_everything(args.seed, workers=True)
     n_models = len(args.model_path)
     dict_args = vars(args)
-    dict_args["predict_probability"] = n_models > 1
+    pp = dict_args["predict_probability"] = n_models > 1
     for i, model_path in enumerate(args.model_path, 1):
         model_num = ModelNum(num=i, out_of=n_models)
         nth_model = f" ({i}/{n_models})"
@@ -699,7 +699,7 @@ def _predict(args, parser: ArgumentParser):
         dm = LesionSegDataModulePredict.from_csv(**dict_args)
         dm.setup()
         model = LesionSegLightningTiramisu.load_from_checkpoint(
-            model_path, _model_num=model_num
+            model_path, predict_probability=pp, _model_num=model_num,
         )
         logger.debug(model)
         trainer.predict(model, datamodule=dm)
