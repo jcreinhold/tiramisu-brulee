@@ -705,7 +705,7 @@ def _predict(args, parser: ArgumentParser):
         aggregate(args.predict_csv, n_models, args.threshold)
     if not args.fast_dev_run:
         exp_dirs = []
-        for mp in enumerate(args.model_path):
+        for mp in args.model_path:
             exp_dirs.append(get_experiment_directory(mp))
         generate_predict_config_yaml(exp_dirs, parser, dict_args)
 

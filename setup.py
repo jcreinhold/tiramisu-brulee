@@ -61,7 +61,7 @@ setup(
         ],
     },
     install_requires=requirements,
-    extras_requires=extras_requirements,
+    extras_require=extras_requirements,
     license="Apache Software License 2.0",
     long_description=readme + "\n\n" + history,
     include_package_data=True,
