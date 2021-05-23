@@ -588,6 +588,40 @@ def train(args=None, return_best_model_paths=False):
         return 0
 
 
+def _predict_parser_shared(
+    parser: ArgumentParser, necessary_trainer_args: set, add_csv: bool
+) -> ArgumentParser:
+    exp_parser = parser.add_argument_group("Experiment")
+    exp_parser.add_argument(
+        "-mp",
+        "--model-path",
+        type=file_path(),
+        nargs="+",
+        required=True,
+        default=["SET ME!"],
+        help="path to output the trained model",
+    )
+    exp_parser.add_argument(
+        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
+    )
+    exp_parser.add_argument(
+        "-v",
+        "--verbosity",
+        action="count",
+        default=0,
+        help="increase output verbosity (e.g., -vv is more than -v)",
+    )
+    parser = LesionSegLightningTiramisu.add_other_arguments(parser)
+    parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
+    parser = LesionSegDataModulePredict.add_arguments(parser, add_csv=add_csv)
+    parser = Trainer.add_argparse_args(parser)
+    trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
+    unnecessary_args = trainer_args - necessary_trainer_args
+    remove_args(parser, unnecessary_args)
+    fix_type_funcs(parser)
+    return parser
+
+
 def predict_parser():
     """ argument parser for using a 3D Tiramisu CNN for prediction """
     desc = "Use a Tiramisu CNN to segment lesions"
@@ -597,34 +631,13 @@ def predict_parser():
         action=ActionConfigFile,
         help="path to a configuration file in json or yaml format",
     )
-    exp_parser = parser.add_argument_group("Experiment")
-    exp_parser.add_argument(
-        "-mp",
-        "--model-path",
-        type=file_path(),
-        nargs="+",
-        required=True,
-        default=["SET ME!"],
-        help="path to output the trained model",
-    )
-    exp_parser.add_argument(
-        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
-    )
-    exp_parser.add_argument(
-        "-v",
-        "--verbosity",
-        action="count",
-        default=0,
-        help="increase output verbosity (e.g., -vv is more than -v)",
-    )
-    parser = LesionSegLightningTiramisu.add_other_arguments(parser)
-    parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
-    parser = LesionSegDataModulePredict.add_arguments(parser)
-    parser = Trainer.add_argparse_args(parser)
-    trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
-    unnecessary_args = trainer_args - {"gpus", "fast_dev_run", "default_root_dir"}
-    remove_args(parser, unnecessary_args)
-    fix_type_funcs(parser)
+    necessary_trainer_args = {
+        "benchmark",
+        "gpus",
+        "fast_dev_run",
+        "default_root_dir",
+    }
+    parser = _predict_parser_shared(parser, necessary_trainer_args, True)
     return parser
 
 
@@ -632,38 +645,12 @@ def predict_image_parser():
     """ argument parser for using a 3D Tiramisu CNN for single-timepoint prediction """
     desc = "Use a Tiramisu CNN to segment lesions for a single-timepoint prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
-    exp_parser = parser.add_argument_group("Experiment")
-    exp_parser.add_argument(
-        "-mp",
-        "--model-path",
-        type=file_path(),
-        nargs="+",
-        required=True,
-        default=["SET ME!"],
-        help="path to output the trained model",
-    )
-    exp_parser.add_argument(
-        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
-    )
-    exp_parser.add_argument(
-        "-v",
-        "--verbosity",
-        action="count",
-        default=0,
-        help="increase output verbosity (e.g., -vv is more than -v)",
-    )
-    parser = LesionSegLightningTiramisu.add_other_arguments(parser)
-    parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
-    parser = LesionSegDataModulePredict.add_arguments(parser, add_csv=False)
-    parser = Trainer.add_argparse_args(parser)
-    trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
-    unnecessary_args = trainer_args - {
+    necessary_trainer_args = {
         "gpus",
         "fast_dev_run",
         "default_root_dir",
     }
-    remove_args(parser, unnecessary_args)
-    fix_type_funcs(parser)
+    parser = _predict_parser_shared(parser, necessary_trainer_args, False)
     return parser
 
 
