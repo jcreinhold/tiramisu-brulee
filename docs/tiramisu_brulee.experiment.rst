@@ -1,16 +1,16 @@
 tiramisu\_brulee.experiment package
 ===================================
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   tiramisu_brulee.experiment.lesion_seg
+
 Submodules
 ----------
-
-tiramisu\_brulee.experiment.default\_configs module
----------------------------------------------------
-
-.. automodule:: tiramisu_brulee.experiment.default_configs
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 tiramisu\_brulee.experiment.lightningtiramisu module
 ----------------------------------------------------

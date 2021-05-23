@@ -1,5 +1,5 @@
 Welcome to tiramisu-brulee's documentation!
-======================================
+===========================================
 
 .. toctree::
    :maxdepth: 2
