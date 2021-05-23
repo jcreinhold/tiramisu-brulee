@@ -21,11 +21,12 @@ import inspect
 import logging
 from pathlib import Path
 import tempfile
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from jsonargparse import (
     ArgumentParser,
     ActionConfigFile,
+    Namespace,
     set_config_read_mode,
 )
 import nibabel as nib
@@ -78,6 +79,7 @@ from tiramisu_brulee.loss import (
     mse_segmentation_loss,
 )
 
+ArgType = Optional[Union[Namespace, List[str]]]
 ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 set_config_read_mode(fsspec_enabled=True)
@@ -271,7 +273,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             self.logger.experiment.add_images(key, image_slice, n, dataformats="NCHW")
 
     @staticmethod
-    def add_model_arguments(parent_parser):
+    def add_model_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Model")
         parser.add_argument(
             "-ic",
@@ -434,7 +436,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return parent_parser
 
     @staticmethod
-    def add_other_arguments(parent_parser):
+    def add_other_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Other")
         parser.add_argument(
             "-th",
@@ -446,7 +448,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return parent_parser
 
     @staticmethod
-    def add_testing_arguments(parent_parser):
+    def add_testing_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Testing")
         parser.add_argument(
             "-mls",
@@ -472,7 +474,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return parent_parser
 
 
-def train_parser():
+def train_parser() -> ArgumentParser:
     """ argument parser for training a 3D Tiramisu CNN """
     desc = "Train a 3D Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-train", description=desc,)
@@ -513,7 +515,7 @@ def train_parser():
     return parser
 
 
-def train(args=None, return_best_model_paths=False):
+def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     """ train a 3D Tiramisu CNN for segmentation """
     parser = train_parser()
     if args is None:
@@ -623,7 +625,7 @@ def _predict_parser_shared(
     return parser
 
 
-def predict_parser():
+def predict_parser() -> ArgumentParser:
     """ argument parser for using a 3D Tiramisu CNN for prediction """
     desc = "Use a Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-predict", description=desc)
@@ -642,7 +644,7 @@ def predict_parser():
     return parser
 
 
-def predict_image_parser():
+def predict_image_parser() -> ArgumentParser:
     """ argument parser for using a 3D Tiramisu CNN for single-timepoint prediction """
     desc = "Use a Tiramisu CNN to segment lesions for a single-timepoint prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
@@ -669,7 +671,10 @@ def _aggregate(n_fn: Tuple[int, str], threshold: float, n_models: int, n_fns: in
 
 
 def aggregate(
-    predict_csv: str, n_models: int, threshold: float = 0.5, num_workers: int = None
+    predict_csv: str,
+    n_models: int,
+    threshold: float = 0.5,
+    num_workers: Optional[int] = None,
 ):
     """ aggregate output from multiple model predictions """
     csv = pd.read_csv(predict_csv)
@@ -687,7 +692,7 @@ def aggregate(
         map(_aggregator, out_fn_iter)
 
 
-def _predict(args, parser: ArgumentParser):
+def _predict(args: Namespace, parser: ArgumentParser, use_multiprocessing: bool):
     args = none_string_to_none(args)
     args = path_to_str(args)
     setup_log(args.verbosity)
@@ -710,7 +715,8 @@ def _predict(args, parser: ArgumentParser):
         logger.info("Finished prediction" + nth_model)
         del dm, model, trainer
     if n_models > 1:
-        aggregate(args.predict_csv, n_models, args.threshold, args.num_workers)
+        num_workers = args.num_workers if use_multiprocessing else 0
+        aggregate(args.predict_csv, n_models, args.threshold, num_workers)
     if not args.fast_dev_run:
         exp_dirs = []
         for mp in args.model_path:
@@ -718,18 +724,18 @@ def _predict(args, parser: ArgumentParser):
         generate_predict_config_yaml(exp_dirs, parser, dict_args)
 
 
-def predict(args=None):
+def predict(args: ArgType = None) -> int:
     """ use a 3D Tiramisu CNN for prediction """
     parser = predict_parser()
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
     elif isinstance(args, list):
         args = parser.parse_args(args, _skip_check=True)  # noqa
-    _predict(args, parser)
+    _predict(args, parser, True)
     return 0
 
 
-def predict_image(args=None):
+def predict_image(args: ArgType = None) -> int:
     """ use a 3D Tiramisu CNN for prediction for a single-timepoint """
     parser = predict_image_parser()
     if args is None:
@@ -742,5 +748,5 @@ def predict_image(args=None):
     with tempfile.NamedTemporaryFile("w") as f:
         dict_to_csv(modality_paths, f)  # noqa
         args.predict_csv = f.name
-        _predict(args, parser)
+        _predict(args, parser, False)
     return 0

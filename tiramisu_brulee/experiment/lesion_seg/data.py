@@ -22,6 +22,7 @@ from logging import getLogger
 from os.path import join
 from typing import List, Optional, Tuple
 
+from jsonargparse import ArgumentParser
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -211,7 +212,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return src, tgt
 
     @staticmethod
-    def add_arguments(parent_parser):
+    def add_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Data")
         parser.add_argument(
             "--train-csv",
@@ -334,7 +335,9 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         return out
 
     @staticmethod
-    def add_arguments(parent_parser, add_csv=True):
+    def add_arguments(
+        parent_parser: ArgumentParser, add_csv: bool = True
+    ) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Data")
         if add_csv:
             parser.add_argument(
@@ -386,7 +389,7 @@ class Mixup:
         return src, tgt
 
     @staticmethod
-    def add_arguments(parent_parser):
+    def add_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Mixup")
         parser.add_argument(
             "-mu",
