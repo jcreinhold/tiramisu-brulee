@@ -36,7 +36,7 @@ Alternatively, you can download the source and run::
 
 If you want a CLI to train a 3D lesion segmentation model, install with::
 
-    pip install tiramisu-brulee[lesionseg]
+    pip install "tiramisu-brulee[lesionseg]"
 
 Basic Usage
 -----------
