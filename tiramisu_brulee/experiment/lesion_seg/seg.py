@@ -15,7 +15,7 @@ __all__ = [
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from collections import namedtuple
+from collections import deque, namedtuple
 from functools import partial
 import inspect
 import logging
@@ -689,7 +689,7 @@ def aggregate(
         with ProcessPoolExecutor(num_workers) as executor:
             executor.map(_aggregator, out_fn_iter)
     else:
-        map(_aggregator, out_fn_iter)
+        deque(map(_aggregator, out_fn_iter), maxlen=0)
 
 
 def _predict(args: Namespace, parser: ArgumentParser, use_multiprocessing: bool):
