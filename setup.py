@@ -71,7 +71,7 @@ setup(
     setup_requires=setup_requirements,
     test_suite="tests",
     tests_require=test_requirements,
-    url="https://github.com/jcreinhold/tiramisu_brulee",
+    url="https://github.com/jcreinhold/tiramisu-brulee",
     version="0.1.4",
     zip_safe=False,
 )
