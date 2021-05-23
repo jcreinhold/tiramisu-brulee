@@ -3,58 +3,72 @@
 """
 tiramisu_brulee.experiment.lightningtiramisu
 
-Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
+Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 03, 2020
 """
 
-__all__ = ['LightningTiramisu']
+__all__ = ["LightningTiramisu"]
 
-from torch import Tensor
+from typing import List, Tuple
 
 import pytorch_lightning as pl
+from torch import Tensor
 
-from pytorch_lightning.utilities.parsing import AttributeDict
 from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
 from tiramisu_brulee.util import init_weights
 
 
 class LightningTiramisu(pl.LightningModule):
-
-    def __init__(self, hparams: AttributeDict):
+    def __init__(
+        self,
+        network_dim: int,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        down_blocks: List[int] = (4, 4, 4, 4, 4),
+        up_blocks: List[int] = (4, 4, 4, 4, 4),
+        bottleneck_layers: int = 4,
+        growth_rate: int = 16,
+        first_conv_out_channels: int = 48,
+        dropout_rate: float = 0.2,
+        init_type: str = "normal",
+        gain: float = 0.02,
+        n_epochs: int = 1,
+        learning_rate: float = 3e-4,
+        betas: Tuple[int, int] = (0.9, 0.99),
+        weight_decay: float = 1e-7,
+    ):
         super().__init__()
-        hparams = self._hparams_to_attributedict(hparams)
-        self.network_dim = hparams.lightning_params["network_dim"]
+        self.save_hyperparameters()
         if self._use_2d_network:
-            self.net = Tiramisu2d(**hparams.network_params)
+            net = Tiramisu2d
         elif self._use_3d_network:
-            self.net = Tiramisu3d(**hparams.network_params)
+            net = Tiramisu3d
         else:
             raise self._invalid_network_dim
-        init_weights(self.net, **hparams.lightning_params["init_params"])
-        self.save_hyperparameters(hparams)
-
-    @staticmethod
-    def _hparams_to_attributedict(hparams):
-        if not isinstance(hparams, AttributeDict):
-            return AttributeDict(hparams)
-        return hparams
+        self.net = net(
+            self.hparams.in_channels,
+            self.hparams.out_channels,
+            self.hparams.down_blocks,
+            self.hparams.up_blocks,
+            self.hparams.bottleneck_layers,
+            self.hparams.growth_rate,
+            self.hparams.first_conv_out_channels,
+            self.hparams.dropout_rate,
+        )
+        init_weights(self.net, self.hparams.init_type, self.hparams.gain)
 
     @property
     def _use_2d_network(self):
-        return self.network_dim == 2
+        return self.hparams.network_dim == 2
 
     @property
     def _use_3d_network(self):
-        return self.network_dim == 3
+        return self.hparams.network_dim == 3
 
     @property
     def _invalid_network_dim(self):
-        err_msg = f"Network dim. {self.network_dim} invalid."
+        err_msg = f"Network dim. {self.hparams.network_dim} invalid."
         return ValueError(err_msg)
-
-    @staticmethod
-    def criterion(x: Tensor, y: Tensor) -> Tensor:
-        raise NotImplementedError
 
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)

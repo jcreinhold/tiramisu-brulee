@@ -5,24 +5,35 @@ tiramisu_brulee.model.attention
 
 grid attention blocks for gated attention networks
 
-Author: Jacob Reinhold (jacob.reinhold@jhu.edu)
+Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 12, 2020
 """
 
-__all__ = ['GridAttentionBlock2d',
-           'GridAttentionBlock3d',
-           'AttentionTiramisu2d',
-           'AttentionTiramisu3d']
+__all__ = [
+    "GridAttentionBlock2d",
+    "GridAttentionBlock3d",
+    "AttentionTiramisu2d",
+    "AttentionTiramisu3d",
+]
 
-from typing import *
+from typing import List, Optional, Tuple
 
 import torch
 from torch import Tensor
 from torch import nn
 from torch.nn import functional as F
 
-from tiramisu_brulee.model.dense import *
-from tiramisu_brulee.model.dense import ACTIVATION
+from tiramisu_brulee.model.dense import (
+    ACTIVATION,
+    Bottleneck2d,
+    Bottleneck3d,
+    DenseBlock2d,
+    DenseBlock3d,
+    TransitionDown2d,
+    TransitionDown3d,
+    TransitionUp2d,
+    TransitionUp3d,
+)
 
 
 class GridAttentionBlock(nn.Module):
@@ -30,7 +41,12 @@ class GridAttentionBlock(nn.Module):
     _norm = None
     _upsample = None
 
-    def __init__(self, in_channels: int, gating_channels: int, inter_channels: Optional[int] = None):
+    def __init__(
+        self,
+        in_channels: int,
+        gating_channels: int,
+        inter_channels: Optional[int] = None,
+    ):
         super().__init__()
         if inter_channels is None:
             inter_channels = in_channels
@@ -38,7 +54,7 @@ class GridAttentionBlock(nn.Module):
         self.W = nn.Sequential(
             self._conv(in_channels, in_channels, 1),
             self._norm(in_channels),
-            ACTIVATION()
+            ACTIVATION(),
         )
 
         self.theta = self._conv(in_channels, inter_channels, 2, stride=2, bias=False)
@@ -90,15 +106,17 @@ class AttentionTiramisu(nn.Module):
     _trans_up = None
     _upsample = None
 
-    def __init__(self,
-                 in_channels: int = 3,
-                 out_channels: int = 1,
-                 down_blocks: List[int] = (5, 5, 5, 5, 5),
-                 up_blocks: List[int] = (5, 5, 5, 5, 5),
-                 bottleneck_layers: int = 5,
-                 growth_rate: int = 16,
-                 out_chans_first_conv: int = 48,
-                 dropout_rate: float = 0.2):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        out_channels: int = 1,
+        down_blocks: List[int] = (5, 5, 5, 5, 5),
+        up_blocks: List[int] = (5, 5, 5, 5, 5),
+        bottleneck_layers: int = 5,
+        growth_rate: int = 16,
+        out_chans_first_conv: int = 48,
+        dropout_rate: float = 0.2,
+    ):
         super().__init__()
         self.down_blocks = down_blocks
         self.up_blocks = up_blocks
@@ -108,53 +126,71 @@ class AttentionTiramisu(nn.Module):
 
         self.first_conv = nn.Sequential(
             self._pad(first_kernel_size // 2),
-            self._conv(in_channels, out_chans_first_conv,
-                       first_kernel_size, bias=False))
+            self._conv(
+                in_channels, out_chans_first_conv, first_kernel_size, bias=False
+            ),
+        )
         cur_channels_count = out_chans_first_conv
 
-        ## Downsampling path ##
+        # Downsampling path
         self.dense_down = nn.ModuleList([])
         self.trans_down = nn.ModuleList([])
         for n_layers in down_blocks:
-            self.dense_down.append(self._denseblock(
-                cur_channels_count, growth_rate, n_layers,
-                upsample=False, dropout_rate=dropout_rate))
-            cur_channels_count += (growth_rate * n_layers)
+            block = self._denseblock(
+                cur_channels_count,
+                growth_rate,
+                n_layers,
+                upsample=False,
+                dropout_rate=dropout_rate,
+            )
+            self.dense_down.append(block)
+            cur_channels_count += growth_rate * n_layers
             skip_connection_channel_counts.insert(0, cur_channels_count)
-            self.trans_down.append(self._trans_down(
-                cur_channels_count, cur_channels_count,
-                dropout_rate=dropout_rate))
+            block = self._trans_down(
+                cur_channels_count, cur_channels_count, dropout_rate=dropout_rate
+            )
+            self.trans_down.append(block)
 
-        ## Bottleneck ##
+        # Bottleneck
         self.bottleneck = self._bottleneck(
-            cur_channels_count, growth_rate, bottleneck_layers,
-            dropout_rate=dropout_rate)
+            cur_channels_count,
+            growth_rate,
+            bottleneck_layers,
+            dropout_rate=dropout_rate,
+        )
         prev_block_channels = growth_rate * bottleneck_layers
         cur_channels_count += prev_block_channels
 
-        ## Upsampling path ##
+        # Upsampling path
         self.trans_up = nn.ModuleList([])
         self.dense_up = nn.ModuleList([])
         self.attention_gates = nn.ModuleList([])
         self.deep_supervision = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
-            self.attention_gates.append(self._attention(
-                sccc, prev_block_channels))
-            self.trans_up.append(self._trans_up(
-                prev_block_channels, prev_block_channels))
+            block = self._attention(sccc, prev_block_channels)
+            self.attention_gates.append(block)
+            block = self._trans_up(prev_block_channels, prev_block_channels)
+            self.trans_up.append(block)
             cur_channels_count = prev_block_channels + sccc
-            not_last_block = i < len(up_blocks)  # do not upsample on last block
-            self.dense_up.append(self._denseblock(
-                cur_channels_count, growth_rate, n_layers,
-                upsample=not_last_block, dropout_rate=dropout_rate))
+            not_last_block = i < len(up_blocks)  # don't upsample on last blk
+            block = self._denseblock(
+                cur_channels_count,
+                growth_rate,
+                n_layers,
+                upsample=not_last_block,
+                dropout_rate=dropout_rate,
+            )
+            self.dense_up.append(block)
             prev_block_channels = growth_rate * n_layers
             cur_channels_count += prev_block_channels
-            dsv_channel_count = prev_block_channels if not_last_block else \
-                cur_channels_count
+            if not_last_block:
+                dsv_channel_count = prev_block_channels
+            else:
+                dsv_channel_count = cur_channels_count
             self.deep_supervision.append(
-                self._conv(dsv_channel_count, out_channels,
-                           final_kernel_size))
+                self._conv(dsv_channel_count, out_channels, final_kernel_size)
+            )
 
     @property
     def _down_blocks(self):
@@ -162,15 +198,16 @@ class AttentionTiramisu(nn.Module):
 
     @property
     def _up_blocks(self):
-        return zip(self.dense_up, self.trans_up,
-                   self.attention_gates, self.deep_supervision)
+        return zip(
+            self.dense_up, self.trans_up, self.attention_gates, self.deep_supervision
+        )
 
-    def _interp(self, x: Tensor, size: Tuple[int]) -> Tensor:
-        return F.interpolate(x, size, mode=self._upsample, align_corners=True)
+    def _interp(self, tensor: Tensor, size: Tuple[int]) -> Tensor:
+        return F.interpolate(tensor, size, mode=self._upsample, align_corners=True)
 
-    def forward(self, x: Tensor) -> List[Tensor]:
-        x_size = x.shape[2:]
-        out = self.first_conv(x)
+    def forward(self, tensor: Tensor) -> List[Tensor]:
+        input_size = tensor.shape[2:]
+        out = self.first_conv(tensor)
         skip_connections = []
         for dbd, tdb in self._down_blocks:
             out = dbd(out)
@@ -184,12 +221,12 @@ class AttentionTiramisu(nn.Module):
             out = tub(out, skip)
             out = ubd(out)
             dsv = dsl(out)
-            dsv = self._interp(dsv, x_size)
+            dsv = self._interp(dsv, input_size)
             dsvs.append(dsv)
         return dsvs
 
-    def predict(self, x: Tensor) -> Tensor:
-        out = self.first_conv(x)
+    def predict(self, tensor: Tensor) -> Tensor:
+        out = self.first_conv(tensor)
         skip_connections = []
         for dbd, tdb in self._down_blocks:
             out = dbd(out)
@@ -213,7 +250,7 @@ class AttentionTiramisu2d(AttentionTiramisu):
     _pad = nn.ReplicationPad2d
     _trans_down = TransitionDown2d
     _trans_up = TransitionUp2d
-    _upsample = 'bilinear'
+    _upsample = "bilinear"
 
 
 class AttentionTiramisu3d(AttentionTiramisu):
@@ -224,20 +261,4 @@ class AttentionTiramisu3d(AttentionTiramisu):
     _pad = nn.ReplicationPad3d
     _trans_down = TransitionDown3d
     _trans_up = TransitionUp3d
-    _upsample = 'trilinear'
-
-
-if __name__ == "__main__":
-    attention_block = GridAttentionBlock3d(1, 1)
-    x = torch.randn(2, 1, 32, 32, 32)
-    g = torch.randn(2, 1, 16, 16, 16)
-    y = attention_block(x, g)
-    assert x.shape == y.shape
-    net_kwargs = dict(in_channels=1, out_channels=1,
-                      down_blocks=[2, 2], up_blocks=[2, 2],
-                      bottleneck_layers=2)
-    net = AttentionTiramisu3d(**net_kwargs)
-    y = net(x)
-    assert all([x.shape == yi.shape for yi in y])
-    y = net.predict(x)
-    assert x.shape == y.shape
+    _upsample = "trilinear"
