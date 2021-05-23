@@ -14,12 +14,13 @@ __all__ = [
 ]
 
 import argparse
-import tempfile
+from concurrent.futures import ProcessPoolExecutor
 from collections import namedtuple
 from functools import partial
 import inspect
 import logging
 from pathlib import Path
+import tempfile
 from typing import List, Optional, Tuple
 
 from jsonargparse import (
@@ -654,20 +655,36 @@ def predict_image_parser():
     return parser
 
 
-def aggregate(predict_csv: str, n_models: int, threshold: float = 0.5):
+def _aggregate(n_fn: Tuple[int, str], threshold: float, n_models: int, n_fns: int):
+    """ aggregate helper for concurrent/parallel processing """
+    n, fn = n_fn
+    data = []
+    for i in range(1, n_models + 1):
+        _fn = append_num_to_filename(fn, i)
+        nib_image = nib.load(_fn)
+        data.append(nib_image.get_fdata())
+    aggregated = (np.mean(data, axis=0) > threshold).astype(np.float32)
+    nib.Nifti1Image(aggregated, nib_image.affine).to_filename(fn)  # noqa
+    logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
+
+
+def aggregate(
+    predict_csv: str, n_models: int, threshold: float = 0.5, num_workers: int = None
+):
     """ aggregate output from multiple model predictions """
     csv = pd.read_csv(predict_csv)
     out_fns = csv["out"]
     n_fns = len(out_fns)
-    for n, fn in enumerate(out_fns, 1):
-        data = []
-        for i in range(1, n_models + 1):
-            _fn = append_num_to_filename(fn, i)
-            nib_image = nib.load(_fn)
-            data.append(nib_image.get_fdata())
-        aggregated = (np.mean(data, axis=0) > threshold).astype(np.float32)
-        nib.Nifti1Image(aggregated, nib_image.affine).to_filename(fn)  # noqa
-        logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
+    out_fn_iter = enumerate(out_fns, 1)
+    _aggregator = partial(
+        _aggregate, threshold=threshold, n_models=n_models, n_fns=n_fns
+    )
+    use_multiprocessing = True if num_workers is None else num_workers > 0
+    if use_multiprocessing:
+        with ProcessPoolExecutor(num_workers) as executor:
+            executor.map(_aggregator, out_fn_iter)
+    else:
+        map(_aggregator, out_fn_iter)
 
 
 def _predict(args, parser: ArgumentParser):
@@ -693,7 +710,7 @@ def _predict(args, parser: ArgumentParser):
         logger.info("Finished prediction" + nth_model)
         del dm, model, trainer
     if n_models > 1:
-        aggregate(args.predict_csv, n_models, args.threshold)
+        aggregate(args.predict_csv, n_models, args.threshold, args.num_workers)
     if not args.fast_dev_run:
         exp_dirs = []
         for mp in args.model_path:
