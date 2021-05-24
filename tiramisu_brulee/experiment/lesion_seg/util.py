@@ -168,3 +168,4 @@ def setup_log(verbosity: int):
         level = logging.getLevelName("WARNING")
     fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(format=fmt, level=level)
+    logging.captureWarnings(True)

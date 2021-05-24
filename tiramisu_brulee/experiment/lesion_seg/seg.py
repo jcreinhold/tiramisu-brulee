@@ -22,6 +22,7 @@ import logging
 from pathlib import Path
 import tempfile
 from typing import List, Optional, Tuple, Union
+import warnings
 
 from jsonargparse import (
     ArgumentParser,
@@ -35,6 +36,7 @@ import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.plugins import DDPPlugin
 import torch
 from torch import Tensor
 from torch.optim import AdamW, RMSprop, lr_scheduler
@@ -83,6 +85,10 @@ ArgType = Optional[Union[Namespace, List[str]]]
 ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 set_config_read_mode(fsspec_enabled=True)
+
+# num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
+dataloader_warning = "The dataloader, train dataloader, does not have many workers"
+warnings.filterwarnings("ignore", dataloader_warning, category=UserWarning)
 
 
 class LesionSegLightningTiramisu(LightningTiramisu):
@@ -549,14 +555,19 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     )
     best_model_paths = []
     dict_args = vars(args)
+    use_multigpus = not (args.gpus is None or args.gpus <= 1)
     for i, (train_csv, valid_csv) in enumerate(csvs, 1):
         tb_logger = TensorBoardLogger(str(root_dir), name=name)
         checkpoint_callback = ModelCheckpoint(**checkpoint_kwargs)
+        plugins = args.plugins
+        if use_multigpus and args.accelerator == "ddp":
+            plugins = DDPPlugin(find_unused_parameters=False)
         trainer = Trainer.from_argparse_args(
             args,
             logger=tb_logger,
             checkpoint_callback=True,
             callbacks=[checkpoint_callback],
+            plugins=plugins,
         )
         nth_model = f" ({i}/{n_models_to_train})"
         dict_args["train_csv"] = train_csv
