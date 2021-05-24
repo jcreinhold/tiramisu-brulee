@@ -84,9 +84,6 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
                     "both training and validation CSV."
                 )
                 raise ValueError(msg)
-        if "div" in subject and len(inputs) > 1:
-            msg = f"If using `div`, expect only 1 input. Got {inputs}."
-            raise ValueError(msg)
         self._use_div = "div" in subject
         self._input_fields = tuple(sorted(inputs))
 
