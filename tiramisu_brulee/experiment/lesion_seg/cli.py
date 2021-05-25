@@ -322,7 +322,7 @@ def aggregate(
         fill_holes=fill_holes,
         min_lesion_size=min_lesion_size,
     )
-    use_multiprocessing = True if num_workers is None else num_workers > 0
+    use_multiprocessing = num_workers is None or num_workers > 0
     if use_multiprocessing:
         with ProcessPoolExecutor(num_workers) as executor:
             executor.map(_aggregator, out_fn_iter)
