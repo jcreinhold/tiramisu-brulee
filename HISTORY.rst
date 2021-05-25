@@ -2,6 +2,16 @@
 History
 =======
 
+0.1.6 (2021-05-25)
+------------------
+
+* Improve documentation
+
+0.1.5 (2021-05-25)
+------------------
+
+* Add docs and split out CLIs from seg module
+
 0.1.4 (2021-05-13)
 ------------------
 
