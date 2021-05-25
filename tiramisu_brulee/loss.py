@@ -34,20 +34,20 @@ import torch.nn.functional as F
 
 
 def per_channel_dice(
-    arr1: Tensor, arr2: Tensor, eps: float = 1e-3, keepdim: bool = False
+    tensor1: Tensor, tensor2: Tensor, eps: float = 1e-3, keepdim: bool = False
 ) -> Tensor:
     """ compute dice score for each channel separately and reduce """
-    spatial_dims = tuple(range(2 - len(arr1.shape), 0))
-    intersection = torch.sum(arr1 * arr2, dim=spatial_dims, keepdim=keepdim)
-    x_sum = torch.sum(arr1, dim=spatial_dims, keepdim=keepdim)
-    y_sum = torch.sum(arr2, dim=spatial_dims, keepdim=keepdim)
+    spatial_dims = tuple(range(2 - len(tensor1.shape), 0))
+    intersection = torch.sum(tensor1 * tensor2, dim=spatial_dims, keepdim=keepdim)
+    x_sum = torch.sum(tensor1, dim=spatial_dims, keepdim=keepdim)
+    y_sum = torch.sum(tensor2, dim=spatial_dims, keepdim=keepdim)
     pc_dice = (2 * intersection + eps) / (x_sum + y_sum + eps)
     return pc_dice
 
 
-def weighted_channel_avg(arr: Tensor, weight: Tensor) -> Tensor:
-    weight = weight[None, ...].repeat([arr.shape[0], 1])
-    weighted = torch.mean(weight * arr)
+def weighted_channel_avg(tensor: Tensor, weight: Tensor) -> Tensor:
+    weight = weight[None, ...].repeat([tensor.shape[0], 1])
+    weighted = torch.mean(weight * tensor)
     return weighted
 
 
