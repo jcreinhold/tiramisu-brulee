@@ -3,7 +3,7 @@
 """
 tiramisu_brulee.tiramisu_brulee.experiment.lesion_seg.cli
 
-cli functions for lesion segmentation with 3D Tiramisu
+command-line interface functions for lesion segmentation with 3D Tiramisu
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 25, 2021
@@ -26,8 +26,8 @@ import tempfile
 from typing import List, Optional, Tuple, Union
 import warnings
 
+import jsonargparse
 from jsonargparse import (
-    ArgumentParser,
     ActionConfigFile,
     Namespace,
 )
@@ -68,6 +68,7 @@ from tiramisu_brulee.experiment.lesion_seg.util import (
 )
 
 ArgType = Optional[Union[Namespace, List[str]]]
+Parser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 
 # num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
@@ -75,13 +76,19 @@ dataloader_warning = "The dataloader, train dataloader, does not have many worke
 warnings.filterwarnings("ignore", dataloader_warning, category=UserWarning)
 
 
-def train_parser() -> ArgumentParser:
+def train_parser(use_python_argparse: bool = True) -> Parser:
     """ argument parser for training a 3D Tiramisu CNN """
+    if use_python_argparse:
+        ArgumentParser = argparse.ArgumentParser
+        config_action = None
+    else:
+        ArgumentParser = jsonargparse.ArgumentParser
+        config_action = ActionConfigFile
     desc = "Train a 3D Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-train", description=desc,)
     parser.add_argument(
         "--config",
-        action=ActionConfigFile,
+        action=config_action,
         help="path to a configuration file in json or yaml format",
     )
     exp_parser = parser.add_argument_group("Experiment")
@@ -101,16 +108,19 @@ def train_parser() -> ArgumentParser:
     parser = LesionSegDataModuleTrain.add_arguments(parser)
     parser = Mixup.add_arguments(parser)
     parser = Trainer.add_argparse_args(parser)
-    parser.link_arguments("n_epochs", "min_epochs")  # noqa
-    parser.link_arguments("n_epochs", "max_epochs")  # noqa
-    unnecessary_args = [
+    unnecessary_args = {
         "checkpoint_callback",
         "logger",
-        "min_steps",
         "max_steps",
+        "min_steps",
         "truncated_bptt_steps",
         "weights_save_path",
-    ]
+    }
+    if use_python_argparse:
+        unnecessary_args.union({"min_epochs", "max_epochs"})
+    else:
+        parser.link_arguments("n_epochs", "min_epochs")  # noqa
+        parser.link_arguments("n_epochs", "max_epochs")  # noqa
     remove_args(parser, unnecessary_args)
     fix_type_funcs(parser)
     return parser
@@ -118,7 +128,7 @@ def train_parser() -> ArgumentParser:
 
 def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     """ train a 3D Tiramisu CNN for segmentation """
-    parser = train_parser()
+    parser = train_parser(False)
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
     elif isinstance(args, list):
@@ -190,7 +200,7 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
             exp_dirs=exp_dirs, dict_args=dict_args, best_model_paths=best_model_paths,
         )
         generate_train_config_yaml(**config_kwargs, parser=parser)
-        generate_predict_config_yaml(**config_kwargs, parser=predict_parser())
+        generate_predict_config_yaml(**config_kwargs, parser=predict_parser(False))
     if return_best_model_paths:
         return best_model_paths
     else:
@@ -198,8 +208,8 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
 
 
 def _predict_parser_shared(
-    parser: ArgumentParser, necessary_trainer_args: set, add_csv: bool
-) -> ArgumentParser:
+    parser: Parser, necessary_trainer_args: set, add_csv: bool
+) -> Parser:
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
         "-mp",
@@ -231,33 +241,37 @@ def _predict_parser_shared(
     return parser
 
 
-def predict_parser() -> ArgumentParser:
+def predict_parser(use_python_argparse: bool = True) -> Parser:
     """ argument parser for using a 3D Tiramisu CNN for prediction """
+    if use_python_argparse:
+        ArgumentParser = argparse.ArgumentParser
+        config_action = None
+    else:
+        ArgumentParser = jsonargparse.ArgumentParser
+        config_action = ActionConfigFile
     desc = "Use a Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-predict", description=desc)
     parser.add_argument(
         "--config",
-        action=ActionConfigFile,
+        action=config_action,
         help="path to a configuration file in json or yaml format",
     )
     necessary_trainer_args = {
         "benchmark",
-        "gpus",
         "fast_dev_run",
-        "default_root_dir",
+        "gpus",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, True)
     return parser
 
 
-def predict_image_parser() -> ArgumentParser:
+def predict_image_parser() -> argparse.ArgumentParser:
     """ argument parser for using a 3D Tiramisu CNN for single-timepoint prediction """
     desc = "Use a Tiramisu CNN to segment lesions for a single-timepoint prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
-        "gpus",
         "fast_dev_run",
-        "default_root_dir",
+        "gpus",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, False)
     return parser
@@ -314,7 +328,7 @@ def aggregate(
         deque(map(_aggregator, out_fn_iter), maxlen=0)
 
 
-def _predict(args: Namespace, parser: ArgumentParser, use_multiprocessing: bool):
+def _predict(args: Namespace, parser: Parser, use_multiprocessing: bool):
     args = none_string_to_none(args)
     args = path_to_str(args)
     setup_log(args.verbosity)
@@ -355,7 +369,7 @@ def _predict(args: Namespace, parser: ArgumentParser, use_multiprocessing: bool)
 
 def predict(args: ArgType = None) -> int:
     """ use a 3D Tiramisu CNN for prediction """
-    parser = predict_parser()
+    parser = predict_parser(False)
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
     elif isinstance(args, list):

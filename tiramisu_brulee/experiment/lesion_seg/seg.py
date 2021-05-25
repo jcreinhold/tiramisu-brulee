@@ -54,6 +54,46 @@ ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 
 
 class LesionSegLightningTiramisu(LightningTiramisu):
+    """3D Tiramisu-based PyTorch-Lightning module for lesion segmentation
+
+    See Also:
+        Jégou, Simon, et al. "The one hundred layers tiramisu: Fully
+        convolutional densenets for semantic segmentation." CVPR. 2017.
+
+        Zhang, Huahong, et al. "Multiple sclerosis lesion segmentation
+        with Tiramisu and 2.5D stacked slices." International Conference
+        on Medical Image Computing and Computer-Assisted Intervention.
+        Springer, Cham, 2019.
+
+    Args:
+        in_channels (int): number of input channels
+        out_channels (int): number of output channels
+        down_blocks (List[int]): number of layers in each block in down path
+        up_blocks (List[int]): number of layers in each block in up path
+        bottleneck_layers (int): number of layers in the bottleneck
+        growth_rate (int): number of channels to grow by in each layer
+        first_conv_out_channels (int): number of output channels in first conv
+        dropout_rate (float): dropout rate/probability
+        init_type (str): method to initialize the weights of network
+        gain (float): gain parameter for initialization
+        n_epochs (int): number of epochs to train the network
+        learning_rate (float): learning rate for the optimizer
+        betas (Tuple[float, float]): momentum parameters for adam
+        weight_decay (float): weight decay for optimizer
+        combo_weight (float): weight by which to balance BCE and Dice loss
+        decay_after (int): decay learning rate linearly after this many epochs
+        loss_function (str): loss function to use in training
+        rmsprop (bool): use rmsprop instead of adamw
+        soft_labels (bool): use non-binary labels for training
+        threshold (float): threshold by which to decide on positive class
+        min_lesion_size (int): minimum lesion size in voxels in output prediction
+        fill_holes (bool): use binary fill holes operation on label
+        predict_probability (bool): save a probability image instead of a binary one
+        mixup (bool): use mixup in training
+        mixup_alpha (float): mixup parameter for beta distribution
+        _model_num (ModelNum): internal param for ith of n models
+    """
+
     def __init__(
         self,
         in_channels: int = 1,
@@ -84,46 +124,6 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
-        """
-        3D Tiramisu-based PyTorch-Lightning module for lesion segmentation [1,2]
-
-        Args:
-            in_channels (int): number of input channels
-            out_channels (int): number of output channels
-            down_blocks (List[int]): number of layers in each block in down path
-            up_blocks (List[int]): number of layers in each block in up path
-            bottleneck_layers (int): number of layers in the bottleneck
-            growth_rate (int): number of channels to grow by in each layer
-            first_conv_out_channels (int): number of output channels in first conv
-            dropout_rate (float): dropout rate/probability
-            init_type (str): method to initialize the weights of network
-            gain (float): gain parameter for initialization
-            n_epochs (int): number of epochs to train the network
-            learning_rate (float): learning rate for the optimizer
-            betas (Tuple[float, float]): momentum parameters for adam
-            weight_decay (float): weight decay for optimizer
-            combo_weight (float): weight by which to balance BCE and Dice loss
-            decay_after (int): decay learning rate linearly after this many epochs
-            loss_function (str): loss function to use in training
-            rmsprop (bool): use rmsprop instead of adamw
-            soft_labels (bool): use non-binary labels for training
-            threshold (float): threshold by which to decide on positive class
-            min_lesion_size (int): minimum lesion size in voxels in output prediction
-            fill_holes (bool): use binary fill holes operation on label
-            predict_probability (bool): save a probability image instead of a binary one
-            mixup (bool): use mixup in training
-            mixup_alpha (float): mixup parameter for beta distribution
-            _model_num (ModelNum): internal param for ith of n models
-
-        References:
-            [1] Jégou, Simon, et al. "The one hundred layers tiramisu:
-                Fully convolutional densenets for semantic segmentation."
-                CVPR. 2017.
-            [2] Zhang, Huahong, et al. "Multiple sclerosis lesion segmentation
-                with Tiramisu and 2.5D stacked slices." International Conference
-                on Medical Image Computing and Computer-Assisted Intervention.
-                Springer, Cham, 2019.
-        """
         network_dim = 3  # only support 3D input
         super().__init__(
             network_dim,
