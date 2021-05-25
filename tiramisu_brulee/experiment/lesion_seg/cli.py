@@ -260,6 +260,7 @@ def predict_parser(use_python_argparse: bool = True) -> Parser:
         "benchmark",
         "fast_dev_run",
         "gpus",
+        "precision",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, True)
     return parser
@@ -272,6 +273,7 @@ def predict_image_parser() -> argparse.ArgumentParser:
     necessary_trainer_args = {
         "fast_dev_run",
         "gpus",
+        "precision",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, False)
     return parser
