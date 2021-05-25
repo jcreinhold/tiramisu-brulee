@@ -12,7 +12,7 @@ from typing import List
 
 import pytest
 
-from tiramisu_brulee.experiment.lesion_seg.seg import train, predict, predict_image
+from tiramisu_brulee.experiment.lesion_seg.cli import train, predict, predict_image
 
 
 @pytest.fixture
