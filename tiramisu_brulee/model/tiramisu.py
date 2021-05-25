@@ -65,6 +65,12 @@ class Tiramisu(nn.Module):
         """
         Base class for Tiramisu convolutional neural network
 
+        See Also:
+            Jégou, Simon, et al. "The one hundred layers tiramisu: Fully
+            convolutional densenets for semantic segmentation." CVPR. 2017.
+
+            Based on: https://github.com/bfortuner/pytorch_tiramisu
+
         Args:
             in_channels (int): number of input channels
             out_channels (int): number of output channels
@@ -76,10 +82,7 @@ class Tiramisu(nn.Module):
             dropout_rate (float): dropout rate/probability
 
         References:
-            [1] Jégou, Simon, et al. "The one hundred layers tiramisu:
-                Fully convolutional densenets for semantic segmentation."
-                CVPR. 2017.
-            [2] https://github.com/bfortuner/pytorch_tiramisu
+
         """
         super().__init__()
         assert len(down_blocks) == len(up_blocks)

@@ -5,13 +5,16 @@ tiramisu_brulee.loss
 
 various segmentation loss functions
 
-References:
-    [1] https://gitlab.com/shan-deep-networks/pytorch-metrics/
-    [2] https://github.com/catalyst-team/catalyst/
-    [3] https://github.com/facebookresearch/fvcore
-    [4] S.A. Taghanaki et al. "Combo loss: Handling input and
-        output imbalance in multi-organ segmentation." Computerized
-        Medical Imaging and Graphics 75 (2019): 24-33.
+See Also:
+    https://gitlab.com/shan-deep-networks/pytorch-metrics/
+
+    https://github.com/catalyst-team/catalyst/
+
+    https://github.com/facebookresearch/fvcore
+
+    S.A. Taghanaki et al. "Combo loss: Handling input and
+    output imbalance in multi-organ segmentation." Computerized
+    Medical Imaging and Graphics 75 (2019): 24-33.
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 01, 2020

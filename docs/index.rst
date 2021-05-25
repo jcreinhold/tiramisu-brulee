@@ -2,7 +2,7 @@ Welcome to tiramisu-brulee's documentation!
 ===========================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    readme

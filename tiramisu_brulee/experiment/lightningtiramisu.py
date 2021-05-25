@@ -19,6 +19,29 @@ from tiramisu_brulee.util import init_weights
 
 
 class LightningTiramisu(pl.LightningModule):
+    """Base class for PyTorch-Lightning Tiramisu convolutional neural network
+
+    See Also:
+        Jégou, Simon, et al. "The one hundred layers tiramisu: Fully
+        convolutional densenets for semantic segmentation." CVPR. 2017.
+
+    Args:
+        in_channels (int): number of input channels
+        out_channels (int): number of output channels
+        down_blocks (List[int]): number of layers in each block in down path
+        up_blocks (List[int]): number of layers in each block in up path
+        bottleneck_layers (int): number of layers in the bottleneck
+        growth_rate (int): number of channels to grow by in each layer
+        first_conv_out_channels (int): number of output channels in first conv
+        dropout_rate (float): dropout rate/probability
+        init_type (str): method to initialize the weights of network
+        gain (float): gain parameter for initialization
+        n_epochs (int): number of epochs to train the network
+        learning_rate (float): learning rate for the optimizer
+        betas (Tuple[float, float]): momentum parameters for adam
+        weight_decay (float): weight decay for optimizer
+    """
+
     def __init__(
         self,
         network_dim: int,
@@ -37,30 +60,6 @@ class LightningTiramisu(pl.LightningModule):
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7,
     ):
-        """
-        Base class for PyTorch-Lightning Tiramisu convolutional neural network [1]
-
-        Args:
-            in_channels (int): number of input channels
-            out_channels (int): number of output channels
-            down_blocks (List[int]): number of layers in each block in down path
-            up_blocks (List[int]): number of layers in each block in up path
-            bottleneck_layers (int): number of layers in the bottleneck
-            growth_rate (int): number of channels to grow by in each layer
-            first_conv_out_channels (int): number of output channels in first conv
-            dropout_rate (float): dropout rate/probability
-            init_type (str): method to initialize the weights of network
-            gain (float): gain parameter for initialization
-            n_epochs (int): number of epochs to train the network
-            learning_rate (float): learning rate for the optimizer
-            betas (Tuple[float, float]): momentum parameters for adam
-            weight_decay (float): weight decay for optimizer
-
-        References:
-            [1] Jégou, Simon, et al. "The one hundred layers tiramisu:
-                Fully convolutional densenets for semantic segmentation."
-                CVPR. 2017.
-        """
         super().__init__()
         self.save_hyperparameters()
         if self._use_2d_network:

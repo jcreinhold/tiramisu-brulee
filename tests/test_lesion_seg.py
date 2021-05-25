@@ -74,7 +74,7 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
     args += "--patch-size 16 16 16".split()
     args += "--queue-length 1".split()
     args += "--samples-per-volume 1".split()
-    args += "--n-epochs 10".split()
+    args += "--n-epochs 2".split()
     args += "--down-blocks 2 2".split()
     args += "--up-blocks 2 2".split()
     args += "--bottleneck-layers 2".split()

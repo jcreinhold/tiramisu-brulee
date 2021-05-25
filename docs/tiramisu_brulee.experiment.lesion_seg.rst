@@ -4,6 +4,14 @@ tiramisu\_brulee.experiment.lesion\_seg package
 Submodules
 ----------
 
+tiramisu\_brulee.experiment.lesion\_seg.cli module
+--------------------------------------------------
+
+.. automodule:: tiramisu_brulee.experiment.lesion_seg.cli
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 tiramisu\_brulee.experiment.lesion\_seg.data module
 ---------------------------------------------------
 
