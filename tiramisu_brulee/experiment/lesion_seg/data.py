@@ -118,6 +118,30 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         spatial_augmentation: bool = False,
         **kwargs,
     ):
+        """
+        Data module for training and validation for lesion segmentation
+
+        Args:
+            train_subject_list (List[tio.Subject]):
+                list of torchio.Subject for training
+            val_subject_list (List[tio.Subject]):
+                list of torchio.Subject for validation
+            batch_size (int): batch size for training/validation
+            patch_size (Tuple[int, int, int]):
+                patch size for training/validation
+            queue_length (int): Maximum number of patches that can be
+                stored in the queue. Using a large number means that
+                the queue needs to be filled less often, but more CPU
+                memory is needed to store the patches.
+            samples_per_volume (int): Number of patches to extract from
+                each volume. A small number of patches ensures a large
+                variability in the queue, but training will be slower.
+            num_workers (int): number of subprocesses for data loading
+            label_sampler (bool): sample patches centered on positive labels
+            spatial_augmentation (bool): use random affine and elastic
+                data augmentation for training
+            **kwargs:
+        """
         super().__init__()
         self.train_subject_list = train_subject_list
         self.val_subject_list = val_subject_list
@@ -288,6 +312,17 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         num_workers: int = 16,
         **kwargs,
     ):
+        """
+        Data module for prediction for lesion segmentation
+
+        Args:
+            subject_list (List[tio.Subject]):
+                list of torchio.Subject for prediction
+            batch_size (int): number of images to predict at a time
+            num_workers (int):
+                number of subprocesses to use for data loading
+            **kwargs:
+        """
         super().__init__()
         self.subject_list = subject_list
         self.batch_size = batch_size
@@ -363,6 +398,12 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
 
 class Mixup:
     def __init__(self, alpha: float):
+        """
+        use mixup as a form of data augmentation
+
+        Args:
+            alpha (float): parameter for beta distribution
+        """
         self.alpha = alpha
 
     def _mixup_dist(self, device: torch.device) -> D.Distribution:

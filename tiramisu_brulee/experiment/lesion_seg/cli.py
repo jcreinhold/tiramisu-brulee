@@ -44,6 +44,7 @@ from tiramisu_brulee.experiment.lesion_seg.data import (
     LesionSegDataModulePredict,
     LesionSegDataModuleTrain,
 )
+from tiramisu_brulee.experiment.lesion_seg.lesion_tools import clean_segmentation
 from tiramisu_brulee.experiment.lesion_seg.parse import (
     dict_to_csv,
     file_path,
@@ -262,7 +263,14 @@ def predict_image_parser() -> ArgumentParser:
     return parser
 
 
-def _aggregate(n_fn: Tuple[int, str], threshold: float, n_models: int, n_fns: int):
+def _aggregate(
+    n_fn: Tuple[int, str],
+    threshold: float,
+    n_models: int,
+    n_fns: int,
+    fill_holes: bool,
+    min_lesion_size: int,
+):
     """ aggregate helper for concurrent/parallel processing """
     n, fn = n_fn
     data = []
@@ -270,8 +278,10 @@ def _aggregate(n_fn: Tuple[int, str], threshold: float, n_models: int, n_fns: in
         _fn = append_num_to_filename(fn, i)
         nib_image = nib.load(_fn)
         data.append(nib_image.get_fdata())
-    aggregated = (np.mean(data, axis=0) > threshold).astype(np.float32)
-    nib.Nifti1Image(aggregated, nib_image.affine).to_filename(fn)  # noqa
+    agg = np.mean(data, axis=0) > threshold
+    agg = clean_segmentation(agg, fill_holes, min_lesion_size)
+    agg = agg.astype(np.float32)
+    nib.Nifti1Image(agg, nib_image.affine).to_filename(fn)  # noqa
     logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
 
 
@@ -279,6 +289,8 @@ def aggregate(
     predict_csv: str,
     n_models: int,
     threshold: float = 0.5,
+    fill_holes: bool = False,
+    min_lesion_size: int = 3,
     num_workers: Optional[int] = None,
 ):
     """ aggregate output from multiple model predictions """
@@ -287,7 +299,12 @@ def aggregate(
     n_fns = len(out_fns)
     out_fn_iter = enumerate(out_fns, 1)
     _aggregator = partial(
-        _aggregate, threshold=threshold, n_models=n_models, n_fns=n_fns
+        _aggregate,
+        threshold=threshold,
+        n_models=n_models,
+        n_fns=n_fns,
+        fill_holes=fill_holes,
+        min_lesion_size=min_lesion_size,
     )
     use_multiprocessing = True if num_workers is None else num_workers > 0
     if use_multiprocessing:
@@ -321,7 +338,14 @@ def _predict(args: Namespace, parser: ArgumentParser, use_multiprocessing: bool)
         del dm, model, trainer
     if n_models > 1:
         num_workers = args.num_workers if use_multiprocessing else 0
-        aggregate(args.predict_csv, n_models, args.threshold, num_workers)
+        aggregate(
+            args.predict_csv,
+            n_models,
+            args.threshold,
+            args.fill_holes,
+            args.min_lesion_size,
+            num_workers,
+        )
     if not args.fast_dev_run:
         exp_dirs = []
         for mp in args.model_path:

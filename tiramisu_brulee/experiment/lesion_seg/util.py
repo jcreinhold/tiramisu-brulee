@@ -45,6 +45,7 @@ def to_np(x: Tensor) -> np.ndarray:
 
 
 def extract_and_average(dicts: List[dict], field: str) -> list:
+    """ extract field from a list of dictionaries and average the results """
     if len(dicts) == 1:
         return dicts[0][field]
     else:
@@ -68,19 +69,22 @@ class BoundingBox3D:
         self.k = slice(k_low, k_high)
         self.original_shape = original_shape
 
-    def crop_to_bbox(self, x: Tensor) -> Tensor:
-        return x[..., self.i, self.j, self.k]
+    def crop_to_bbox(self, tensor: Tensor) -> Tensor:
+        """ returns the tensor cropped around the saved bbox """
+        return tensor[..., self.i, self.j, self.k]
 
-    def __call__(self, x: Tensor) -> Tensor:
-        return self.crop_to_bbox(x)
+    def __call__(self, tensor: Tensor) -> Tensor:
+        return self.crop_to_bbox(tensor)
 
-    def uncrop(self, x: Tensor) -> Tensor:
-        assert x.ndim == 3, "expects tensors with shape HxWxD"
-        out = torch.zeros(self.original_shape, dtype=x.dtype, device=x.device)
-        out[self.i, self.j, self.k] = x
+    def uncrop(self, tensor: Tensor) -> Tensor:
+        """ places a tensor back into the saved original shape """
+        assert tensor.ndim == 3, "expects tensors with shape HxWxD"
+        out = torch.zeros(self.original_shape, dtype=tensor.dtype, device=tensor.device)
+        out[self.i, self.j, self.k] = tensor
         return out
 
     def uncrop_batch(self, batch: Tensor) -> Tensor:
+        """ places a batch back into the saved original shape """
         assert batch.ndim == 5, "expects tensors with shape NxCxHxWxD"
         batch_size, channel_size = batch.shape[:2]
         out_shape = (batch_size, channel_size) + self.original_shape
@@ -134,9 +138,11 @@ class BoundingBox3D:
         )
 
 
-def reshape_for_broadcasting(x: Tensor, ndim: int) -> Tensor:
+def reshape_for_broadcasting(tensor: Tensor, ndim: int) -> Tensor:
+    """ expand dimensions of a 0- or 1-dimensional tensor to ndim for broadcast ops """
+    assert tensor.ndim <= 1
     dims = [1 for _ in range(ndim - 1)]
-    return x.view(-1, *dims)
+    return tensor.view(-1, *dims)
 
 
 def split_filename(filepath: Union[str, Path]) -> Tuple[Path, str, str]:
@@ -149,10 +155,11 @@ def split_filename(filepath: Union[str, Path]) -> Tuple[Path, str, str]:
         ext2 = base.suffix
         base = base.stem
         ext = ext2 + ext
-    return Path(path), base, ext
+    return Path(path), str(base), ext
 
 
 def append_num_to_filename(filepath: Union[str, Path], num: int) -> Path:
+    """ append num to the filename of filepath and return the modified path """
     path, base, ext = split_filename(filepath)
     base += f"_{num}"
     return path / (base + ext)
