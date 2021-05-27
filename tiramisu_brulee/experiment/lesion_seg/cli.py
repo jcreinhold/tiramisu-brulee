@@ -38,10 +38,14 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
+import torchio as tio
 
 from tiramisu_brulee.experiment.lesion_seg.data import (
+    csv_to_subjectlist,
     Mixup,
-    LesionSegDataModulePredict,
+    LesionSegDataModulePredictBase,
+    LesionSegDataModulePredictPatches,
+    LesionSegDataModulePredictWhole,
     LesionSegDataModuleTrain,
 )
 from tiramisu_brulee.experiment.lesion_seg.lesion_tools import clean_segmentation
@@ -160,6 +164,11 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     )
     best_model_paths = []
     dict_args = vars(args)
+    use_pseudo3d = args.pseudo3d_dim is not None
+    dict_args["network_dim"] = 2 if use_pseudo3d else 3
+    channels_per_image = args.patch_size[args.pseudo3d_dim] if use_pseudo3d else 1
+    dict_args["in_channels"] = args.num_input * channels_per_image
+    dict_args["out_channels"] = args.num_output
     use_multigpus = not (args.gpus is None or args.gpus <= 1)
     for i, (train_csv, valid_csv) in enumerate(csvs, 1):
         tb_logger = TensorBoardLogger(str(root_dir), name=name)
@@ -232,7 +241,7 @@ def _predict_parser_shared(
     )
     parser = LesionSegLightningTiramisu.add_other_arguments(parser)
     parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
-    parser = LesionSegDataModulePredict.add_arguments(parser, add_csv=add_csv)
+    parser = LesionSegDataModulePredictBase.add_arguments(parser, add_csv=add_csv)
     parser = Trainer.add_argparse_args(parser)
     trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
     unnecessary_args = trainer_args - necessary_trainer_args
@@ -310,8 +319,8 @@ def aggregate(
     num_workers: Optional[int] = None,
 ):
     """ aggregate output from multiple model predictions """
-    csv = pd.read_csv(predict_csv)
-    out_fns = csv["out"]
+    df = pd.read_csv(predict_csv)
+    out_fns = df["out"]
     n_fns = len(out_fns)
     out_fn_iter = enumerate(out_fns, 1)
     _aggregator = partial(
@@ -330,6 +339,43 @@ def aggregate(
         deque(map(_aggregator, out_fn_iter), maxlen=0)
 
 
+def _predict_whole_image(
+    args: Namespace, model_path: Path, model_num: ModelNum,
+):
+    """ predict a whole image volume as opposed to patches """
+    dict_args = vars(args)
+    pp = args.predict_probability
+    trainer = Trainer.from_argparse_args(args)
+    dm = LesionSegDataModulePredictWhole.from_csv(**dict_args)
+    dm.setup()
+    model = LesionSegLightningTiramisu.load_from_checkpoint(
+        model_path, predict_probability=pp, _model_num=model_num,
+    )
+    logging.debug(model)
+    trainer.predict(model, datamodule=dm)
+    del dm, model, trainer
+
+
+def _predict_patch_image(
+    args: Namespace, model_path: Path, model_num: ModelNum,
+):
+    """ predict a volume with patches as opposed to a whole volume """
+    dict_args = vars(args)
+    pp = args.predict_probability
+    subject_list = csv_to_subjectlist(args.predict_csv)
+    model = LesionSegLightningTiramisu.load_from_checkpoint(
+        model_path, predict_probability=pp, _model_num=model_num,
+    )
+    logging.debug(model)
+    for subject in subject_list:
+        trainer = Trainer.from_argparse_args(args)
+        dm = LesionSegDataModulePredictPatches(subject, **dict_args)
+        dm.setup()
+        trainer.predict(model, datamodule=dm)
+        del dm, trainer
+    del model
+
+
 def _predict(args: Namespace, parser: Parser, use_multiprocessing: bool):
     args = none_string_to_none(args)
     args = path_to_str(args)
@@ -337,21 +383,16 @@ def _predict(args: Namespace, parser: Parser, use_multiprocessing: bool):
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
     n_models = len(args.model_path)
-    dict_args = vars(args)
-    pp = dict_args["predict_probability"] = n_models > 1
+    args.predict_probability = n_models > 1
+    patch_predict = args.patch_size is not None
     for i, model_path in enumerate(args.model_path, 1):
         model_num = ModelNum(num=i, out_of=n_models)
         nth_model = f" ({i}/{n_models})"
-        trainer = Trainer.from_argparse_args(args)
-        dm = LesionSegDataModulePredict.from_csv(**dict_args)
-        dm.setup()
-        model = LesionSegLightningTiramisu.load_from_checkpoint(
-            model_path, predict_probability=pp, _model_num=model_num,
-        )
-        logger.debug(model)
-        trainer.predict(model, datamodule=dm)
+        if patch_predict:
+            _predict_patch_image(args, model_path, model_num)
+        else:
+            _predict_whole_image(args, model_path, model_num)
         logger.info("Finished prediction" + nth_model)
-        del dm, model, trainer
     if n_models > 1:
         num_workers = args.num_workers if use_multiprocessing else 0
         aggregate(
@@ -366,7 +407,7 @@ def _predict(args: Namespace, parser: Parser, use_multiprocessing: bool):
         exp_dirs = []
         for mp in args.model_path:
             exp_dirs.append(get_experiment_directory(mp))
-        generate_predict_config_yaml(exp_dirs, parser, dict_args)
+        generate_predict_config_yaml(exp_dirs, parser, vars(args))
 
 
 def predict(args: ArgType = None) -> int:
@@ -381,7 +422,7 @@ def predict(args: ArgType = None) -> int:
 
 
 def predict_image(args: ArgType = None) -> int:
-    """ use a 3D Tiramisu CNN for prediction for a single-timepoint """
+    """ use a 3D Tiramisu CNN for prediction for a single time-point """
     parser = predict_image_parser()
     if args is None:
         args, unknown = parser.parse_known_args()
