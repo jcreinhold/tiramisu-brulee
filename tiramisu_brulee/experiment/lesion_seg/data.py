@@ -12,7 +12,7 @@ Created on: May 17, 2021
 __all__ = [
     "csv_to_subjectlist",
     "glob_ext",
-    "LesionSegDataModulePredict",
+    "LesionSegDataModulePredictBase",
     "LesionSegDataModuleTrain",
     "Mixup",
 ]
@@ -20,7 +20,7 @@ __all__ = [
 from glob import glob
 from logging import getLogger
 from os.path import join
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from jsonargparse import ArgumentParser
 import pandas as pd
@@ -48,8 +48,8 @@ logger = getLogger(__name__)
 class LesionSegDataModuleBase(pl.LightningDataModule):
     def _determine_input(
         self,
-        subject_list: List[tio.Subject],
-        other_subject_list: Optional[List[tio.Subject]] = None,
+        subjects: Union[tio.Subject, List[tio.Subject]],
+        other_subjects: Optional[List[tio.Subject]] = None,
     ):
         """
         assume all columns except:
@@ -57,7 +57,10 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         are some type of non-categorical image
         """
         exclude = ("name", "label", "div", "weight", "out")
-        subject = subject_list[0]  # arbitrarily pick the first element
+        if isinstance(subjects, list):
+            subject = subjects[0]  # arbitrarily pick the first element
+        else:
+            subject = subjects
         inputs = []
         for key in subject:
             if key not in exclude:
@@ -68,8 +71,8 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
                 "`t1` with corresponding paths to NIfTI files."
             )
             raise ValueError(msg)
-        if other_subject_list is not None:
-            other_subject = other_subject_list[0]
+        if other_subjects is not None:
+            other_subject = other_subjects[0]
             for key in inputs:
                 if key not in other_subject:
                     msg = "Validation CSV fields not the same as training CSV"
@@ -92,16 +95,40 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             batch /= reshape_for_broadcasting(div, batch.ndim)
         return batch
 
-    def _collate_fn(self, batch: dict) -> Tensor:
+    def _default_collate_fn(self, batch: dict, cat_dim: Optional[int] = None) -> Tensor:
         if isinstance(batch, list):
             batch = default_collate(batch)
         inputs = []
         for field in self._input_fields:
             inputs.append(batch[field][tio.DATA])
-        src = torch.cat(inputs, dim=1)
+        cat_dim_ = cat_dim or 1
+        src = torch.cat(inputs, dim=cat_dim_)
+        if cat_dim is not None:
+            # if axis is not None, use pseudo3d images
+            src.swapaxes_(1, cat_dim_)
+            src.squeeze_()
+            if src.ndim == 3:  # batch size of 1
+                src.unsqueeze_(0)
+            assert src.ndim == 4
         if self._use_div:
             src = self._div_batch(src, batch["div"])
         return src
+
+    @staticmethod
+    def _pseudo3d_label(label: Tensor, pseudo3d_dim: int):
+        assert label.ndim == 5, "expects label with shape NxCxHxWxD"
+        if pseudo3d_dim == 0:
+            mid_channel = label.shape[2] // 2
+            label = label[..., mid_channel, :, :]
+        elif pseudo3d_dim == 1:
+            mid_channel = label.shape[3] // 2
+            label = label[..., :, mid_channel, :]
+        elif pseudo3d_dim == 2:
+            mid_channel = label.shape[4] // 2
+            label = label[..., :, :, mid_channel]
+        else:
+            raise ValueError(f"pseudo3d_dim must be 0, 1, or 2. Got {pseudo3d_dim}.")
+        return label
 
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
@@ -126,6 +153,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         label_sampler (bool): sample patches centered on positive labels
         spatial_augmentation (bool): use random affine and elastic
             data augmentation for training
+        pseudo3d_dim (Optional[int]): concatenate images along this
+            axis and swap it for channel dimension
     """
 
     def __init__(
@@ -139,6 +168,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         num_workers: int = 16,
         label_sampler: bool = False,
         spatial_augmentation: bool = False,
+        pseudo3d_dim: Optional[int] = None,
         **kwargs,
     ):
         super().__init__()
@@ -151,6 +181,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.num_workers = num_workers
         self.label_sampler = label_sampler
         self.spatial_augmentation = spatial_augmentation
+        self.pseudo3d_dim = pseudo3d_dim
 
     @classmethod
     def from_csv(cls, train_csv: str, valid_csv: str, *args, **kwargs):
@@ -227,8 +258,12 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _collate_fn(self, batch: dict) -> Tuple[Tensor, Tensor]:
         batch = default_collate(batch)
-        src = super()._collate_fn(batch)
+        # p3d is the offset by batch/channel dims if pseudo3d used
+        p3d = self.pseudo3d_dim and self.pseudo3d_dim + 2
+        src = self._default_collate_fn(batch, p3d)
         tgt = batch["label"][tio.DATA]
+        if self.pseudo3d_dim is not None:
+            tgt = self._pseudo3d_label(tgt, self.pseudo3d_dim)
         return src, tgt
 
     @staticmethod
@@ -300,39 +335,33 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             default=False,
             help="use spatial (affine and elastic) data augmentation",
         )
+        parser.add_argument(
+            "-p3d",
+            "--pseudo3d-dim",
+            type=nonnegative_int(),
+            choices=(0, 1, 2),
+            default=None,
+            help="dim on which to concatenate the images for input "
+            "to a 2D network. If not provided, use 3D network.",
+        )
         return parent_parser
 
 
-class LesionSegDataModulePredict(LesionSegDataModuleBase):
-    """Data module for prediction for lesion segmentation
-
-    Args:
-        subject_list (List[tio.Subject]):
-            list of torchio.Subject for prediction
-        batch_size (int): number of images to predict at a time
-        num_workers (int):
-            number of subprocesses to use for data loading
-    """
-
+class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
     def __init__(
         self,
-        subject_list: List[tio.Subject],
+        subjects: Union[tio.Subject, List[tio.Subject]],
         batch_size: int = 1,
         num_workers: int = 16,
         **kwargs,
     ):
         super().__init__()
-        self.subject_list = subject_list
+        self.subjects = subjects
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    @classmethod
-    def from_csv(cls, predict_csv: str, *args, **kwargs):
-        subject_list = csv_to_subjectlist(predict_csv)
-        return cls(subject_list, *args, **kwargs)
-
     def setup(self, stage: Optional[str] = None):
-        self._determine_input(self.subject_list)
+        self._determine_input(self.subjects)
         self._setup_predict_dataset()
 
     def predict_dataloader(self) -> DataLoader:
@@ -346,23 +375,11 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
         return pred_dataloader
 
     def _setup_predict_dataset(self):
-        subjects_dataset = tio.SubjectsDataset(
-            self.subject_list, transform=LabelToFloat(),
-        )
-        self.predict_dataset = subjects_dataset
+        self.predict_dataset = None
+        raise NotImplementedError
 
     def _collate_fn(self, batch: dict) -> Tensor:
-        batch = default_collate(batch)
-        src = super()._collate_fn(batch)
-        # assume affine matrices same across modalities
-        # so arbitrarily choose first
-        field = self._input_fields[0]
-        out = dict(
-            src=src,
-            affine=batch[field][tio.AFFINE],
-            out=batch["out"],  # path to save the prediction
-        )
-        return out
+        raise NotImplementedError
 
     @staticmethod
     def add_arguments(
@@ -382,7 +399,23 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
             "--batch-size",
             type=positive_int(),
             default=1,
-            help="number of images to run at a time",
+            help="number of patches to run at a time",
+        )
+        parser.add_argument(
+            "-ps",
+            "--patch-size",
+            type=positive_int(),
+            nargs=3,
+            default=None,
+            help="shape of patches (None -> crop image to foreground)",
+        )
+        parser.add_argument(
+            "-po",
+            "--patch-overlap",
+            type=positive_int(),
+            nargs=3,
+            default=None,
+            help="patches will overlap by this much (None -> patch-size // 2)",
         )
         parser.add_argument(
             "-nw",
@@ -391,7 +424,131 @@ class LesionSegDataModulePredict(LesionSegDataModuleBase):
             default=16,
             help="number of CPUs to use for loading data",
         )
+        parser.add_argument(
+            "-p3d",
+            "--pseudo3d-dim",
+            type=nonnegative_int(),
+            choices=(0, 1, 2),
+            default=None,
+            help="dim on which to concatenate the images for input "
+            "to a 2D network. If not provided, use 3D network.",
+        )
         return parent_parser
+
+
+class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
+    """Data module for whole-image prediction for lesion segmentation
+
+    Args:
+        subjects (List[tio.Subject]):
+            list of torchio.Subject for prediction
+        batch_size (int): number of images to predict at a time
+        num_workers (int):
+            number of subprocesses to use for data loading
+    """
+
+    @classmethod
+    def from_csv(cls, predict_csv: str, *args, **kwargs):
+        subject_list = csv_to_subjectlist(predict_csv)
+        return cls(subject_list, *args, **kwargs)
+
+    def setup(self, stage: Optional[str] = None):
+        self._determine_input(self.subjects)
+        self._setup_predict_dataset()
+
+    def predict_dataloader(self) -> DataLoader:
+        pred_dataloader = DataLoader(
+            self.predict_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            collate_fn=self._collate_fn,
+        )
+        return pred_dataloader
+
+    def _setup_predict_dataset(self):
+        subjects_dataset = tio.SubjectsDataset(self.subjects, transform=LabelToFloat())
+        self.predict_dataset = subjects_dataset
+
+    def _collate_fn(self, batch: dict) -> Tensor:
+        batch = default_collate(batch)
+        src = self._default_collate_fn(batch)
+        # assume affine matrices same across modalities
+        # so arbitrarily choose first
+        field = self._input_fields[0]
+        out = dict(
+            src=src,
+            affine=batch[field][tio.AFFINE],
+            out=batch["out"],  # path to save the prediction
+        )
+        return out
+
+
+class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
+    """Data module for patch-based prediction for lesion segmentation
+
+    Args:
+        subject (tio.Subject):
+            a torchio.Subject for prediction
+        batch_size (int): number of patches to predict at a time
+        patch_size (Tuple[int, int, int]):
+            patch size for training/validation
+        patch_overlap (Optional[Tuple[int, int, int]]):
+            overlap of each patch, if None then patch_size // 2
+        num_workers (int):
+            number of subprocesses to use for data loading
+        pseudo3d_dim (Optional[int]): concatenate images along this
+            axis and swap it for channel dimension
+    """
+
+    def __init__(
+        self,
+        subject: tio.Subject,
+        batch_size: int = 1,
+        patch_size: Tuple[int, int, int] = (96, 96, 96),
+        patch_overlap: Optional[Tuple[int, int, int]] = None,
+        num_workers: int = 16,
+        pseudo3d_dim: Optional[int] = None,
+        **kwargs,
+    ):
+        super().__init__(subject, batch_size, num_workers)
+        self.patch_size = patch_size
+        self.patch_overlap = patch_overlap or self._default_overlap()
+        self.pseudo3d_dim = pseudo3d_dim
+
+    def _default_overlap(self):
+        patch_overlap = []
+        for ps in self.patch_size:
+            overlap = ps // 2
+            if overlap % 2:
+                overlap = max(0, overlap + 1)
+            patch_overlap.append(overlap)
+        return patch_overlap
+
+    def _setup_predict_dataset(self):
+        grid_sampler = tio.GridSampler(
+            self.subjects, self.patch_size, self.patch_overlap, padding_mode="edge",
+        )
+        self.predict_dataset = grid_sampler
+        self.grid_aggregator = tio.GridAggregator(grid_sampler)
+
+    def _collate_fn(self, batch: dict) -> Tensor:
+        batch = default_collate(batch)
+        # p3d is the offset by batch/channel dims if pseudo3d used
+        p3d = self.pseudo3d_dim and self.pseudo3d_dim + 2
+        src = self._default_collate_fn(batch, p3d)
+        # assume affine matrices same across modalities
+        # so arbitrarily choose first
+        field = self._input_fields[0]
+        out = dict(
+            src=src,
+            affine=batch[field][tio.AFFINE],
+            out=batch["out"],  # path to save the prediction
+            locations=batch[tio.LOCATION],
+            aggregator=self.grid_aggregator,
+            pseudo3d_dim=p3d,
+        )
+        return out
 
 
 class Mixup:

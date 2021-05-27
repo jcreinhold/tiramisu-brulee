@@ -73,7 +73,6 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
     args += f"--train-csv {csv_}".split()
     args += f"--valid-csv {csv_}".split()
     args += "--batch-size 2".split()
-    args += "--patch-size 8 8 8".split()
     args += "--queue-length 1".split()
     args += "--samples-per-volume 1".split()
     args += "--n-epochs 2".split()
@@ -94,10 +93,21 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     return args
 
 
-def test_cli(cli_train_args, cli_predict_args):
+def test_cli(cli_train_args: List[str], cli_predict_args: List[str]):
+    cli_train_args += "--patch-size 8 8 8".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
+    retcode = predict(cli_predict_args)
+    assert retcode == 0
+
+
+def test_patch_prediction_cli(cli_train_args: List[str], cli_predict_args: List[str]):
+    cli_train_args += "--patch-size 8 8 8".split()
+    best_model_paths = train(cli_train_args, True)
+    best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
+    cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += "--patch-size 32 32 32".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0
 
@@ -115,8 +125,21 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
 
 
 def test_predict_image_cli(cli_train_args, cli_predict_image_args):
+    cli_train_args += "--patch-size 8 8 8".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_image_args += f"--model-path {best_model_paths}".split()
     retcode = predict_image(cli_predict_image_args)
+    assert retcode == 0
+
+
+def test_pseudo3d_cli(cli_train_args: List[str], cli_predict_args: List[str]):
+    cli_train_args += "--patch-size 8 8 3".split()
+    cli_train_args += "--pseudo3d-dim 2".split()
+    best_model_paths = train(cli_train_args, True)
+    best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
+    cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += "--patch-size 8 8 3".split()
+    cli_predict_args += "--pseudo3d-dim 2".split()
+    retcode = predict(cli_predict_args)
     assert retcode == 0

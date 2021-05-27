@@ -26,6 +26,7 @@ class LightningTiramisu(pl.LightningModule):
         convolutional densenets for semantic segmentation." CVPR. 2017.
 
     Args:
+        network_dim (int): use a 2D or 3D network
         in_channels (int): number of input channels
         out_channels (int): number of output channels
         down_blocks (List[int]): number of layers in each block in down path

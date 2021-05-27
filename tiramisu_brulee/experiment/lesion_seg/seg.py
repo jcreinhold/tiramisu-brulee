@@ -66,6 +66,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         Springer, Cham, 2019.
 
     Args:
+        network_dim (int): use a 2D or 3D convolutions
         in_channels (int): number of input channels
         out_channels (int): number of output channels
         down_blocks (List[int]): number of layers in each block in down path
@@ -91,11 +92,16 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         predict_probability (bool): save a probability image instead of a binary one
         mixup (bool): use mixup in training
         mixup_alpha (float): mixup parameter for beta distribution
+        num_input (int): number of different images input to the network,
+            differs from in_channels when using pseudo3d
+        num_output (int): number of different images output by the network
+            differs from in_channels when using pseudo3d
         _model_num (ModelNum): internal param for ith of n models
     """
 
     def __init__(
         self,
+        network_dim: int = 3,
         in_channels: int = 1,
         out_channels: int = 1,
         down_blocks: List[int] = (4, 4, 4, 4, 4),
@@ -121,10 +127,11 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         predict_probability: bool = False,
         mixup: bool = False,
         mixup_alpha: float = 0.4,
+        num_input: int = 1,
+        num_output: int = 1,
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
-        network_dim = 3  # only support 3D input
         super().__init__(
             network_dim,
             in_channels,
@@ -184,9 +191,16 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             on_epoch=True,
             prog_bar=False,
         )
-        if batch_idx == 0:
-            images = dict(truth=tgt, pred=pred,)
+        if batch_idx == 0 and self._is_3d_image_batch(src):
+            images = dict(truth=tgt, pred=pred, dim=3)
             for i in range(src.shape[1]):
+                images[f"input_channel_{i}"] = src[:, i : i + 1, ...]
+        elif batch_idx == 0 and self._is_2d_image_batch(src):
+            images = dict(truth=tgt, pred=pred, dim=2)
+            step = src.shape[1] // self.hparams.num_input
+            start = step // 2
+            end = src.shape[1]
+            for i in range(start, end, step):
                 images[f"input_channel_{i}"] = src[:, i : i + 1, ...]
         else:
             images = None
@@ -198,16 +212,10 @@ class LesionSegLightningTiramisu(LightningTiramisu):
     def predict_step(
         self, batch: dict, batch_idx: int, dataloader_idx: Optional[int] = None
     ) -> Tensor:
-        src = batch["src"]
-        bbox = BoundingBox3D.from_batch(src, pad=0)
-        src = bbox(src)
-        pred = self(src)
-        pred_seg = torch.sigmoid(pred)
-        if not self.hparams.predict_probability:
-            pred_seg = pred_seg > self.hparams.threshold
-        pred_seg = bbox.uncrop_batch(pred_seg)
-        pred_seg = pred_seg.float()
-        return pred_seg
+        if self._predict_with_patches(batch):
+            return self._predict_patch_image(batch)
+        else:
+            return self._predict_whole_image(batch)
 
     def on_predict_batch_end(
         self,
@@ -216,22 +224,16 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         batch_idx: int,
         dataloader_idx: int,
     ):
-        data = to_np(pred_step_outputs).squeeze()
-        if data.ndim == 5:
-            raise ValueError("Predictions should only have one channel.")
-        elif data.ndim == 3:
-            data = data[None, ...]
-        if not self.hparams.predict_probability:
-            data = [clean_segmentation(seg) for seg in data]
-        data = [seg.astype(np.float32) for seg in data]
-        affine_matrices = batch["affine"]
-        out_fns = batch["out"]
-        nifti_attrs = zip(data, affine_matrices, out_fns)
-        for data, affine, fn in nifti_attrs:
-            if self._model_num != ModelNum(num=1, out_of=1):
-                fn = append_num_to_filename(fn, self._model_num.num)
-            logging.info(f"Saving {fn}.")
-            nib.Nifti1Image(data, affine).to_filename(fn)
+        if self._predict_with_patches(batch):
+            self._predict_accumulate_patches(pred_step_outputs, batch)
+        else:
+            self._predict_save_whole_image(pred_step_outputs, batch)
+        return batch
+
+    def on_predict_epoch_end(self, results: List[dict]):
+        batch = results[0]  # arbitrarily pick first batch
+        if self._predict_with_patches(batch):
+            self._predict_save_patch_image(batch)
 
     def configure_optimizers(self):
         if self.hparams.rmsprop:
@@ -260,13 +262,82 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         lr = 1.0 - numerator / denominator
         return lr
 
+    @staticmethod
+    def _predict_with_patches(batch: dict) -> bool:
+        return "aggregator" in batch
+
+    def _predict_whole_image(self, batch: dict) -> Tensor:
+        src = batch["src"]
+        bbox = BoundingBox3D.from_batch(src, pad=0)
+        batch["src"] = bbox(src)
+        pred_seg = self._predict_patch_image(batch)
+        pred_seg = bbox.uncrop_batch(pred_seg)
+        return pred_seg
+
+    def _predict_patch_image(self, batch: dict) -> Tensor:
+        src = batch["src"]
+        pred = self(src)
+        pred_seg = torch.sigmoid(pred)
+        if not self.hparams.predict_probability:
+            pred_seg = pred_seg > self.hparams.threshold
+        pred_seg = pred_seg.float()
+        return pred_seg
+
+    def _clean_prediction(self, pred: Tensor) -> List[Tensor]:
+        pred = to_np(pred).squeeze()
+        if pred.ndim == 5:
+            raise ValueError("Predictions should only have one channel.")
+        elif pred.ndim == 3:
+            pred = pred[None, ...]
+        if not self.hparams.predict_probability:
+            pred = [clean_segmentation(seg) for seg in pred]
+        pred = [seg.astype(np.float32) for seg in pred]
+        return pred
+
+    def _predict_save_whole_image(self, pred_step_outputs: Tensor, batch: dict):
+        preds = self._clean_prediction(pred_step_outputs)
+        affine_matrices = batch["affine"]
+        out_fns = batch["out"]
+        nifti_attrs = zip(preds, affine_matrices, out_fns)
+        for pred, affine, fn in nifti_attrs:
+            if self._model_num != ModelNum(num=1, out_of=1):
+                fn = append_num_to_filename(fn, self._model_num.num)
+            logging.info(f"Saving {fn}.")
+            nib.Nifti1Image(pred, affine).to_filename(fn)
+
+    def _predict_save_patch_image(self, batch: dict):
+        data = batch["aggregator"].get_output_tensor()
+        pred = self._clean_prediction(data)[0]
+        fn = batch["out"]
+        if self._model_num != ModelNum(num=1, out_of=1):
+            fn = append_num_to_filename(fn, self._model_num.num)
+        logging.info(f"Saving {fn}.")
+        nib.Nifti1Image(pred, batch["affine"]).to_filename(fn)
+
+    def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
+        p3d = batch["pseudo3d_dim"]
+        locations = batch["locations"]
+        aggregator = batch["aggregator"]
+        if p3d is not None:
+            # locations were determined by the pseudo3d input, not the 1 channel target
+            # so we need to fix the locations based on the pseudo3d dim.
+            locations[:, p3d + 1] = 1  # I don't know why we need to add 1, but we do.
+            pred_step_outputs.unsqueeze_(p3d)
+        aggregator.add_batch(pred_step_outputs, locations)
+
     def _log_images(self, images: dict):
         n = self.current_epoch
         mid_slice = None
+        dim = images.pop("dim")
         for key, image in images.items():
-            if mid_slice is None:
-                mid_slice = image.shape[-1] // 2
-            image_slice = image[..., mid_slice]
+            if dim == 3:
+                if mid_slice is None:
+                    mid_slice = image.shape[-1] // 2
+                image_slice = image[..., mid_slice]
+            elif dim == 2:
+                image_slice = image
+            else:
+                raise ValueError(f"Image dimension must be either 2 or 3. Got {dim}.")
             if self.hparams.soft_labels and key == "pred":
                 image_slice = torch.sigmoid(image_slice)
             elif key == "pred":
@@ -278,23 +349,29 @@ class LesionSegLightningTiramisu(LightningTiramisu):
                 image_slice = minmax_scale_batch(image_slice)
             self.logger.experiment.add_images(key, image_slice, n, dataformats="NCHW")
 
+    def _is_3d_image_batch(self, tensor: Tensor) -> bool:
+        return tensor.ndim == 5
+
+    def _is_2d_image_batch(self, tensor: Tensor) -> bool:
+        return tensor.ndim == 4
+
     @staticmethod
     def add_model_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Model")
         parser.add_argument(
-            "-ic",
-            "--in-channels",
+            "-ni",
+            "--num-input",
             type=positive_int(),
             default=1,
-            help="number of input channels (should match the number "
+            help="number of input images (should match the number "
             "of non-label/other fields in the input csv)",
         )
         parser.add_argument(
-            "-oc",
-            "--out-channels",
+            "-no",
+            "--num-output",
             type=positive_int(),
             default=1,
-            help="number of output channels (usually 1 for segmentation)",
+            help="number of output images (usually 1 for segmentation)",
         )
         parser.add_argument(
             "-dr",
