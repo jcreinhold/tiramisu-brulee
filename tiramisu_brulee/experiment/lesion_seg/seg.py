@@ -159,7 +159,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         if self.hparams.mixup:
             self._mix = Mixup(self.hparams.mixup_alpha)
 
-    def training_step(self, batch: dict, batch_idx: int) -> Tensor:
+    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         src, tgt = batch
         if self.hparams.mixup:
             src, tgt = self._mix(src, tgt)
@@ -168,12 +168,11 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         self.log("loss", loss)
         return loss
 
-    def validation_step(self, batch: dict, batch_idx: int) -> dict:
+    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> dict:
         src, tgt = batch
         pred = self(src)
         loss = self.criterion(pred, tgt)
-        with torch.no_grad():
-            pred_seg = torch.sigmoid(pred) > self.hparams.threshold
+        pred_seg = torch.sigmoid(pred) > self.hparams.threshold
         isbi15_score = almost_isbi15_score(pred_seg, tgt)
         self.log(
             "val_loss", loss, on_step=False, on_epoch=True, prog_bar=True,
@@ -265,19 +264,18 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         n = self.current_epoch
         mid_slice = None
         for key, image in images.items():
-            with torch.no_grad():
-                if mid_slice is None:
-                    mid_slice = image.shape[-1] // 2
-                image_slice = image[..., mid_slice]
-                if self.hparams.soft_labels and key == "pred":
-                    image_slice = torch.sigmoid(image_slice)
-                elif key == "pred":
-                    threshold = self.hparams.threshold
-                    image_slice = torch.sigmoid(image_slice) > threshold
-                elif key == "truth":
-                    image_slice = image_slice > 0.0
-                else:
-                    image_slice = minmax_scale_batch(image_slice)
+            if mid_slice is None:
+                mid_slice = image.shape[-1] // 2
+            image_slice = image[..., mid_slice]
+            if self.hparams.soft_labels and key == "pred":
+                image_slice = torch.sigmoid(image_slice)
+            elif key == "pred":
+                threshold = self.hparams.threshold
+                image_slice = torch.sigmoid(image_slice) > threshold
+            elif key == "truth":
+                image_slice = image_slice > 0.0
+            else:
+                image_slice = minmax_scale_batch(image_slice)
             self.logger.experiment.add_images(key, image_slice, n, dataformats="NCHW")
 
     @staticmethod
