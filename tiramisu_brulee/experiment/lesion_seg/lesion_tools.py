@@ -46,11 +46,16 @@ def clean_segmentation(
 
 def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
+    batch_size = pred.shape[0]
     dice = dice_score(pred.int(), target.int())
     if dice.isnan():
         dice = torch.tensor(0.0, device=pred.device)
     ppv = precision(pred.int(), target.int(), mdmc_average="samplewise")
-    corr = pearson_corrcoef(
-        pred.flatten().float(), target.flatten().float()  # noqa  # noqa
-    )
-    return 0.25 * dice + 0.25 * ppv + 0.5 * corr
+    isbi15_score = 0.5 * dice + 0.5 * ppv
+    if batch_size > 1:
+        dims = list(range(1, pred.ndim))
+        corr = pearson_corrcoef(
+            pred.sum(dim=dims).float(), target.sum(dim=dims).float()
+        )
+        isbi15_score = 0.5 * isbi15_score + 0.5 * corr
+    return isbi15_score

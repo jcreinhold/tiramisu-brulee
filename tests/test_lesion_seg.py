@@ -41,15 +41,17 @@ def _create_csv(temp_dir: Path, data_dir: Path, stage: str) -> Path:
     label_path = data_dir / "mask.nii.gz"
     out_path = temp_dir / "out.nii.gz"
     headers = "subject,label,t1"
-    filenames = f"subj1,{label_path},{image_path}"
+    filenames = [f"subj{i},{label_path},{image_path}" for i in range(2)]
     if stage == "predict":
         headers += ",out\n"
-        filenames += f",{out_path}"
+        filenames = [fns + f",{out_path}\n" for fns in filenames]
     else:
         headers += "\n"
+        filenames = [fns + f"\n" for fns in filenames]
     with open(csv_path, "w") as f:
         f.write(headers)
-        f.write(filenames)
+        for fns in filenames:
+            f.write(fns)
     return csv_path
 
 
@@ -70,8 +72,8 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
     args += f"--default_root_dir {temp_dir}".split()
     args += f"--train-csv {csv_}".split()
     args += f"--valid-csv {csv_}".split()
-    args += "--batch-size 1".split()
-    args += "--patch-size 16 16 16".split()
+    args += "--batch-size 2".split()
+    args += "--patch-size 8 8 8".split()
     args += "--queue-length 1".split()
     args += "--samples-per-volume 1".split()
     args += "--n-epochs 2".split()
@@ -86,7 +88,6 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
 @pytest.fixture
 def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     args = []
-    args += f"--default_root_dir {temp_dir}".split()
     args += f"--predict-csv {predict_csv}".split()
     args += "--num-workers 0".split()
     args += ["--fast_dev_run"]
@@ -106,7 +107,6 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
     image_path = data_dir / "img.nii.gz"
     out_path = temp_dir / "out.nii.gz"
     args = []
-    args += f"--default_root_dir {temp_dir}".split()
     args += f"--t1 {image_path}".split()
     args += f"--out {out_path}".split()
     args += "--num-workers 0".split()
