@@ -39,7 +39,7 @@ def clean_segmentation(
         label = binary_fill_holes(label, structure=structure)
     if minimum_lesion_size > 0:
         label = remove_small_objects(
-            label, min_size=minimum_lesion_size, connectivity=d
+            label, min_size=minimum_lesion_size, connectivity=d,
         )
     return label
 
@@ -55,7 +55,7 @@ def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
     if batch_size > 1:
         dims = list(range(1, pred.ndim))
         corr = pearson_corrcoef(
-            pred.sum(dim=dims).float(), target.sum(dim=dims).float()
+            pred.sum(dim=dims).float(), target.sum(dim=dims).float(),
         )
         isbi15_score = 0.5 * isbi15_score + 0.5 * corr
     return isbi15_score

@@ -90,7 +90,8 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         self._use_div = "div" in subject
         self._input_fields = tuple(sorted(inputs))
 
-    def _div_batch(self, batch: Tensor, div: Tensor) -> Tensor:
+    @staticmethod
+    def _div_batch(batch: Tensor, div: Tensor) -> Tensor:
         with torch.no_grad():
             batch /= reshape_for_broadcasting(div, batch.ndim)
         return batch
@@ -223,7 +224,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                 shuffle_patches=False,
             )
             val_dataloader = DataLoader(
-                patches_queue, batch_size=self.batch_size, collate_fn=self._collate_fn
+                patches_queue, batch_size=self.batch_size, collate_fn=self._collate_fn,
             )
         else:
             val_dataloader = DataLoader(
@@ -236,7 +237,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return val_dataloader
 
     def _get_train_augmentation(self):
-        transforms = [LabelToFloat()]
+        transforms = [label_to_float()]
         if self.spatial_augmentation:
             spatial = tio.OneOf(
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
@@ -259,7 +260,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.train_dataset = subjects_dataset
 
     def _get_val_augmentation(self):
-        transforms = [LabelToFloat()]
+        transforms = [label_to_float()]
         if not self._use_pseudo3d:
             transforms.insert(0, tio.CropOrPad(self.patch_size))
         transform = tio.Compose(transforms)
@@ -271,7 +272,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     def _setup_val_dataset(self):
         transform = self._get_val_augmentation()
         subjects_dataset = tio.SubjectsDataset(
-            self.val_subject_list, transform=transform
+            self.val_subject_list, transform=transform,
         )
         self.val_dataset = subjects_dataset
 
@@ -490,7 +491,9 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         return pred_dataloader
 
     def _setup_predict_dataset(self):
-        subjects_dataset = tio.SubjectsDataset(self.subjects, transform=LabelToFloat())
+        subjects_dataset = tio.SubjectsDataset(
+            self.subjects, transform=label_to_float(),
+        )
         self.predict_dataset = subjects_dataset
 
     def _collate_fn(self, batch: dict) -> Tensor:
@@ -633,9 +636,9 @@ def _to_float(tensor: Tensor) -> Tensor:
     return tensor.float()
 
 
-def LabelToFloat() -> tio.Transform:
+def label_to_float() -> tio.Transform:
     """ cast a label image (usually uint8) to a float """
-    return tio.Lambda(_to_float, types_to_apply=[tio.LABEL],)
+    return tio.Lambda(_to_float, types_to_apply=[tio.LABEL])
 
 
 def _get_type(name: str):

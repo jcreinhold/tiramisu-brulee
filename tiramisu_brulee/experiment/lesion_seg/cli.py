@@ -100,7 +100,7 @@ def train_parser(use_python_argparse: bool = True) -> Parser:
     )
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
-        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility"
+        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
     )
     exp_parser.add_argument(
         "-v",

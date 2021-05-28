@@ -98,7 +98,7 @@ class DenseBlock(nn.Module):
         self.upsample = upsample
         self.dropout_rate = dropout_rate
         _layer = partial(
-            self._layer, growth_rate=self.growth_rate, dropout_rate=self.dropout_rate
+            self._layer, growth_rate=self.growth_rate, dropout_rate=self.dropout_rate,
         )
         icr = self.in_channels_range
         self.layers = nn.ModuleList([_layer(ic) for ic in icr])
@@ -160,7 +160,7 @@ class TransitionUp(nn.Module):
         super().__init__()
         kernel_size = 3
         self.conv_trans = self._conv_trans(
-            in_channels, out_channels, kernel_size, stride=2, bias=False
+            in_channels, out_channels, kernel_size, stride=2, bias=False,
         )
 
     def forward(self, tensor: Tensor, skip: Tensor) -> Tensor:
