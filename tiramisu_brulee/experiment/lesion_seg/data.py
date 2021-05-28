@@ -258,15 +258,15 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         self.train_dataset = subjects_dataset
 
-    def _get_val_sampler(self):
-        return tio.LabelSampler(self.patch_size)
-
     def _get_val_augmentation(self):
         transforms = [LabelToFloat()]
         if not self._use_pseudo3d:
             transforms.insert(0, tio.CropOrPad(self.patch_size))
         transform = tio.Compose(transforms)
         return transform
+
+    def _get_val_sampler(self):
+        return tio.LabelSampler(self.patch_size)
 
     def _setup_val_dataset(self):
         transform = self._get_val_augmentation()
