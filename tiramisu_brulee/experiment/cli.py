@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.tiramisu_brulee.experiment.lesion_seg.cli
+tiramisu_brulee.experiment.cli
 
-command-line interface functions for lesion segmentation with 3D Tiramisu
+command-line interface functions for lesion
+segmentation with Tiramisu neural network
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 25, 2021

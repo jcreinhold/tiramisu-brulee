@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.experiment.lesion_seg.data
+tiramisu_brulee.experiment.data
 
-load and process data for lesion segmentation
+load and process data for training/prediction
+for segmentation tasks
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 17, 2021
