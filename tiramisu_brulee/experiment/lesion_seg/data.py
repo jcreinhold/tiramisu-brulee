@@ -211,13 +211,28 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return train_dataloader
 
     def val_dataloader(self) -> DataLoader:
-        val_dataloader = DataLoader(
-            self.val_dataset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            collate_fn=self._collate_fn,
-        )
+        if self._use_pseudo3d:
+            sampler = self._get_val_sampler()
+            patches_queue = tio.Queue(
+                self.val_dataset,
+                self.queue_length,
+                self.samples_per_volume,
+                sampler,
+                num_workers=self.num_workers,
+                shuffle_subjects=False,
+                shuffle_patches=False,
+            )
+            val_dataloader = DataLoader(
+                patches_queue, batch_size=self.batch_size, collate_fn=self._collate_fn
+            )
+        else:
+            val_dataloader = DataLoader(
+                self.val_dataset,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                pin_memory=True,
+                collate_fn=self._collate_fn,
+            )
         return val_dataloader
 
     def _get_train_augmentation(self):
@@ -231,11 +246,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return transform
 
     def _get_train_sampler(self):
-        ps = self.patch_size
         if self.label_sampler:
-            return tio.LabelSampler(ps)
+            return tio.LabelSampler(self.patch_size)
         else:
-            return tio.UniformSampler(ps)
+            return tio.UniformSampler(self.patch_size)
 
     def _setup_train_dataset(self):
         transform = self._get_train_augmentation()
@@ -244,9 +258,14 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         self.train_dataset = subjects_dataset
 
+    def _get_val_sampler(self):
+        return tio.LabelSampler(self.patch_size)
+
     def _get_val_augmentation(self):
-        crop = tio.CropOrPad(self.patch_size)
-        transform = tio.Compose([crop, LabelToFloat()])
+        transforms = [LabelToFloat()]
+        if not self._use_pseudo3d:
+            transforms.insert(0, tio.CropOrPad(self.patch_size))
+        transform = tio.Compose(transforms)
         return transform
 
     def _setup_val_dataset(self):
@@ -265,6 +284,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         if self.pseudo3d_dim is not None:
             tgt = self._pseudo3d_label(tgt, self.pseudo3d_dim)
         return src, tgt
+
+    @property
+    def _use_pseudo3d(self) -> bool:
+        return self.pseudo3d_dim is not None
 
     @staticmethod
     def add_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
