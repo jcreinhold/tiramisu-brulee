@@ -23,14 +23,10 @@ import inspect
 import logging
 from pathlib import Path
 import tempfile
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Tuple
 import warnings
 
 import jsonargparse
-from jsonargparse import (
-    ActionConfigFile,
-    Namespace,
-)
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -38,9 +34,14 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
-import torchio as tio
 
-from tiramisu_brulee.experiment.lesion_seg.data import (
+from tiramisu_brulee.experiment.type import (
+    ArgType,
+    file_path,
+    Namespace,
+    ArgParser,
+)
+from tiramisu_brulee.experiment.data import (
     csv_to_subjectlist,
     Mixup,
     LesionSegDataModulePredictBase,
@@ -48,10 +49,9 @@ from tiramisu_brulee.experiment.lesion_seg.data import (
     LesionSegDataModulePredictWhole,
     LesionSegDataModuleTrain,
 )
-from tiramisu_brulee.experiment.lesion_seg.lesion_tools import clean_segmentation
-from tiramisu_brulee.experiment.lesion_seg.parse import (
+from tiramisu_brulee.experiment.lesion_tools import clean_segmentation
+from tiramisu_brulee.experiment.parse import (
     dict_to_csv,
-    file_path,
     fix_type_funcs,
     generate_predict_config_yaml,
     generate_train_config_yaml,
@@ -62,17 +62,15 @@ from tiramisu_brulee.experiment.lesion_seg.parse import (
     path_to_str,
     remove_args,
 )
-from tiramisu_brulee.experiment.lesion_seg.seg import (
+from tiramisu_brulee.experiment.seg import (
     LesionSegLightningTiramisu,
     ModelNum,
 )
-from tiramisu_brulee.experiment.lesion_seg.util import (
+from tiramisu_brulee.experiment.util import (
     append_num_to_filename,
     setup_log,
 )
 
-ArgType = Optional[Union[Namespace, List[str]]]
-Parser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 
 # num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
@@ -83,14 +81,14 @@ val_dataloader_warning = "The dataloader, val dataloader, does not have many wor
 warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning)
 
 
-def train_parser(use_python_argparse: bool = True) -> Parser:
+def train_parser(use_python_argparse: bool = True) -> ArgParser:
     """ argument parser for training a 3D Tiramisu CNN """
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
         config_action = None
     else:
         ArgumentParser = jsonargparse.ArgumentParser
-        config_action = ActionConfigFile
+        config_action = jsonargparse.ActionConfigFile
     desc = "Train a 3D Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-train", description=desc,)
     parser.add_argument(
@@ -109,17 +107,20 @@ def train_parser(use_python_argparse: bool = True) -> Parser:
         default=0,
         help="increase output verbosity (e.g., -vv is more than -v)",
     )
+    parser = LesionSegLightningTiramisu.add_io_arguments(parser)
     parser = LesionSegLightningTiramisu.add_model_arguments(parser)
-    parser = LesionSegLightningTiramisu.add_training_arguments(parser)
     parser = LesionSegLightningTiramisu.add_other_arguments(parser)
+    parser = LesionSegLightningTiramisu.add_training_arguments(parser)
     parser = LesionSegDataModuleTrain.add_arguments(parser)
     parser = Mixup.add_arguments(parser)
     parser = Trainer.add_argparse_args(parser)
     unnecessary_args = {
         "checkpoint_callback",
+        "in_channels",
         "logger",
         "max_steps",
         "min_steps",
+        "out_channels",
         "truncated_bptt_steps",
         "weights_save_path",
     }
@@ -222,8 +223,8 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
 
 
 def _predict_parser_shared(
-    parser: Parser, necessary_trainer_args: set, add_csv: bool
-) -> Parser:
+    parser: ArgParser, necessary_trainer_args: set, add_csv: bool
+) -> ArgParser:
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
         "-mp",
@@ -255,14 +256,14 @@ def _predict_parser_shared(
     return parser
 
 
-def predict_parser(use_python_argparse: bool = True) -> Parser:
+def predict_parser(use_python_argparse: bool = True) -> ArgParser:
     """ argument parser for using a 3D Tiramisu CNN for prediction """
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
         config_action = None
     else:
         ArgumentParser = jsonargparse.ArgumentParser
-        config_action = ActionConfigFile
+        config_action = jsonargparse.ActionConfigFile
     desc = "Use a Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-predict", description=desc)
     parser.add_argument(
@@ -275,6 +276,7 @@ def predict_parser(use_python_argparse: bool = True) -> Parser:
         "fast_dev_run",
         "gpus",
         "precision",
+        "progress_bar_refresh_rate",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, True)
     return parser
@@ -285,9 +287,11 @@ def predict_image_parser() -> argparse.ArgumentParser:
     desc = "Use a Tiramisu CNN to segment lesions for a single-timepoint prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
+        "benchmark",
         "fast_dev_run",
         "gpus",
         "precision",
+        "progress_bar_refresh_rate",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, False)
     return parser
@@ -381,7 +385,7 @@ def _predict_patch_image(
     del model
 
 
-def _predict(args: Namespace, parser: Parser, use_multiprocessing: bool):
+def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
     args = none_string_to_none(args)
     args = path_to_str(args)
     setup_log(args.verbosity)

@@ -1,2 +1,3 @@
 sphinx-argparse
+sphinx-paramlinks
 pytorch-lightning

@@ -2,6 +2,21 @@
 History
 =======
 
+0.1.9 (2021-05-28)
+------------------
+
+* Add pseudo3d (2.5D) support and patch-based prediction
+
+0.1.8 (2021-05-27)
+------------------
+
+* Fix ISBI 15 score metric
+
+0.1.7 (2021-05-25)
+------------------
+
+* Add precision to arguments for prediction
+
 0.1.6 (2021-05-25)
 ------------------
 

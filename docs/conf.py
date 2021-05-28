@@ -27,7 +27,6 @@ autodoc_mock_imports = [
     "nibabel",
     "numpy",
     "pandas",
-    "pytorch_lightning",
     "skimage",
     "scipy",
     "torch",
@@ -50,6 +49,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx_paramlinks",
     "sphinxarg.ext",
 ]
 

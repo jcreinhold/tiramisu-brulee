@@ -1,2 +1,1 @@
-# -*- coding: utf-8 -*-
-from tiramisu_brulee.experiment.lightningtiramisu import LightningTiramisu
+"""Segmentation module for tiramisu_brulee including CLI."""

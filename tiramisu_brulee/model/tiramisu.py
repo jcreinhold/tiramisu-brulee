@@ -3,19 +3,20 @@
 """
 tiramisu_brulee.model.tiramisu
 
-PyTorch implementation of the Tiramisu network architecture [1]
-(2D) Implementation based on [2].
+PyTorch implementation of the Tiramisu network architecture.
+Implementation based on `pytorch_tiramisu`.
 
-Changes from [2] include:
+Changes from `pytorch_tiramisu` include:
   1) removal of bias from conv layers,
   2) change zero padding to replication padding,
   3) cosmetic changes for brevity, clarity, consistency
 
 References:
-  [1] Jégou, Simon, et al. "The one hundred layers tiramisu:
-      Fully convolutional densenets for semantic segmentation."
-      CVPR. 2017.
-  [2] https://github.com/bfortuner/pytorch_tiramisu
+  Jégou, Simon, et al. "The one hundred layers tiramisu:
+  Fully convolutional densenets for semantic segmentation."
+  CVPR. 2017.
+
+  https://github.com/bfortuner/pytorch_tiramisu
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: Jul 01, 2020
