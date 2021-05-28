@@ -76,8 +76,11 @@ Parser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 
 # num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
-dataloader_warning = "The dataloader, train dataloader, does not have many workers"
-warnings.filterwarnings("ignore", dataloader_warning, category=UserWarning)
+train_dataloader_warning = (
+    "The dataloader, train dataloader, does not have many workers"
+)
+val_dataloader_warning = "The dataloader, val dataloader, does not have many workers"
+warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning)
 
 
 def train_parser(use_python_argparse: bool = True) -> Parser:
@@ -165,6 +168,8 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     best_model_paths = []
     dict_args = vars(args)
     use_pseudo3d = args.pseudo3d_dim is not None
+    if use_pseudo3d:
+        warnings.filterwarnings("ignore", val_dataloader_warning, category=UserWarning)
     dict_args["network_dim"] = 2 if use_pseudo3d else 3
     channels_per_image = args.patch_size[args.pseudo3d_dim] if use_pseudo3d else 1
     dict_args["in_channels"] = args.num_input * channels_per_image
