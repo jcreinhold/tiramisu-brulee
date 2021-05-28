@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.experiment.lesion_seg.util
+tiramisu_brulee.experiment.util
 
-miscellaneous tools for lesion segmentation
+miscellaneous tools for segmentation
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 16, 2021

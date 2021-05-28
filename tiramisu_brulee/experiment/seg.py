@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.experiment.lesion_seg.seg
+tiramisu_brulee.experiment.seg
 
-3D Tiramisu network for lesion segmentation
+Training and prediction logic for segmentation
+(usually lesion segmentation). Also, an
+implementation of the Tiramisu network with
+the training and prediction logic built-in.
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 14, 2021

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.experiment.lesion_seg.parse
+tiramisu_brulee.experiment.parse
 
 parsing functions for argparse and config files
 

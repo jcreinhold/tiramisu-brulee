@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-tiramisu_brulee.experiment.lesion_seg.lesion_tools
+tiramisu_brulee.experiment.lesion_tools
 
 functions specific to handling/processing lesion segmentations
 

@@ -3,7 +3,7 @@
 """
 tiramisu_brulee.experiment.type
 
-project-specific types
+experiment-specific types
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 28, 2021
