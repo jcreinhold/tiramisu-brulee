@@ -10,73 +10,59 @@ Created on: May 14, 2021
 """
 
 __all__ = [
+    "LesionSegLightningBase",
     "LesionSegLightningTiramisu",
 ]
 
-from collections import namedtuple
 from functools import partial
 import logging
 from typing import List, Optional, Tuple
 
-from jsonargparse import ArgumentParser
 import nibabel as nib
 import numpy as np
 
+import pytorch_lightning as pl
 import torch
+from torch import nn
 from torch import Tensor
 from torch.optim import AdamW, RMSprop, lr_scheduler
 
-from tiramisu_brulee.experiment.lightningtiramisu import LightningTiramisu
-from tiramisu_brulee.experiment.lesion_seg.data import Mixup
-from tiramisu_brulee.experiment.lesion_seg.lesion_tools import (
-    almost_isbi15_score,
-    clean_segmentation,
-)
-from tiramisu_brulee.experiment.lesion_seg.parse import (
-    nonnegative_int,
-    positive_float,
-    positive_int,
-    probability_float,
-)
-from tiramisu_brulee.experiment.lesion_seg.util import (
-    append_num_to_filename,
-    BoundingBox3D,
-    minmax_scale_batch,
-    to_np,
-)
 from tiramisu_brulee.loss import (
     binary_combo_loss,
     l1_segmentation_loss,
     mse_segmentation_loss,
 )
+from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
+from tiramisu_brulee.util import init_weights
+from tiramisu_brulee.experiment.type import (
+    ModelNum,
+    nonnegative_int,
+    ArgParser,
+    positive_float,
+    positive_int,
+    probability_float,
+)
+from tiramisu_brulee.experiment.data import Mixup
+from tiramisu_brulee.experiment.lesion_tools import (
+    almost_isbi15_score,
+    clean_segmentation,
+)
+from tiramisu_brulee.experiment.util import (
+    append_num_to_filename,
+    BoundingBox3D,
+    minmax_scale_batch,
+    to_np,
+)
 
-ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 
+class LesionSegLightningBase(pl.LightningModule):
+    """PyTorch-Lightning module for lesion segmentation
 
-class LesionSegLightningTiramisu(LightningTiramisu):
-    """3D Tiramisu-based PyTorch-Lightning module for lesion segmentation
-
-    See Also:
-        Jégou, Simon, et al. "The one hundred layers tiramisu: Fully
-        convolutional densenets for semantic segmentation." CVPR. 2017.
-
-        Zhang, Huahong, et al. "Multiple sclerosis lesion segmentation
-        with Tiramisu and 2.5D stacked slices." International Conference
-        on Medical Image Computing and Computer-Assisted Intervention.
-        Springer, Cham, 2019.
+    Includes framework for both training and prediction,
+    just drop in a PyTorch neural network module
 
     Args:
-        network_dim (int): use a 2D or 3D convolutions
-        in_channels (int): number of input channels
-        out_channels (int): number of output channels
-        down_blocks (List[int]): number of layers in each block in down path
-        up_blocks (List[int]): number of layers in each block in up path
-        bottleneck_layers (int): number of layers in the bottleneck
-        growth_rate (int): number of channels to grow by in each layer
-        first_conv_out_channels (int): number of output channels in first conv
-        dropout_rate (float): dropout rate/probability
-        init_type (str): method to initialize the weights of network
-        gain (float): gain parameter for initialization
+        network (nn.Module): PyTorch neural network
         n_epochs (int): number of epochs to train the network
         learning_rate (float): learning rate for the optimizer
         betas (Tuple[float, float]): momentum parameters for adam
@@ -95,23 +81,13 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         num_input (int): number of different images input to the network,
             differs from in_channels when using pseudo3d
         num_output (int): number of different images output by the network
-            differs from in_channels when using pseudo3d
+            differs from out_channels when using pseudo3d
         _model_num (ModelNum): internal param for ith of n models
     """
 
     def __init__(
         self,
-        network_dim: int = 3,
-        in_channels: int = 1,
-        out_channels: int = 1,
-        down_blocks: List[int] = (4, 4, 4, 4, 4),
-        up_blocks: List[int] = (4, 4, 4, 4, 4),
-        bottleneck_layers: int = 4,
-        growth_rate: int = 16,
-        first_conv_out_channels: int = 48,
-        dropout_rate: float = 0.2,
-        init_type: str = "normal",
-        gain: float = 0.02,
+        network: nn.Module,
         n_epochs: int = 1,
         learning_rate: float = 1e-3,
         betas: Tuple[int, int] = (0.9, 0.99),
@@ -132,25 +108,13 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
-        super().__init__(
-            network_dim,
-            in_channels,
-            out_channels,
-            down_blocks,
-            up_blocks,
-            bottleneck_layers,
-            growth_rate,
-            first_conv_out_channels,
-            dropout_rate,
-            init_type,
-            gain,
-            n_epochs,
-            learning_rate,
-            betas,
-            weight_decay,
-        )
+        super().__init__()
+        self.network = network
         self._model_num = _model_num
-        self.save_hyperparameters(ignore="_model_num")
+        self.save_hyperparameters(ignore=["network", "_model_num"])
+
+    def forward(self, tensor: Tensor) -> Tensor:
+        return self.network(tensor)
 
     def setup(self, stage: Optional[str] = None):
         if self.hparams.loss_function == "combo":
@@ -233,7 +197,8 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return batch
 
     def on_predict_epoch_end(self, results: List[dict]):
-        batch = results[0]  # arbitrarily pick first batch
+        # arbitrarily pick first batch, since all contain ref to same aggregator
+        batch = results[0]
         if self._predict_with_patches(batch):
             self._predict_save_patch_image(batch)
 
@@ -358,8 +323,8 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return tensor.ndim == 4
 
     @staticmethod
-    def add_model_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
-        parser = parent_parser.add_argument_group("Model")
+    def add_io_arguments(parent_parser: ArgParser) -> ArgParser:
+        parser = parent_parser.add_argument_group("I/O")
         parser.add_argument(
             "-ni",
             "--num-input",
@@ -375,76 +340,10 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             default=1,
             help="number of output images (usually 1 for segmentation)",
         )
-        parser.add_argument(
-            "-dr",
-            "--dropout-rate",
-            type=positive_float(),
-            default=0.2,
-            help="dropout rate/probability",
-        )
-        parser.add_argument(
-            "-it",
-            "--init-type",
-            type=str,
-            default="he_uniform",
-            choices=(
-                "normal",
-                "xavier_normal",
-                "he_normal",
-                "he_uniform",
-                "orthogonal",
-            ),
-            help="use this type of initialization for the network",
-        )
-        parser.add_argument(
-            "-ig",
-            "--init-gain",
-            type=positive_float(),
-            default=0.2,
-            help="use this initialization gain for initialization",
-        )
-        parser.add_argument(
-            "-db",
-            "--down-blocks",
-            type=positive_int(),
-            default=[4, 4, 4, 4, 4],
-            nargs="+",
-            help="tiramisu down-sample path specification",
-        )
-        parser.add_argument(
-            "-ub",
-            "--up-blocks",
-            type=positive_int(),
-            default=[4, 4, 4, 4, 4],
-            nargs="+",
-            help="tiramisu up-sample path specification",
-        )
-        parser.add_argument(
-            "-bl",
-            "--bottleneck-layers",
-            type=positive_int(),
-            default=4,
-            help="tiramisu bottleneck specification",
-        )
-        parser.add_argument(
-            "-gr",
-            "--growth-rate",
-            type=positive_int(),
-            default=12,
-            help="tiramisu growth rate (number of channels "
-            "added between each layer in a dense block)",
-        )
-        parser.add_argument(
-            "-fcoc",
-            "--first-conv-out-channels",
-            type=positive_int(),
-            default=48,
-            help="number of output channels in first conv",
-        )
         return parent_parser
 
     @staticmethod
-    def add_training_arguments(parent_parser):
+    def add_training_arguments(parent_parser: ArgParser) -> ArgParser:
         parser = parent_parser.add_argument_group("Training")
         parser.add_argument(
             "-bt",
@@ -521,7 +420,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return parent_parser
 
     @staticmethod
-    def add_other_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
+    def add_other_arguments(parent_parser: ArgParser) -> ArgParser:
         parser = parent_parser.add_argument_group("Other")
         parser.add_argument(
             "-th",
@@ -533,7 +432,7 @@ class LesionSegLightningTiramisu(LightningTiramisu):
         return parent_parser
 
     @staticmethod
-    def add_testing_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
+    def add_testing_arguments(parent_parser: ArgParser) -> ArgParser:
         parser = parent_parser.add_argument_group("Testing")
         parser.add_argument(
             "-mls",
@@ -555,5 +454,211 @@ class LesionSegLightningTiramisu(LightningTiramisu):
             action="store_true",
             default=False,
             help="in testing, store the probability instead of the binary prediction",
+        )
+        return parent_parser
+
+
+class LesionSegLightningTiramisu(LesionSegLightningBase):
+    """3D Tiramisu-based PyTorch-Lightning module for lesion segmentation
+
+    See Also:
+        Jégou, Simon, et al. "The one hundred layers tiramisu: Fully
+        convolutional densenets for semantic segmentation." CVPR. 2017.
+
+        Zhang, Huahong, et al. "Multiple sclerosis lesion segmentation
+        with Tiramisu and 2.5D stacked slices." International Conference
+        on Medical Image Computing and Computer-Assisted Intervention.
+        Springer, Cham, 2019.
+
+    Args:
+        network_dim (int): use a 2D or 3D convolutions
+        in_channels (int): number of input channels
+        out_channels (int): number of output channels
+        down_blocks (List[int]): number of layers in each block in down path
+        up_blocks (List[int]): number of layers in each block in up path
+        bottleneck_layers (int): number of layers in the bottleneck
+        growth_rate (int): number of channels to grow by in each layer
+        first_conv_out_channels (int): number of output channels in first conv
+        dropout_rate (float): dropout rate/probability
+        init_type (str): method to initialize the weights of network
+        gain (float): gain parameter for initialization
+        n_epochs (int): number of epochs to train the network
+        learning_rate (float): learning rate for the optimizer
+        betas (Tuple[float, float]): momentum parameters for adam
+        weight_decay (float): weight decay for optimizer
+        combo_weight (float): weight by which to balance BCE and Dice loss
+        decay_after (int): decay learning rate linearly after this many epochs
+        loss_function (str): loss function to use in training
+        rmsprop (bool): use rmsprop instead of adamw
+        soft_labels (bool): use non-binary labels for training
+        threshold (float): threshold by which to decide on positive class
+        min_lesion_size (int): minimum lesion size in voxels in output prediction
+        fill_holes (bool): use binary fill holes operation on label
+        predict_probability (bool): save a probability image instead of a binary one
+        mixup (bool): use mixup in training
+        mixup_alpha (float): mixup parameter for beta distribution
+        num_input (int): number of different images input to the network,
+            differs from in_channels when using pseudo3d
+        num_output (int): number of different images output by the network
+            differs from out_channels when using pseudo3d
+        _model_num (ModelNum): internal param for ith of n models
+    """
+
+    def __init__(
+        self,
+        network_dim: int = 3,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        down_blocks: List[int] = (4, 4, 4, 4, 4),
+        up_blocks: List[int] = (4, 4, 4, 4, 4),
+        bottleneck_layers: int = 4,
+        growth_rate: int = 16,
+        first_conv_out_channels: int = 48,
+        dropout_rate: float = 0.2,
+        init_type: str = "normal",
+        gain: float = 0.02,
+        n_epochs: int = 1,
+        learning_rate: float = 1e-3,
+        betas: Tuple[int, int] = (0.9, 0.99),
+        weight_decay: float = 1e-7,
+        combo_weight: float = 0.6,
+        decay_after: int = 8,
+        loss_function: str = "combo",
+        rmsprop: bool = False,
+        soft_labels: bool = False,
+        threshold: float = 0.5,
+        min_lesion_size: int = 3,
+        fill_holes: bool = True,
+        predict_probability: bool = False,
+        mixup: bool = False,
+        mixup_alpha: float = 0.4,
+        num_input: int = 1,
+        num_output: int = 1,
+        _model_num: ModelNum = ModelNum(1, 1),
+        **kwargs,
+    ):
+        if network_dim == 2:
+            network_class = Tiramisu2d
+        elif network_dim == 3:
+            network_class = Tiramisu3d
+        else:
+            raise ValueError(f"Network dim. must be 2 or 3. Got {network_dim}.")
+        network = network_class(
+            in_channels,
+            out_channels,
+            down_blocks,
+            up_blocks,
+            bottleneck_layers,
+            growth_rate,
+            first_conv_out_channels,
+            dropout_rate,
+        )
+        init_weights(network, init_type, gain)
+        super().__init__(
+            network,
+            n_epochs,
+            learning_rate,
+            betas,
+            weight_decay,
+            combo_weight,
+            decay_after,
+            loss_function,
+            rmsprop,
+            soft_labels,
+            threshold,
+            min_lesion_size,
+            fill_holes,
+            predict_probability,
+            mixup,
+            mixup_alpha,
+            num_input,
+            num_output,
+            _model_num,
+            **kwargs,
+        )
+        self.save_hyperparameters(ignore="_model_num")
+
+    @staticmethod
+    def add_model_arguments(parent_parser: ArgParser) -> ArgParser:
+        parser = parent_parser.add_argument_group("Model")
+        parser.add_argument(
+            "-ic",
+            "--in-channels",
+            type=positive_int(),
+            default=1,
+            help="number of input channels",
+        )
+        parser.add_argument(
+            "-oc",
+            "--out-channels",
+            type=positive_int(),
+            default=1,
+            help="number of output channels",
+        )
+        parser.add_argument(
+            "-dr",
+            "--dropout-rate",
+            type=positive_float(),
+            default=0.2,
+            help="dropout rate/probability",
+        )
+        parser.add_argument(
+            "-it",
+            "--init-type",
+            type=str,
+            default="he_uniform",
+            choices=(
+                "normal",
+                "xavier_normal",
+                "he_normal",
+                "he_uniform",
+                "orthogonal",
+            ),
+            help="use this type of initialization for the network",
+        )
+        parser.add_argument(
+            "-ig",
+            "--init-gain",
+            type=positive_float(),
+            default=0.2,
+            help="use this initialization gain for initialization",
+        )
+        parser.add_argument(
+            "-db",
+            "--down-blocks",
+            type=positive_int(),
+            default=[4, 4, 4, 4, 4],
+            nargs="+",
+            help="tiramisu down-sample path specification",
+        )
+        parser.add_argument(
+            "-ub",
+            "--up-blocks",
+            type=positive_int(),
+            default=[4, 4, 4, 4, 4],
+            nargs="+",
+            help="tiramisu up-sample path specification",
+        )
+        parser.add_argument(
+            "-bl",
+            "--bottleneck-layers",
+            type=positive_int(),
+            default=4,
+            help="tiramisu bottleneck specification",
+        )
+        parser.add_argument(
+            "-gr",
+            "--growth-rate",
+            type=positive_int(),
+            default=12,
+            help="tiramisu growth rate (number of channels "
+            "added between each layer in a dense block)",
+        )
+        parser.add_argument(
+            "-fcoc",
+            "--first-conv-out-channels",
+            type=positive_int(),
+            default=48,
+            help="number of output channels in first conv",
         )
         return parent_parser

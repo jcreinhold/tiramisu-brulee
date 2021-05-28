@@ -12,7 +12,7 @@ from typing import List
 
 import pytest
 
-from tiramisu_brulee.experiment.lesion_seg.cli import train, predict, predict_image
+from tiramisu_brulee.experiment.cli import train, predict, predict_image
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ def _create_csv(temp_dir: Path, data_dir: Path, stage: str) -> Path:
         filenames = [fns + f",{out_path}\n" for fns in filenames]
     else:
         headers += "\n"
-        filenames = [fns + f"\n" for fns in filenames]
+        filenames = [fns + "\n" for fns in filenames]
     with open(csv_path, "w") as f:
         f.write(headers)
         for fns in filenames:
@@ -70,6 +70,7 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
     csv_ = " ".join([str(csv) for csv in [train_csv, train_csv]])
     args = []
     args += f"--default_root_dir {temp_dir}".split()
+    args += "--progress_bar_refresh_rate 0".split()
     args += f"--train-csv {csv_}".split()
     args += f"--valid-csv {csv_}".split()
     args += "--batch-size 2".split()
@@ -88,6 +89,7 @@ def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
 def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     args = []
     args += f"--predict-csv {predict_csv}".split()
+    args += "--progress_bar_refresh_rate 0".split()
     args += "--num-workers 0".split()
     args += ["--fast_dev_run"]
     return args
@@ -99,6 +101,13 @@ def test_cli(cli_train_args: List[str], cli_predict_args: List[str]):
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
     retcode = predict(cli_predict_args)
+    assert retcode == 0
+
+
+def test_mixup_train_cli(cli_train_args: List[str]):
+    cli_train_args += "--patch-size 8 8 8".split()
+    cli_train_args += "--mixup".split()
+    retcode = train(cli_train_args, False)
     assert retcode == 0
 
 
@@ -119,6 +128,7 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
     args = []
     args += f"--t1 {image_path}".split()
     args += f"--out {out_path}".split()
+    args += "--progress_bar_refresh_rate 0".split()
     args += "--num-workers 0".split()
     args += ["--fast_dev_run"]
     return args

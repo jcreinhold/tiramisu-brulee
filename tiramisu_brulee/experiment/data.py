@@ -32,13 +32,13 @@ from torch.utils.data.dataloader import default_collate
 import torch.distributions as D
 import torchio as tio
 
-from tiramisu_brulee.experiment.lesion_seg.parse import (
+from tiramisu_brulee.experiment.type import (
     file_path,
     nonnegative_int,
     positive_float,
     positive_int,
 )
-from tiramisu_brulee.experiment.lesion_seg.util import reshape_for_broadcasting
+from tiramisu_brulee.experiment.util import reshape_for_broadcasting
 
 VALID_NAMES = ("ct", "flair", "pd", "t1", "t1c", "t2", "label", "weight", "div", "out")
 
@@ -598,7 +598,7 @@ class Mixup:
 
     def _mixup_coef(self, batch_size: int, device: torch.device) -> Tensor:
         dist = self._mixup_dist(device)
-        return dist.sample(batch_size)
+        return dist.sample((batch_size,))
 
     def __call__(self, src: Tensor, tgt: Tensor) -> Tuple[Tensor, Tensor]:
         with torch.no_grad():
@@ -666,7 +666,7 @@ def glob_ext(path: str, ext: str = "*.nii*") -> List[str]:
 
 
 def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
-    """ Convert a csv file to a list of torchio subjects
+    """Convert a csv file to a list of torchio subjects
 
     Args:
         filename: Path to csv file formatted with
@@ -675,8 +675,7 @@ def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
             Row will fill in the filenames per type.
             Other columns headers must be one of:
             ct, flair, label, pd, t1, t1c, t2, weight, div
-            (`label` should correspond to a
-             segmentation mask)
+            (`label` should correspond to a segmentation mask)
             (`weight` and `div` should correspond to a float)
 
     Returns:

@@ -28,7 +28,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-Indices = Tuple[int, int, int, int, int, int]
+from tiramisu_brulee.experiment.type import Indices
 
 
 def minmax_scale_batch(x: Tensor) -> Tensor:

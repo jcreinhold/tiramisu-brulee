@@ -3,8 +3,7 @@
 """
 tiramisu_brulee.experiment.lesion_seg.parse
 
-parsing functions (including types) for argparse
-and config files in lesion_seg
+parsing functions for argparse and config files
 
 Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 17, 2021
@@ -12,23 +11,17 @@ Created on: May 17, 2021
 
 __all__ = [
     "dict_to_csv",
-    "file_path",
     "fix_type_funcs",
     "get_best_model_path",
     "get_experiment_directory",
     "generate_train_config_yaml",
     "generate_predict_config_yaml",
     "none_string_to_none",
-    "nonnegative_int",
     "parse_unknown_to_dict",
     "path_to_str",
-    "positive_float",
-    "positive_int",
-    "probability_float",
     "remove_args",
 ]
 
-from argparse import ArgumentTypeError
 from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
@@ -38,63 +31,10 @@ from typing import Callable, List, Optional, Union
 from jsonargparse import ArgumentParser, Namespace
 import yaml
 
-from tiramisu_brulee.experiment.lesion_seg.util import append_num_to_filename
+from tiramisu_brulee.experiment.type import new_parse_type
+from tiramisu_brulee.experiment.util import append_num_to_filename
 
 logger = getLogger(__name__)
-
-
-class _ParseType:
-    @property
-    def __name__(self):
-        return self.__class__.__name__
-
-    def __str__(self):
-        return self.__name__
-
-
-class file_path(_ParseType):
-    def __call__(self, string: str) -> Path:
-        path = Path(string)
-        if not path.is_file():
-            msg = f"{string} is not a valid path."
-            raise ArgumentTypeError(msg)
-        return path
-
-
-class positive_float(_ParseType):
-    def __call__(self, string: str) -> float:
-        num = float(string)
-        if num <= 0.0:
-            msg = f"{string} needs to be a positive float."
-            raise ArgumentTypeError(msg)
-        return num
-
-
-class positive_int(_ParseType):
-    def __call__(self, string: str) -> int:
-        num = int(string)
-        if num <= 0:
-            msg = f"{string} needs to be a positive integer."
-            raise ArgumentTypeError(msg)
-        return num
-
-
-class nonnegative_int(_ParseType):
-    def __call__(self, string: str) -> int:
-        num = int(string)
-        if num < 0:
-            msg = f"{string} needs to be a nonnegative integer."
-            raise ArgumentTypeError(msg)
-        return num
-
-
-class probability_float(_ParseType):
-    def __call__(self, string: str) -> float:
-        num = float(string)
-        if num <= 0.0 or num >= 1.0:
-            msg = f"{string} needs to be between 0 and 1."
-            raise ArgumentTypeError(msg)
-        return num
 
 
 def get_best_model_path(checkpoint_callback, only_best: bool = False) -> Path:
@@ -196,11 +136,17 @@ def fix_type_funcs(parser: ArgumentParser):
             type_func_name = action.type.__name__
             if type_func_name.startswith("str_to_"):
                 func = deepcopy(action.type)
-                action.type = lambda val: func(str(val))
+                action.type = new_parse_type(
+                    lambda val: func(str(val)), type_func_name,
+                )
             elif "gpus" in type_func_name:
-                action.type = _gpus_allowed_type
+                action.type = new_parse_type(_gpus_allowed_type, type_func_name)
             elif action.dest == "progress_bar_refresh_rate":
-                action.type = lambda val: val if val is None else int(val)
+                action.type = new_parse_type(
+                    lambda val: val and int(val), "none_or_int",
+                )
+            elif action.type.__str__ is not object.__str__:
+                action.type = new_parse_type(action.type, type_func_name)
 
 
 def _map_attrs(args: Namespace, cond: Callable, target: Callable) -> Namespace:
@@ -272,7 +218,17 @@ def parse_unknown_to_dict(unknown: List[str]) -> dict:
 
 
 def dict_to_csv(modality_path: dict, open_file):
-    """ takes a dictionary of modalities and paths and open file and writes to csv """
+    """
+    takes a dictionary of modalities and paths
+    (one for each modality) and an open file
+    (e.g., open("file.csv", "w")) and writes
+    the modalities as headers and the paths as
+    entries under those headers
+
+    used for to wrangle single time-point
+    prediction into the same interface as
+    multi time-point prediction
+    """
     headers, paths = ["subject"], ["pred_subj"]
     for modality, path in modality_path.items():
         headers.append(modality)
