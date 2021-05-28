@@ -144,7 +144,7 @@ class AttentionTiramisu(nn.Module):
         self.first_conv = nn.Sequential(
             self._pad(first_kernel_size // 2),
             self._conv(
-                in_channels, out_chans_first_conv, first_kernel_size, bias=False
+                in_channels, out_chans_first_conv, first_kernel_size, bias=False,
             ),
         )
         cur_channels_count = out_chans_first_conv
@@ -164,7 +164,7 @@ class AttentionTiramisu(nn.Module):
             cur_channels_count += growth_rate * n_layers
             skip_connection_channel_counts.insert(0, cur_channels_count)
             block = self._trans_down(
-                cur_channels_count, cur_channels_count, dropout_rate=dropout_rate
+                cur_channels_count, cur_channels_count, dropout_rate=dropout_rate,
             )
             self.trans_down.append(block)
 
