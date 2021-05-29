@@ -48,7 +48,7 @@ You'll also need to modify the ``num_input`` argument to match the number of
 non-``label`` columns in the csv files.
 
 Make sure to set the ``gpus`` argument to some number greater than or equal to
-1 (assuming you want to train on one of more GPUs). If you use multiple GPUs 2,
+1 (assuming you want to train on one of more GPUs). If you use multiple GPUs,
 you should also change ``accelerator`` to ``ddp``.
 
 You should also consider using a 2.5D or pseudo-3d network. The
