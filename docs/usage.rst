@@ -31,6 +31,9 @@ You should also create a separate CSV file or files for validation. The
 validation CSVs should contain the same columns as the training but with paths
 to images not included in the training CSVs.
 
+An example training CSV file can be found
+`here <https://gist.github.com/jcreinhold/9453dbd25a7d65ea9831658cdaaa6876>`_.
+
 Now you should create a configuration file for training with::
 
    lesion-train --print_config > train_config.yaml
@@ -105,6 +108,9 @@ Copy one of those config files and modify it to use the your prediction CSV
 file (i.e., a CSV with the same columns as the training minus the
 ``label`` column and with the addition of an ``out`` column which contains
 the paths to save the image).
+
+An example prediction CSV file can be found
+`here <https://gist.github.com/jcreinhold/8787667df85839be66355089eb148c43>`_.
 
 You can either use patches for prediction (by setting ``patch_size``) or
 predict the whole image volume at once. If you predict with patches,
