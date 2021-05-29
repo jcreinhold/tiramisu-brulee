@@ -29,6 +29,7 @@ import torch
 from torch import nn
 from torch import Tensor
 from torch.optim import AdamW, RMSprop, lr_scheduler
+import torchio as tio
 
 from tiramisu_brulee.loss import (
     binary_combo_loss,
@@ -228,7 +229,7 @@ class LesionSegLightningBase(pl.LightningModule):
 
     @staticmethod
     def _predict_with_patches(batch: dict) -> bool:
-        return "aggregator" in batch
+        return "grid_obj" in batch
 
     def _predict_whole_image(self, batch: dict) -> Tensor:
         src = batch["src"]
@@ -270,7 +271,7 @@ class LesionSegLightningBase(pl.LightningModule):
             nib.Nifti1Image(pred, affine).to_filename(fn)
 
     def _predict_save_patch_image(self, batch: dict):
-        data = batch["aggregator"].get_output_tensor()
+        data = self.aggregator.get_output_tensor()
         pred = self._clean_prediction(data)[0]
         affine = batch["affine"][0]
         fn = batch["out"][0]
@@ -282,11 +283,14 @@ class LesionSegLightningBase(pl.LightningModule):
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
         p3d = batch["pseudo3d_dim"]
         locations = batch["locations"]
-        aggregator = batch["aggregator"]
+        if not hasattr(self, "aggregator"):
+            self.aggregator = tio.GridAggregator(
+                batch["grid_obj"], overlap_mode="average"
+            )
         if p3d is not None:
             locations = self._fix_pseudo3d_locations(locations, p3d)
             pred_step_outputs.unsqueeze_(p3d + 2)  # +2 to offset batch/channel dims
-        aggregator.add_batch(pred_step_outputs, locations)
+        self.aggregator.add_batch(pred_step_outputs, locations)
 
     def _fix_pseudo3d_locations(self, locations: Tensor, pseudo3d_dim: int) -> Tensor:
         """Fix locations for aggregator when using pseudo3d
