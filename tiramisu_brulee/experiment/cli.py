@@ -81,14 +81,14 @@ warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning
 
 
 def train_parser(use_python_argparse: bool = True) -> ArgParser:
-    """ argument parser for training a 3D Tiramisu CNN """
+    """ argument parser for training a Tiramisu CNN """
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
         config_action = None
     else:
         ArgumentParser = jsonargparse.ArgumentParser
         config_action = jsonargparse.ActionConfigFile
-    desc = "Train a 3D Tiramisu CNN to segment lesions"
+    desc = "Train a Tiramisu CNN to segment lesions"
     parser = ArgumentParser(prog="lesion-train", description=desc,)
     parser.add_argument(
         "--config",
@@ -135,7 +135,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
 
 
 def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
-    """ train a 3D Tiramisu CNN for segmentation """
+    """ train a Tiramisu CNN for segmentation """
     parser = train_parser(False)
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
@@ -257,7 +257,7 @@ def _predict_parser_shared(
 
 
 def predict_parser(use_python_argparse: bool = True) -> ArgParser:
-    """ argument parser for using a 3D Tiramisu CNN for prediction """
+    """ argument parser for using a Tiramisu CNN for prediction """
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
         config_action = None
@@ -283,8 +283,8 @@ def predict_parser(use_python_argparse: bool = True) -> ArgParser:
 
 
 def predict_image_parser() -> argparse.ArgumentParser:
-    """ argument parser for using a 3D Tiramisu CNN for single-timepoint prediction """
-    desc = "Use a Tiramisu CNN to segment lesions for a single-timepoint prediction"
+    """ argument parser for using a Tiramisu CNN for single time-point prediction """
+    desc = "Use a Tiramisu CNN to segment lesions for a single time-point prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
         "benchmark",
@@ -420,7 +420,7 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
 
 
 def predict(args: ArgType = None) -> int:
-    """ use a 3D Tiramisu CNN for prediction """
+    """ use a Tiramisu CNN for prediction """
     parser = predict_parser(False)
     if args is None:
         args = parser.parse_args(_skip_check=True)  # noqa
@@ -431,7 +431,7 @@ def predict(args: ArgType = None) -> int:
 
 
 def predict_image(args: ArgType = None) -> int:
-    """ use a 3D Tiramisu CNN for prediction for a single time-point """
+    """ use a Tiramisu CNN for prediction for a single time-point """
     parser = predict_image_parser()
     if args is None:
         args, unknown = parser.parse_known_args()
