@@ -12,7 +12,6 @@ Created on: May 17, 2021
 
 __all__ = [
     "csv_to_subjectlist",
-    "glob_ext",
     "LesionSegDataModulePredictBase",
     "LesionSegDataModuleTrain",
     "Mixup",
@@ -557,7 +556,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             self.subjects, self.patch_size, self.patch_overlap, padding_mode="edge",
         )
         self.predict_dataset = grid_sampler
-        self.grid_aggregator = tio.GridAggregator(grid_sampler)
+        self.grid_aggregator = tio.GridAggregator(grid_sampler, overlap_mode="average")
 
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
@@ -573,7 +572,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             out=batch["out"],  # path to save the prediction
             locations=batch[tio.LOCATION],
             aggregator=self.grid_aggregator,
-            pseudo3d_dim=p3d,
+            pseudo3d_dim=self.pseudo3d_dim,
         )
         return out
 
@@ -658,12 +657,6 @@ def _get_type(name: str):
         )
         type_ = tio.INTENSITY
     return type_
-
-
-def glob_ext(path: str, ext: str = "*.nii*") -> List[str]:
-    """ grab all `ext` files in a directory and sort them for consistency """
-    fns = sorted(glob(join(path, ext)))
-    return fns
 
 
 def csv_to_subjectlist(filename: str) -> List[tio.Subject]:

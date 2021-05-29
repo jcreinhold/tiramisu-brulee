@@ -166,7 +166,7 @@ def append_num_to_filename(filepath: Union[str, Path], num: int) -> Path:
 
 
 def setup_log(verbosity: int):
-    """ get logger with appropriate logging level and message """
+    """ set logger with verbosity logging level and message """
     if verbosity == 1:
         level = logging.getLevelName("INFO")
     elif verbosity >= 2:

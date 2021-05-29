@@ -287,11 +287,40 @@ class LesionSegLightningBase(pl.LightningModule):
         locations = batch["locations"]
         aggregator = batch["aggregator"]
         if p3d is not None:
-            # locations were determined by the pseudo3d input, not the 1 channel target
-            # so we need to fix the locations based on the pseudo3d dim.
-            locations[:, p3d + 1] = 1  # I don't know why we need to add 1, but we do.
-            pred_step_outputs.unsqueeze_(p3d)
+            locations = self._fix_pseudo3d_locations(locations, p3d)
+            pred_step_outputs.unsqueeze_(p3d + 2)  # +2 to offset batch/channel dims
         aggregator.add_batch(pred_step_outputs, locations)
+
+    def _fix_pseudo3d_locations(self, locations: Tensor, pseudo3d_dim: int) -> Tensor:
+        """Fix locations for aggregator when using pseudo3d
+
+        locations were determined by the pseudo3d input, not the 1 channel target.
+        this fixes the locations to use 1 channel corresponding to the pseudo3d dim.
+        """
+        for n, location in enumerate(locations):
+            i_ini, j_ini, k_ini, i_fin, j_fin, k_fin = location
+            if pseudo3d_dim == 0:
+                i = (i_fin - i_ini) // 2 + i_ini
+                i_ini = i
+                i_fin = i + 1
+            elif pseudo3d_dim == 1:
+                j = (j_fin - j_ini) // 2 + j_ini
+                j_ini = j
+                j_fin = j + 1
+            elif pseudo3d_dim == 2:
+                k = (k_fin - k_ini) // 2 + k_ini
+                k_ini = k
+                k_fin = k + 1
+            else:
+                raise ValueError(
+                    f"pseudo3d_dim must be 0, 1, or 2. Got {pseudo3d_dim}."
+                )
+            locations[n, :] = torch.tensor(
+                [i_ini, j_ini, k_ini, i_fin, j_fin, k_fin],
+                dtype=locations.dtype,
+                device=locations.device,
+            )
+        return locations
 
     def _log_images(self, images: dict):
         n = self.current_epoch
