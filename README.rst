@@ -48,6 +48,15 @@ Import the 2D or 3D Tiramisu version with:
 
     from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
 
+If you install tiramisu-brulee with ``[lesionseg]`` extras, then you
+can train a lesion segmentation Tiramisu CNN and predict with::
+
+    lesion-train ...
+    lesion-predict ...
+    lesion-predict-image ...
+
+Use the ``--help`` option to see the arguments. See the documentation for a
+tutorial on how to use the CLIs.
 
 References
 ----------
