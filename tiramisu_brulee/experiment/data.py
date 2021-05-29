@@ -549,7 +549,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # the grid sampler we don't want to send the whole sampler over though,
         # so create a makeshift object with the relevant attributes that duck types
         self.grid_obj = SimpleNamespace(
-            subject=SimpleNamespace(spatial_shape=self.subjects.spatial_shape),
+            subject=SimpleNamespace(spatial_shape=grid_sampler.subject.spatial_shape),
             padding_mode=grid_sampler.padding_mode,
             patch_overlap=grid_sampler.patch_overlap,
         )
