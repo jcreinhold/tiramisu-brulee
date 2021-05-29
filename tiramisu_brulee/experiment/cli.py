@@ -78,7 +78,7 @@ EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 train_dataloader_warning = (
     "The dataloader, train dataloader, does not have many workers"
 )
-val_dataloader_warning = "The dataloader, val dataloader, does not have many workers"
+val_dataloader_warning = "The dataloader, val dataloader 0, does not have many workers"
 warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning)
 
 
