@@ -63,10 +63,8 @@ from tiramisu_brulee.experiment.parse import (
     path_to_str,
     remove_args,
 )
-from tiramisu_brulee.experiment.seg import (
-    LesionSegLightningTiramisu,
-    ModelNum,
-)
+from tiramisu_brulee.experiment.seg import LesionSegLightningTiramisu
+from tiramisu_brulee.experiment.type import ModelNum
 from tiramisu_brulee.experiment.util import (
     append_num_to_filename,
     setup_log,

@@ -139,9 +139,7 @@ class LesionSegLightningBase(pl.LightningModule):
             src, tgt = self._mix(src, tgt)
         pred = self(src)
         loss = self.criterion(pred, tgt)
-        self.log(
-            "loss", loss, on_step=True, on_epoch=False, prog_bar=True,
-        )
+        self.log("loss", loss)
         return loss
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> dict:
