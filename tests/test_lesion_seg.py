@@ -91,7 +91,6 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     args += f"--predict-csv {predict_csv}".split()
     args += "--progress_bar_refresh_rate 0".split()
     args += "--num-workers 0".split()
-    args += ["--fast_dev_run"]
     return args
 
 
@@ -100,6 +99,7 @@ def test_cli(cli_train_args: List[str], cli_predict_args: List[str]):
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += ["--fast_dev_run"]
     retcode = predict(cli_predict_args)
     assert retcode == 0
 
@@ -117,6 +117,7 @@ def test_patch_prediction_cli(cli_train_args: List[str], cli_predict_args: List[
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
     cli_predict_args += "--patch-size 32 32 32".split()
+    cli_predict_args += "--patch-overlap 0 0 0".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0
 
@@ -144,12 +145,13 @@ def test_predict_image_cli(cli_train_args, cli_predict_image_args):
 
 
 def test_pseudo3d_cli(cli_train_args: List[str], cli_predict_args: List[str]):
-    cli_train_args += "--patch-size 8 8 3".split()
+    cli_train_args += "--patch-size 8 8 32".split()
     cli_train_args += "--pseudo3d-dim 2".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
-    cli_predict_args += "--patch-size 8 8 3".split()
+    cli_predict_args += "--patch-size 32 32 32".split()
     cli_predict_args += "--pseudo3d-dim 2".split()
+    cli_predict_args += "--patch-overlap 0 0 0".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0
