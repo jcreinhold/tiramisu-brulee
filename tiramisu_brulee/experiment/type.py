@@ -10,6 +10,7 @@ Created on: May 28, 2021
 """
 
 __all__ = [
+    "ArgParser",
     "ArgType",
     "file_path",
     "Indices",
@@ -17,7 +18,6 @@ __all__ = [
     "Namespace",
     "new_parse_type",
     "nonnegative_int",
-    "ArgParser",
     "positive_float",
     "positive_int",
     "probability_float",

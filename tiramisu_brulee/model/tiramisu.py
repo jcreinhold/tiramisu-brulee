@@ -81,9 +81,6 @@ class Tiramisu(nn.Module):
             growth_rate (int): number of channels to grow by in each layer
             first_conv_out_channels (int): number of output channels in first conv
             dropout_rate (float): dropout rate/probability
-
-        References:
-
         """
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
