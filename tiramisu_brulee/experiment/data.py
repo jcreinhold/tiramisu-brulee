@@ -396,6 +396,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
             pin_memory=True,
             collate_fn=self._collate_fn,
         )
+        self.total_batches = len(pred_dataloader)
         return pred_dataloader
 
     def _setup_predict_dataset(self):
@@ -436,7 +437,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         parser.add_argument(
             "-po",
             "--patch-overlap",
-            type=positive_int(),
+            type=nonnegative_int(),
             nargs=3,
             default=None,
             help="patches will overlap by this much (None -> patch-size // 2)",
@@ -479,16 +480,6 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
     def setup(self, stage: Optional[str] = None):
         self._determine_input(self.subjects)
         self._setup_predict_dataset()
-
-    def predict_dataloader(self) -> DataLoader:
-        pred_dataloader = DataLoader(
-            self.predict_dataset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            collate_fn=self._collate_fn,
-        )
-        return pred_dataloader
 
     def _setup_predict_dataset(self):
         subjects_dataset = tio.SubjectsDataset(
@@ -573,6 +564,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             locations=batch[tio.LOCATION],
             aggregator=self.grid_aggregator,
             pseudo3d_dim=self.pseudo3d_dim,
+            total_batches=self.total_batches,
         )
         return out
 

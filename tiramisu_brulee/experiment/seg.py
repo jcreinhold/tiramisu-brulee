@@ -193,15 +193,11 @@ class LesionSegLightningBase(pl.LightningModule):
     ):
         if self._predict_with_patches(batch):
             self._predict_accumulate_patches(pred_step_outputs, batch)
+            if (batch_idx + 1) == batch["total_batches"]:
+                self._predict_save_patch_image(batch)
         else:
             self._predict_save_whole_image(pred_step_outputs, batch)
         return batch
-
-    def on_predict_epoch_end(self, results: List[dict]):
-        # arbitrarily pick first batch, since all contain ref to same aggregator
-        batch = results[0]
-        if self._predict_with_patches(batch):
-            self._predict_save_patch_image(batch)
 
     def configure_optimizers(self):
         if self.hparams.rmsprop:
@@ -276,11 +272,12 @@ class LesionSegLightningBase(pl.LightningModule):
     def _predict_save_patch_image(self, batch: dict):
         data = batch["aggregator"].get_output_tensor()
         pred = self._clean_prediction(data)[0]
-        fn = batch["out"]
+        affine = batch["affine"][0]
+        fn = batch["out"][0]
         if self._model_num != ModelNum(num=1, out_of=1):
             fn = append_num_to_filename(fn, self._model_num.num)
         logging.info(f"Saving {fn}.")
-        nib.Nifti1Image(pred, batch["affine"]).to_filename(fn)
+        nib.Nifti1Image(pred, affine).to_filename(fn)
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
         p3d = batch["pseudo3d_dim"]
