@@ -145,7 +145,7 @@ def fix_type_funcs(parser: ArgumentParser):
                 action.type = new_parse_type(
                     lambda val: val and int(val), "none_or_int",
                 )
-            elif action.type.__str__ is not object.__str__:
+            elif action.type.__str__ is object.__str__:
                 action.type = new_parse_type(action.type, type_func_name)
 
 

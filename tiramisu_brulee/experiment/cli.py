@@ -115,6 +115,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     parser = Trainer.add_argparse_args(parser)
     unnecessary_args = {
         "checkpoint_callback",
+        "distributed_backend",
         "in_channels",
         "logger",
         "max_steps",
