@@ -3,7 +3,7 @@ History
 =======
 
 0.1.10 (2021-05-29)
-------------------
+-------------------
 
 * Add CLI usage documentation and fix some minor bugs/typos.
 
