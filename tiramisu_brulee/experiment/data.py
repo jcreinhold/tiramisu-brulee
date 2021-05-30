@@ -531,7 +531,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
     ):
         super().__init__(subject, batch_size, num_workers)
         self._set_patch_size(subject, patch_size)
-        self.patch_overlap = patch_overlap or self._default_overlap()
+        self.patch_overlap = patch_overlap or self._default_overlap(patch_size)
         self.pseudo3d_dim = pseudo3d_dim
 
     def _set_patch_size(self, subject: tio.Subject, patch_size: PatchShape):
@@ -540,12 +540,16 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             patch_size = tuple([ps or dim for ps, dim in zip(patch_size, image_dim)])
         self.patch_size = patch_size
 
-    def _default_overlap(self):
+    @staticmethod
+    def _default_overlap(patch_size: PatchShape) -> PatchShape:
         patch_overlap = []
-        for ps in self.patch_size:
+        for ps in patch_size:
+            if ps is None:
+                patch_overlap.append(0)
+                continue
             overlap = ps // 2
             if overlap % 2:
-                overlap = max(0, overlap + 1)
+                overlap += 1
             patch_overlap.append(overlap)
         return patch_overlap
 
