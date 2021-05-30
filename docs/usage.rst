@@ -52,7 +52,8 @@ non-``label`` columns in the csv files.
 
 Make sure to set the ``gpus`` argument to some number greater than or equal to
 1 (assuming you want to train on one of more GPUs). If you use multiple GPUs,
-you should also change ``accelerator`` to ``ddp``.
+you should also change ``accelerator`` to ``ddp`` and ``sync_batchnorm`` to
+``true``.
 
 You should also consider using a 2.5D or pseudo-3d network. The
 state-of-the-art in MS lesion segmentation uses such a methodology.
