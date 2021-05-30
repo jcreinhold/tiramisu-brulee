@@ -152,7 +152,7 @@ def test_pseudo3d_cli(cli_train_args: List[str], cli_predict_args: List[str]):
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
-    cli_predict_args += "--patch-size 32 32 32".split()
+    cli_predict_args += "--patch-size None None 32".split()
     cli_predict_args += "--pseudo3d-dim 2".split()
     cli_predict_args += "--patch-overlap 0 0 0".split()
     retcode = predict(cli_predict_args)

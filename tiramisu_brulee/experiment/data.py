@@ -34,8 +34,10 @@ import torchio as tio
 from tiramisu_brulee.experiment.type import (
     file_path,
     nonnegative_int,
+    PatchShape,
     positive_float,
     positive_int,
+    positive_int_or_none,
 )
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
 
@@ -428,7 +430,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         parser.add_argument(
             "-ps",
             "--patch-size",
-            type=positive_int(),
+            type=positive_int_or_none(),
             nargs=3,
             default=None,
             help="shape of patches (None -> crop image to foreground)",
@@ -507,8 +509,8 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         subject (tio.Subject):
             a torchio.Subject for prediction
         batch_size (int): number of patches to predict at a time
-        patch_size (Tuple[int, int, int]):
-            patch size for training/validation
+        patch_size (PatchShape): patch size for training/validation
+            if any element is None, use the corresponding image dim
         patch_overlap (Optional[Tuple[int, int, int]]):
             overlap of each patch, if None then patch_size // 2
         num_workers (int):
@@ -521,16 +523,22 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         self,
         subject: tio.Subject,
         batch_size: int = 1,
-        patch_size: Tuple[int, int, int] = (96, 96, 96),
+        patch_size: PatchShape = (96, 96, 96),
         patch_overlap: Optional[Tuple[int, int, int]] = None,
         num_workers: int = 16,
         pseudo3d_dim: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(subject, batch_size, num_workers)
-        self.patch_size = patch_size
+        self._set_patch_size(subject, patch_size)
         self.patch_overlap = patch_overlap or self._default_overlap()
         self.pseudo3d_dim = pseudo3d_dim
+
+    def _set_patch_size(self, subject: tio.Subject, patch_size: PatchShape):
+        if any([ps is None for ps in patch_size]):
+            image_dim = subject.spatial_shape
+            patch_size = tuple([ps or dim for ps, dim in zip(patch_size, image_dim)])
+        self.patch_size = patch_size
 
     def _default_overlap(self):
         patch_overlap = []
