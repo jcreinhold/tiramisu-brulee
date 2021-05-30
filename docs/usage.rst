@@ -31,8 +31,9 @@ You should also create a separate CSV file or files for validation. The
 validation CSVs should contain the same columns as the training but with paths
 to images not included in the training CSVs.
 
-An example training CSV file can be found
-`here <https://gist.github.com/jcreinhold/9453dbd25a7d65ea9831658cdaaa6876>`_.
+Here is an
+`example training CSV <https://gist.github.com/jcreinhold/9453dbd25a7d65ea9831658cdaaa6876>`_
+file.
 
 Now you should create a configuration file for training with::
 
@@ -110,8 +111,9 @@ file (i.e., a CSV with the same columns as the training minus the
 ``label`` column and with the addition of an ``out`` column which contains
 the paths to save the image).
 
-An example prediction CSV file can be found
-`here <https://gist.github.com/jcreinhold/8787667df85839be66355089eb148c43>`_.
+Here is an
+`example prediction CSV <https://gist.github.com/jcreinhold/8787667df85839be66355089eb148c43>`_
+file.
 
 You can either use patches for prediction (by setting ``patch_size``) or
 predict the whole image volume at once. If you predict with patches,
@@ -119,6 +121,25 @@ you'll need to tune the batch size. If you predict the whole volume
 at once, leave ``batch_size`` at 1 because, even though it crops the
 image based on estimates foreground values and inputs the only the
 foreground image into the network, it is still memory-intensive.
+
+If you set ``pseudo3d_dim`` for training, an option to make prediction
+faster is to set ``patch_size`` to use the full image dimensions
+along the non-``pseudo3d_dim`` axis. To do so, you can set ``patch_size``
+to::
+
+- null
+- null
+- M
+
+(assuming you set ``psuedo3d_dim`` to 2) where ``M`` is the same
+small odd number used in training. If the image to predict on
+has shape ``H x W x D``, then the input to the network will be
+``H x W x (M * N)`` where ``N`` is the ``num_input`` set in training.
+This will speed up prediction because some redundant prediction is
+skipped due to predicting non-overlapped patches. In general, you should
+leave ``patch_overlap`` as ``null``, regardless, because the correct
+``patch_overlap`` will be automatically determined based on ``patch_size``
+such that there are no missing predictions.
 
 If you run out of memory, try it on a machine with more memory or use
 patch-based prediction. And/or try setting the precision to 16.
