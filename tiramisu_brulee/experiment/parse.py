@@ -47,7 +47,7 @@ def get_best_model_path(checkpoint_callback, only_best: bool = False) -> Path:
     return Path(model_path).resolve()
 
 
-def get_experiment_directory(model_path: Path) -> Path:
+def get_experiment_directory(model_path: Union[str, Path]) -> Path:
     """ gets the experiment directory from a checkpoint model path """
     if isinstance(model_path, str):
         model_path = Path(model_path).resolve()
@@ -69,6 +69,8 @@ def _generate_config_yaml(
     config = vars(parser.get_defaults())
     for k, v in dict_args.items():
         if k in config:
+            if isinstance(v, Path):
+                v = str(v)
             config[k] = v
     for exp_dir in exp_dirs:
         config_filename = exp_dir / f"{stage}_config.yaml"
@@ -106,6 +108,7 @@ def generate_predict_config_yaml(
     """ generate config yaml file(s) for prediction, store in experiment dir """
     if isinstance(exp_dirs, Path):
         exp_dirs = [exp_dirs]
+    remove_args(parser, ["config"])
     _generate_config_yaml(exp_dirs, parser, dict_args, best_model_paths, "predict")
 
 

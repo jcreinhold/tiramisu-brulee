@@ -47,12 +47,12 @@ class _ParseType:
 
 
 class file_path(_ParseType):
-    def __call__(self, string: str) -> Path:
+    def __call__(self, string: str) -> str:
         path = Path(string)
         if not path.is_file():
             msg = f"{string} is not a valid path."
             raise argparse.ArgumentTypeError(msg)
-        return path
+        return str(path.resolve())
 
 
 class positive_float(_ParseType):
