@@ -18,8 +18,10 @@ __all__ = [
     "Namespace",
     "new_parse_type",
     "nonnegative_int",
+    "PatchShape",
     "positive_float",
     "positive_int",
+    "positive_int_or_none",
     "probability_float",
 ]
 
@@ -33,6 +35,7 @@ import jsonargparse
 Indices = Tuple[int, int, int, int, int, int]
 ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 Namespace = Union[argparse.Namespace, jsonargparse.Namespace]
+PatchShape = Tuple[Optional[int], Optional[int], Optional[int]]
 ArgType = Optional[Union[Namespace, List[str]]]
 ArgParser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
 
@@ -71,6 +74,17 @@ class positive_int(_ParseType):
             msg = f"{string} needs to be a positive integer."
             raise argparse.ArgumentTypeError(msg)
         return num
+
+
+class positive_int_or_none(_ParseType):
+    def __call__(self, string: str) -> int:
+        if isinstance(string, str):
+            str_lower = string.lower()
+            if str_lower in ("none", "null"):
+                return None
+        elif string is None:
+            return None
+        return positive_int()(string)
 
 
 class nonnegative_int(_ParseType):
