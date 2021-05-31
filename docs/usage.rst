@@ -66,15 +66,27 @@ To use a 2.5D/pseudo-3D network, determine which axis you want to stack the
 slices on. Set ``pseudo3d_dim`` to that axis (e.g., 2). Then change the patch
 size to something like::
 
- - 128
- - 128
- - M
+  - 128
+  - 128
 
-(where ``M`` is something relatively small and odd like 3). Note that the
-``pseudo3d_dim`` corresponds to the (0-indexed) element of the patch size
-list. If you have set ``num_input`` to ``N``, these settings will result in a
-2D network with ``N * M`` input channels and trained/validated on ``128 x 128``
-images.
+and set ``pseudo3d_size`` to something small and odd like 3.
+Also set the ``pseudo3d_dim`` to some value between 0 and 2. If you have
+set ``num_input`` to N and the pseudo3d_size to M, then this will result in
+a 2D network with N * M input channels and trained/validated on 128x128
+images (if you set the patch size as above).
+
+Note that you can set the ``pseudo3d_dim`` per each set of train/valid
+CSVs, e.g., if you have two train/valid CSVs, then you can set
+``pseudo3d_dim`` to::
+
+  - 1
+  - 2
+
+which will set the network on corresponding to the first train/valid
+CSV pair to have ``pseudo3d_dim == 1`` and the second CSV pair to have
+``psuedo3d_dim == 2`` (pseudo3d_size will correspond to both). This
+can be useful to replicate the training/prediction scheme used in
+the original Tiramisu 2.5D paper.
 
 Now you can use your config file to train a set of lesion segmentation Tiramisu
 neural networks with::
@@ -127,19 +139,34 @@ faster is to set ``patch_size`` to use the full image dimensions
 along the non-``pseudo3d_dim`` axis. To do so, you can set ``patch_size``
 to::
 
-- null
-- null
-- M
+  - null
+  - null
 
-(assuming you set ``psuedo3d_dim`` to 2) where ``M`` is the same
-small odd number used in training. If the image to predict on
-has shape ``H x W x D``, then the input to the network will be
-``H x W x (M * N)`` where ``N`` is the ``num_input`` set in training.
+Note that ``pseudo3d_size`` must be the same as used in training
+If the image to predict on has shape ``H x W x D``, then the input to the
+network will be ``H x W x (M * N)`` where ``N`` is the ``num_input`` set
+in training and ``M`` is the ``pseudo3d_size``.
 This will speed up prediction because some redundant prediction is
 skipped due to predicting non-overlapped patches. In general, you should
 leave ``patch_overlap`` as ``null``, regardless, because the correct
 ``patch_overlap`` will be automatically determined based on ``patch_size``
 such that there are no missing predictions.
+
+If you are using multiple networks for prediction (by providing multiple
+model paths) and those networks are pseudo3d networks, then you should
+set ``pseudo3d_dim`` to either 1 number to be used across all models,
+e.g.,::
+
+    pseudo3d_dim:
+    - 1
+
+Or, if each model doesn't use the same ``pseudo3d_dim``, then use, e.g.,::
+
+    pseudo3d_dim:
+    - 1
+    - 2
+
+where each number corresponds to a model path.
 
 If you run out of memory, try it on a machine with more memory or use
 patch-based prediction. And/or try setting the precision to 16.
