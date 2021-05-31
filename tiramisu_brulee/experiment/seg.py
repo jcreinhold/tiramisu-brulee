@@ -279,6 +279,7 @@ class LesionSegLightningBase(pl.LightningModule):
             fn = append_num_to_filename(fn, self._model_num.num)
         logging.info(f"Saving {fn}.")
         nib.Nifti1Image(pred, affine).to_filename(fn)
+        del self.aggregator
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
         p3d = batch["pseudo3d_dim"]
