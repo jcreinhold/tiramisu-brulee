@@ -147,13 +147,15 @@ def test_predict_image_cli(cli_train_args, cli_predict_image_args):
 
 
 def test_pseudo3d_cli(cli_train_args: List[str], cli_predict_args: List[str]):
-    cli_train_args += "--patch-size 8 8 32".split()
-    cli_train_args += "--pseudo3d-dim 2".split()
+    cli_train_args += "--patch-size 8 8".split()
+    cli_train_args += "--pseudo3d-dim 2 1".split()
+    cli_train_args += "--pseudo3d-size 31".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
-    cli_predict_args += "--patch-size None None 32".split()
-    cli_predict_args += "--pseudo3d-dim 2".split()
+    cli_predict_args += "--patch-size None None".split()
+    cli_predict_args += "--pseudo3d-dim 2 1".split()
+    cli_predict_args += "--pseudo3d-size 31".split()
     cli_predict_args += "--patch-overlap 0 0 0".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0
