@@ -2,6 +2,22 @@
 History
 =======
 
+0.1.13 (2021-05-31)
+-------------------
+
+* Fix a bug when using pseudo3d_dim == 0.
+
+0.1.12 (2021-05-31)
+-------------------
+
+* Fix bug with patch-based prediction and add support for training/predicting with networks
+  with differing pseudo3d dimensions.
+
+0.1.11 (2021-05-30)
+-------------------
+
+* Add better prediction support for pseudo3d networks.
+
 0.1.10 (2021-05-29)
 -------------------
 
