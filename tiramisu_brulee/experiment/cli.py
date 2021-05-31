@@ -278,6 +278,13 @@ def _predict_parser_shared(
         "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
     )
     exp_parser.add_argument(
+        "-oa",
+        "--only-aggregate",
+        action="store_true",
+        default=False,
+        help="only aggregate results (useful to test different thresholds)",
+    )
+    exp_parser.add_argument(
         "-v",
         "--verbosity",
         action="count",
@@ -435,21 +442,22 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
     n_models = len(args.model_path)
-    args.predict_probability = n_models > 1
-    patch_predict = args.patch_size is not None
-    use_pseudo3d = args.pseudo3d_dim is not None
-    if patch_predict:
-        _check_patch_size(args.patch_size, use_pseudo3d)
-    pseudo3d_dims = _pseudo3d_dims_setup(args.pseudo3d_dim, n_models, "predict")
-    predict_iter_data = zip(args.model_path, pseudo3d_dims)
-    for i, (model_path, p3d) in enumerate(predict_iter_data, 1):
-        model_num = ModelNum(num=i, out_of=n_models)
-        nth_model = f" ({i}/{n_models})"
+    if not args.only_aggregate:
+        args.predict_probability = n_models > 1
+        patch_predict = args.patch_size is not None
+        use_pseudo3d = args.pseudo3d_dim is not None
         if patch_predict:
-            _predict_patch_image(args, model_path, model_num, p3d)
-        else:
-            _predict_whole_image(args, model_path, model_num)
-        logger.info("Finished prediction" + nth_model)
+            _check_patch_size(args.patch_size, use_pseudo3d)
+        pseudo3d_dims = _pseudo3d_dims_setup(args.pseudo3d_dim, n_models, "predict")
+        predict_iter_data = zip(args.model_path, pseudo3d_dims)
+        for i, (model_path, p3d) in enumerate(predict_iter_data, 1):
+            model_num = ModelNum(num=i, out_of=n_models)
+            nth_model = f" ({i}/{n_models})"
+            if patch_predict:
+                _predict_patch_image(args, model_path, model_num, p3d)
+            else:
+                _predict_whole_image(args, model_path, model_num)
+            logger.info("Finished prediction" + nth_model)
     if n_models > 1:
         num_workers = args.num_workers if use_multiprocessing else 0
         aggregate(
@@ -460,7 +468,7 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
             args.min_lesion_size,
             num_workers,
         )
-    if not args.fast_dev_run:
+    if not args.fast_dev_run and not args.only_aggregate:
         exp_dirs = []
         for mp in args.model_path:
             exp_dirs.append(get_experiment_directory(mp))
