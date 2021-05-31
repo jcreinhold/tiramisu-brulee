@@ -62,8 +62,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pseudo3d_dim = pseudo3d_dim
         self.pseudo3d_size = pseudo3d_size
-        self.use_pseudo3d = self.pseudo3d_dim is not None
-        if self.use_pseudo3d and self.pseudo3d_size is None:
+        if self._use_pseudo3d and self.pseudo3d_size is None:
             raise ValueError(
                 "If pseudo3d_dim provided, pseudo3d_size must be provided."
             )
@@ -158,13 +157,17 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         if patch_size is None:
             return patch_size
         patch_size = list(patch_size)
-        if self.use_pseudo3d and len(patch_size) != 2:
+        if self._use_pseudo3d and len(patch_size) != 2:
             raise ValueError(
                 "If using pseudo3d, patch size must contain only 2 values."
             )
-        if self.use_pseudo3d:
+        if self._use_pseudo3d:
             patch_size.insert(self.pseudo3d_dim, self.pseudo3d_size)
         return tuple(patch_size)
+
+    @property
+    def _use_pseudo3d(self) -> bool:
+        return self.pseudo3d_dim is not None
 
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
@@ -312,16 +315,12 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     def _collate_fn(self, batch: dict) -> Tuple[Tensor, Tensor]:
         batch = default_collate(batch)
         # p3d is the offset by batch/channel dims if pseudo3d used
-        p3d = self.pseudo3d_dim and self.pseudo3d_dim + 2
+        p3d = self.pseudo3d_dim + 2 if self._use_pseudo3d else None
         src = self._default_collate_fn(batch, p3d)
         tgt = batch["label"][tio.DATA]
         if self.pseudo3d_dim is not None:
             tgt = self._pseudo3d_label(tgt, self.pseudo3d_dim)
         return src, tgt
-
-    @property
-    def _use_pseudo3d(self) -> bool:
-        return self.pseudo3d_dim is not None
 
     @staticmethod
     def add_arguments(parent_parser: ArgumentParser) -> ArgumentParser:
@@ -652,7 +651,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
         # p3d is the offset by batch/channel dims if pseudo3d used
-        p3d = self.pseudo3d_dim and self.pseudo3d_dim + 2
+        p3d = self.pseudo3d_dim + 2 if self._use_pseudo3d else None
         src = self._default_collate_fn(batch, p3d)
         # assume affine matrices same across modalities
         # so arbitrarily choose first

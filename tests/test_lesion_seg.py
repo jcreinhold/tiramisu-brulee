@@ -40,8 +40,8 @@ def _create_csv(temp_dir: Path, data_dir: Path, stage: str) -> Path:
     image_path = data_dir / "img.nii.gz"
     label_path = data_dir / "mask.nii.gz"
     out_path = temp_dir / "out.nii.gz"
-    headers = "subject,label,t1"
-    filenames = [f"subj{i},{label_path},{image_path}" for i in range(2)]
+    headers = "subject,label,t1,t2"
+    filenames = [f"subj{i},{label_path},{image_path},{image_path}" for i in range(2)]
     if stage == "predict":
         headers += ",out\n"
         filenames = [fns + f",{out_path}\n" for fns in filenames]
@@ -66,13 +66,11 @@ def predict_csv(temp_dir: Path, data_dir: Path) -> Path:
 
 
 @pytest.fixture
-def cli_train_args(temp_dir: Path, train_csv: Path) -> List[str]:
-    csv_ = " ".join([str(csv) for csv in [train_csv, train_csv]])
+def cli_train_args(temp_dir: Path) -> List[str]:
     args = []
     args += f"--default_root_dir {temp_dir}".split()
     args += "--progress_bar_refresh_rate 0".split()
-    args += f"--train-csv {csv_}".split()
-    args += f"--valid-csv {csv_}".split()
+    args += "--num-input 2".split()
     args += "--batch-size 2".split()
     args += "--queue-length 1".split()
     args += "--samples-per-volume 1".split()
@@ -95,7 +93,10 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     return args
 
 
-def test_cli(cli_train_args: List[str], cli_predict_args: List[str]):
+def test_cli(cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
@@ -105,14 +106,22 @@ def test_cli(cli_train_args: List[str], cli_predict_args: List[str]):
     assert retcode == 0
 
 
-def test_mixup_train_cli(cli_train_args: List[str]):
+def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     cli_train_args += "--mixup".split()
     retcode = train(cli_train_args, False)
     assert retcode == 0
 
 
-def test_patch_prediction_cli(cli_train_args: List[str], cli_predict_args: List[str]):
+def test_patch_prediction_cli(
+    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path
+):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
@@ -130,6 +139,7 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
     args = []
     args += f"--default_root_dir {temp_dir}".split()
     args += f"--t1 {image_path}".split()
+    args += f"--t2 {image_path}".split()
     args += f"--out {out_path}".split()
     args += "--progress_bar_refresh_rate 0".split()
     args += "--num-workers 0".split()
@@ -137,7 +147,10 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
     return args
 
 
-def test_predict_image_cli(cli_train_args, cli_predict_image_args):
+def test_predict_image_cli(cli_train_args, cli_predict_image_args, train_csv: Path):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
@@ -146,15 +159,20 @@ def test_predict_image_cli(cli_train_args, cli_predict_image_args):
     assert retcode == 0
 
 
-def test_pseudo3d_cli(cli_train_args: List[str], cli_predict_args: List[str]):
+def test_pseudo3d_cli(
+    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path
+):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 3])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8".split()
-    cli_train_args += "--pseudo3d-dim 2 1".split()
+    cli_train_args += "--pseudo3d-dim 0 1 2".split()
     cli_train_args += "--pseudo3d-size 31".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
     cli_predict_args += "--patch-size None None".split()
-    cli_predict_args += "--pseudo3d-dim 2 1".split()
+    cli_predict_args += "--pseudo3d-dim 0 1 2".split()
     cli_predict_args += "--pseudo3d-size 31".split()
     cli_predict_args += "--patch-overlap 0 0 0".split()
     retcode = predict(cli_predict_args)
