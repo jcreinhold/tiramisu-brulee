@@ -24,7 +24,7 @@ import inspect
 import logging
 from pathlib import Path
 import tempfile
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 import warnings
 
 import jsonargparse
@@ -157,7 +157,6 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
             "Number of training and validation CSVs must be equal.\n"
             f"Got {n_models_to_train} != {len(args.valid_csv)}"
         )
-    csvs = zip(args.train_csv, args.valid_csv)
     checkpoint_kwargs = dict(
         filename="{epoch}-{val_loss:.3f}-{val_isbi15_score:.3f}",
         monitor="val_isbi15_score",
@@ -171,12 +170,12 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     use_pseudo3d = args.pseudo3d_dim is not None
     if use_pseudo3d:
         warnings.filterwarnings("ignore", val_dataloader_warning, category=UserWarning)
+    _check_patch_size(args.patch_size, use_pseudo3d)
+    pseudo3d_dims = _pseudo3d_dims_setup(args.pseudo3d_dim, n_models_to_train, "train")
     dict_args["network_dim"] = 2 if use_pseudo3d else 3
-    channels_per_image = args.patch_size[args.pseudo3d_dim] if use_pseudo3d else 1
-    dict_args["in_channels"] = args.num_input * channels_per_image
-    dict_args["out_channels"] = args.num_output
     use_multigpus = not (args.gpus is None or args.gpus <= 1)
-    for i, (train_csv, valid_csv) in enumerate(csvs, 1):
+    train_iter_data = zip(args.train_csv, args.valid_csv, pseudo3d_dims)
+    for i, (train_csv, valid_csv, p3d) in enumerate(train_iter_data, 1):
         tb_logger = TensorBoardLogger(str(root_dir), name=name)
         checkpoint_callback = ModelCheckpoint(**checkpoint_kwargs)
         plugins = args.plugins
@@ -192,6 +191,10 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         nth_model = f" ({i}/{n_models_to_train})"
         dict_args["train_csv"] = train_csv
         dict_args["valid_csv"] = valid_csv
+        channels_per_image = args.pseudo3d_size if use_pseudo3d else 1
+        dict_args["in_channels"] = args.num_input * channels_per_image
+        dict_args["out_channels"] = args.num_output
+        dict_args["pseudo3d_dim"] = p3d
         dm = LesionSegDataModuleTrain.from_csv(**dict_args)
         dm.setup()
         model = LesionSegLightningTiramisu(**dict_args)
@@ -220,6 +223,42 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         return best_model_paths
     else:
         return 0
+
+
+def _pseudo3d_dims_setup(
+    pseudo3d_dim: Union[None, List[int]], n_models: int, stage: str
+) -> Union[List[None], List[int]]:
+    assert stage in ("train", "predict")
+    if stage == "predict":
+        stage = "us"
+    n_p3d = 0 if pseudo3d_dim is None else len(pseudo3d_dim)
+    if n_p3d == 1:
+        pseudo3d_dims = pseudo3d_dim * n_models
+    elif n_p3d == n_models:
+        pseudo3d_dims = pseudo3d_dim
+    elif pseudo3d_dim is None:
+        pseudo3d_dims = [None] * n_models
+    else:
+        raise ValueError(
+            "pseudo3d_dim must be None (for 3D network), 1 value to be used "
+            f"across all models to be {stage}ed, or N values corresponding to each "
+            f"of the N models to be {stage}ed. Got {n_p3d} != {n_models}."
+        )
+    return pseudo3d_dims
+
+
+def _check_patch_size(patch_size: List[int], use_pseudo3d: bool) -> List[int]:
+    n_patch_elems = len(patch_size)
+    if n_patch_elems != 2 and use_pseudo3d:
+        raise ValueError(
+            f"Number of patch size elements must be 2 for "
+            f"pseudo-3D (2D) network. Got {len(patch_size)}."
+        )
+    elif n_patch_elems != 3 and not use_pseudo3d:
+        raise ValueError(
+            f"Number of patch size elements must be 3 for "
+            f"a 3D network. Got {len(patch_size)}."
+        )
 
 
 def _predict_parser_shared(
@@ -366,10 +405,14 @@ def _predict_whole_image(
 
 
 def _predict_patch_image(
-    args: Namespace, model_path: Path, model_num: ModelNum,
+    args: Namespace,
+    model_path: Path,
+    model_num: ModelNum,
+    pseudo3d_dim: Union[None, int],
 ):
     """ predict a volume with patches as opposed to a whole volume """
     dict_args = vars(args)
+    dict_args["pseudo3d_dim"] = pseudo3d_dim
     pp = args.predict_probability
     subject_list = csv_to_subjectlist(args.predict_csv)
     model = LesionSegLightningTiramisu.load_from_checkpoint(
@@ -394,11 +437,16 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
     n_models = len(args.model_path)
     args.predict_probability = n_models > 1
     patch_predict = args.patch_size is not None
-    for i, model_path in enumerate(args.model_path, 1):
+    use_pseudo3d = args.pseudo3d_dim is not None
+    if patch_predict:
+        _check_patch_size(args.patch_size, use_pseudo3d)
+    pseudo3d_dims = _pseudo3d_dims_setup(args.pseudo3d_dim, n_models, "predict")
+    predict_iter_data = zip(args.model_path, pseudo3d_dims)
+    for i, (model_path, p3d) in enumerate(predict_iter_data, 1):
         model_num = ModelNum(num=i, out_of=n_models)
         nth_model = f" ({i}/{n_models})"
         if patch_predict:
-            _predict_patch_image(args, model_path, model_num)
+            _predict_patch_image(args, model_path, model_num, p3d)
         else:
             _predict_whole_image(args, model_path, model_num)
         logger.info("Finished prediction" + nth_model)

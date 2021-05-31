@@ -34,9 +34,11 @@ import torchio as tio
 from tiramisu_brulee.experiment.type import (
     file_path,
     nonnegative_int,
+    PatchShapeOption,
     PatchShape,
     positive_float,
     positive_int,
+    positive_odd_int,
     positive_int_or_none,
 )
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
@@ -47,6 +49,26 @@ logger = getLogger(__name__)
 
 
 class LesionSegDataModuleBase(pl.LightningDataModule):
+    def __init__(
+        self,
+        batch_size: int,
+        patch_size: Optional[PatchShape] = None,
+        num_workers: int = 16,
+        pseudo3d_dim: Optional[int] = None,
+        pseudo3d_size: Optional[int] = None,
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.pseudo3d_dim = pseudo3d_dim
+        self.pseudo3d_size = pseudo3d_size
+        self.use_pseudo3d = self.pseudo3d_dim is not None
+        if self.use_pseudo3d and self.pseudo3d_size is None:
+            raise ValueError(
+                "If pseudo3d_dim provided, pseudo3d_size must be provided."
+            )
+        self.patch_size = self._determine_patch_size(patch_size)
+
     def _determine_input(
         self,
         subjects: Union[tio.Subject, List[tio.Subject]],
@@ -132,6 +154,18 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             raise ValueError(f"pseudo3d_dim must be 0, 1, or 2. Got {pseudo3d_dim}.")
         return label
 
+    def _determine_patch_size(self, patch_size: PatchShapeOption) -> PatchShapeOption:
+        if patch_size is None:
+            return patch_size
+        patch_size = list(patch_size)
+        if self.use_pseudo3d and len(patch_size) != 2:
+            raise ValueError(
+                "If using pseudo3d, patch size must contain only 2 values."
+            )
+        if self.use_pseudo3d:
+            patch_size.insert(self.pseudo3d_dim, self.pseudo3d_size)
+        return tuple(patch_size)
+
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     """Data module for training and validation for lesion segmentation
@@ -142,8 +176,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         val_subject_list (List[tio.Subject]):
             list of torchio.Subject for validation
         batch_size (int): batch size for training/validation
-        patch_size (Tuple[int, int, int]):
-            patch size for training/validation
+        patch_size (PatchShape): patch size for training/validation
         queue_length (int): Maximum number of patches that can be
             stored in the queue. Using a large number means that
             the queue needs to be filled less often, but more CPU
@@ -164,26 +197,25 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         train_subject_list: List[tio.Subject],
         val_subject_list: List[tio.Subject],
         batch_size: int = 2,
-        patch_size: List[int] = (96, 96, 96),
+        patch_size: PatchShape = (96, 96, 96),
         queue_length: int = 200,
         samples_per_volume: int = 10,
         num_workers: int = 16,
         label_sampler: bool = False,
         spatial_augmentation: bool = False,
         pseudo3d_dim: Optional[int] = None,
+        pseudo3d_size: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__()
+        super().__init__(
+            batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size,
+        )
         self.train_subject_list = train_subject_list
         self.val_subject_list = val_subject_list
-        self.batch_size = batch_size
-        self.patch_size = patch_size
         self.queue_length = queue_length
         self.samples_per_volume = samples_per_volume
-        self.num_workers = num_workers
         self.label_sampler = label_sampler
         self.spatial_augmentation = spatial_augmentation
-        self.pseudo3d_dim = pseudo3d_dim
 
     @classmethod
     def from_csv(cls, train_csv: str, valid_csv: str, *args, **kwargs):
@@ -300,7 +332,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             nargs="+",
             required=True,
             default=["SET ME!"],
-            help="path(s) to csv(s) with training images",
+            help="path(s) to CSV(s) with training images",
         )
         parser.add_argument(
             "--valid-csv",
@@ -308,7 +340,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             nargs="+",
             required=True,
             default=["SET ME!"],
-            help="path(s) to csv(s) with validation images",
+            help="path(s) to CSV(s) with validation images",
         )
         parser.add_argument(
             "-bs",
@@ -321,7 +353,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             "-ps",
             "--patch-size",
             type=positive_int(),
-            nargs=3,
+            nargs="+",
             default=[96, 96, 96],
             help="training/validation patch size extracted from image",
         )
@@ -364,10 +396,21 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             "-p3d",
             "--pseudo3d-dim",
             type=nonnegative_int(),
+            nargs="+",
             choices=(0, 1, 2),
             default=None,
             help="dim on which to concatenate the images for input "
-            "to a 2D network. If not provided, use 3D network.",
+            "to a 2D network. If provided, either provide 1 value"
+            "to be used for all train/valid CSVs or provide N values "
+            "corresponding to the N train/valid CSVs. If not provided, "
+            "use 3D network.",
+        )
+        parser.add_argument(
+            "-p3s",
+            "--pseudo3d-size",
+            type=positive_odd_int(),
+            default=None,
+            help="size of the pseudo3d dimension (if -p3d provided)",
         )
         return parent_parser
 
@@ -376,14 +419,17 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
     def __init__(
         self,
         subjects: Union[tio.Subject, List[tio.Subject]],
-        batch_size: int = 1,
+        batch_size: int,
+        patch_size: Optional[PatchShape] = None,
         num_workers: int = 16,
+        pseudo3d_dim: Optional[int] = None,
+        pseudo3d_size: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__()
+        super().__init__(
+            batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size
+        )
         self.subjects = subjects
-        self.batch_size = batch_size
-        self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None):
         self._determine_input(self.subjects)
@@ -431,7 +477,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
             "-ps",
             "--patch-size",
             type=positive_int_or_none(),
-            nargs=3,
+            nargs="+",
             default=None,
             help="shape of patches (None -> crop image to foreground)",
         )
@@ -454,10 +500,21 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
             "-p3d",
             "--pseudo3d-dim",
             type=nonnegative_int(),
+            nargs="+",
             choices=(0, 1, 2),
             default=None,
             help="dim on which to concatenate the images for input "
-            "to a 2D network. If not provided, use 3D network.",
+            "to a 2D network. If provided, either provide 1 value"
+            "to be used for all train/valid CSVs or provide N values "
+            "corresponding to the N train/valid CSVs. If not provided, "
+            "use 3D network.",
+        )
+        parser.add_argument(
+            "-p3s",
+            "--pseudo3d-size",
+            type=positive_odd_int(),
+            default=None,
+            help="size of the pseudo3d dimension (if -p3d provided)",
         )
         return parent_parser
 
@@ -472,6 +529,17 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         num_workers (int):
             number of subprocesses to use for data loading
     """
+
+    def __init__(
+        self,
+        subjects: Union[tio.Subject, List[tio.Subject]],
+        batch_size: int,
+        num_workers: int = 16,
+        **kwargs,
+    ):
+        super().__init__(
+            subjects, batch_size, None, num_workers, None, None,
+        )
 
     @classmethod
     def from_csv(cls, predict_csv: str, *args, **kwargs):
@@ -509,7 +577,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         subject (tio.Subject):
             a torchio.Subject for prediction
         batch_size (int): number of patches to predict at a time
-        patch_size (PatchShape): patch size for training/validation
+        patch_size (OptionalPatchShape): patch size for training/validation
             if any element is None, use the corresponding image dim
         patch_overlap (Optional[Tuple[int, int, int]]):
             overlap of each patch, if None then patch_size // 2
@@ -517,35 +585,49 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             number of subprocesses to use for data loading
         pseudo3d_dim (Optional[int]): concatenate images along this
             axis and swap it for channel dimension
+        pseudo3d_size (Optional[int]): number of slices to concatenate
+            if pseudo3d_dim provided, must be an odd (usually small) integer
     """
 
     def __init__(
         self,
         subject: tio.Subject,
         batch_size: int = 1,
-        patch_size: PatchShape = (96, 96, 96),
-        patch_overlap: Optional[Tuple[int, int, int]] = None,
+        patch_size: PatchShapeOption = (96, 96, 96),
+        patch_overlap: Optional[PatchShape] = None,
         num_workers: int = 16,
         pseudo3d_dim: Optional[int] = None,
+        pseudo3d_size: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__(subject, batch_size, num_workers)
-        self._set_patch_size(subject, patch_size)
-        self.patch_overlap = patch_overlap or self._default_overlap(patch_size)
-        self.pseudo3d_dim = pseudo3d_dim
+        super().__init__(
+            subject, batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size,
+        )
+        ps = self.patch_size  # result from _determine_patch_size
+        self._set_patch_size(subject, ps)
+        self.patch_overlap = patch_overlap or self._default_overlap(ps)
 
-    def _set_patch_size(self, subject: tio.Subject, patch_size: PatchShape):
+    def _set_patch_size(
+        self, subject: tio.Subject, patch_size: PatchShapeOption
+    ) -> PatchShapeOption:
         if any([ps is None for ps in patch_size]):
             image_dim = subject.spatial_shape
-            patch_size = tuple([ps or dim for ps, dim in zip(patch_size, image_dim)])
-        self.patch_size = patch_size
+            patch_size = [ps or dim for ps, dim in zip(patch_size, image_dim)]
+        if len(patch_size) != 3:
+            raise ValueError(
+                "Patch size must have length 3 here. "
+                f"Got {len(patch_size)}. Something went wrong."
+            )
+        self.patch_size = tuple(patch_size)
 
-    @staticmethod
-    def _default_overlap(patch_size: PatchShape) -> PatchShape:
+    def _default_overlap(self, patch_size: PatchShape) -> PatchShape:
         patch_overlap = []
-        for ps in patch_size:
+        for i, ps in enumerate(patch_size):
             if ps is None:
                 patch_overlap.append(0)
+                continue
+            if i == self.pseudo3d_dim:
+                patch_overlap.append(self.pseudo3d_size - 1)
                 continue
             overlap = ps // 2
             if overlap % 2:

@@ -75,9 +75,10 @@ def _generate_config_yaml(
     for exp_dir in exp_dirs:
         config_filename = exp_dir / f"{stage}_config.yaml"
         if config_filename.is_file():
+            orig_fn = config_filename
             i = 1
             while config_filename.is_file():
-                config_filename = append_num_to_filename(config_filename, i)
+                config_filename = append_num_to_filename(orig_fn, i)
                 i += 1
         if best_model_paths is not None:
             config["model_path"] = [str(bmp) for bmp in best_model_paths]
