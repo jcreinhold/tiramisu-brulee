@@ -40,6 +40,7 @@ from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
 from tiramisu_brulee.util import init_weights
 from tiramisu_brulee.experiment.type import (
     ModelNum,
+    nonnegative_float,
     nonnegative_int,
     ArgParser,
     positive_float,
@@ -71,9 +72,14 @@ class LesionSegLightningBase(pl.LightningModule):
         learning_rate (float): learning rate for the optimizer
         betas (Tuple[float, float]): momentum parameters for adam
         weight_decay (float): weight decay for optimizer
-        combo_weight (float): weight by which to balance BCE and Dice loss
-        decay_after (int): decay learning rate linearly after this many epochs
         loss_function (str): loss function to use in training
+        focal_weight (Optional[float]): weight for positive class
+            in focal loss if using combo loss function
+        focal_gamma (float): gamma param for focal loss
+            if using combo loss function (0. -> BCE)
+        combo_weight (float): weight by which to balance focal and Dice
+            losses in combo loss function
+        decay_after (int): decay learning rate linearly after this many epochs
         rmsprop (bool): use rmsprop instead of adamw
         soft_labels (bool): use non-binary labels for training
         threshold (float): threshold by which to decide on positive class
@@ -96,9 +102,11 @@ class LesionSegLightningBase(pl.LightningModule):
         learning_rate: float = 1e-3,
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7,
+        loss_function: str = "combo",
+        focal_weight: Optional[float] = None,
+        focal_gamma: float = 0.0,
         combo_weight: float = 0.6,
         decay_after: int = 8,
-        loss_function: str = "combo",
         rmsprop: bool = False,
         soft_labels: bool = False,
         threshold: float = 0.5,
@@ -123,7 +131,10 @@ class LesionSegLightningBase(pl.LightningModule):
     def setup(self, stage: Optional[str] = None):
         if self.hparams.loss_function == "combo":
             self.criterion = partial(
-                binary_combo_loss, combo_weight=self.hparams.combo_weight
+                binary_combo_loss,
+                focal_weight=self.hparams.focal_weight,
+                focal_gamma=self.hparams.focal_gamma,
+                combo_weight=self.hparams.combo_weight,
             )
         elif self.hparams.loss_function == "mse":
             self.criterion = mse_segmentation_loss
@@ -393,11 +404,26 @@ class LesionSegLightningBase(pl.LightningModule):
             help="save model weights (checkpoint) every n epochs",
         )
         parser.add_argument(
+            "-fw",
+            "--focal-weight",
+            type=probability_float(),
+            default=None,
+            help="weight of positive class in focal loss "
+            "component of combo loss function (None -> equal)",
+        )
+        parser.add_argument(
+            "-fg",
+            "--focal-gamma",
+            type=nonnegative_float(),
+            default=0.0,
+            help="gamma parameter for focal loss component of combo loss",
+        )
+        parser.add_argument(
             "-cw",
             "--combo-weight",
-            type=positive_float(),
+            type=probability_float(),
             default=0.6,
-            help="weight of positive class in combo loss",
+            help="weight of focal loss component in combo loss",
         )
         parser.add_argument(
             "-da",
@@ -518,9 +544,14 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         learning_rate (float): learning rate for the optimizer
         betas (Tuple[float, float]): momentum parameters for adam
         weight_decay (float): weight decay for optimizer
-        combo_weight (float): weight by which to balance BCE and Dice loss
-        decay_after (int): decay learning rate linearly after this many epochs
         loss_function (str): loss function to use in training
+        focal_weight (Optional[float]): weight for positive class
+            in focal loss if using combo loss function
+        focal_gamma (float): gamma param for focal loss
+            if using combo loss function (0. -> BCE)
+        combo_weight (float): weight by which to balance focal and Dice
+            losses in combo loss function
+        decay_after (int): decay learning rate linearly after this many epochs
         rmsprop (bool): use rmsprop instead of adamw
         soft_labels (bool): use non-binary labels for training
         threshold (float): threshold by which to decide on positive class
@@ -553,9 +584,11 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         learning_rate: float = 1e-3,
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7,
+        loss_function: str = "combo",
+        focal_weight: Optional[float] = None,
+        focal_gamma: float = 0.0,
         combo_weight: float = 0.6,
         decay_after: int = 8,
-        loss_function: str = "combo",
         rmsprop: bool = False,
         soft_labels: bool = False,
         threshold: float = 0.5,
@@ -592,9 +625,11 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
             learning_rate,
             betas,
             weight_decay,
+            loss_function,
+            focal_weight,
+            focal_gamma,
             combo_weight,
             decay_after,
-            loss_function,
             rmsprop,
             soft_labels,
             threshold,

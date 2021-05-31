@@ -17,6 +17,7 @@ __all__ = [
     "ModelNum",
     "Namespace",
     "new_parse_type",
+    "nonnegative_float",
     "nonnegative_int",
     "PatchShapeOption",
     "PatchShape",
@@ -112,10 +113,19 @@ class nonnegative_int(_ParseType):
         return num
 
 
+class nonnegative_float(_ParseType):
+    def __call__(self, string: str) -> int:
+        num = float(string)
+        if num < 0.0:
+            msg = f"{string} needs to be a nonnegative float."
+            raise argparse.ArgumentTypeError(msg)
+        return num
+
+
 class probability_float(_ParseType):
     def __call__(self, string: str) -> float:
         num = float(string)
-        if num <= 0.0 or num >= 1.0:
+        if num < 0.0 or num > 1.0:
             msg = f"{string} needs to be between 0 and 1."
             raise argparse.ArgumentTypeError(msg)
         return num
