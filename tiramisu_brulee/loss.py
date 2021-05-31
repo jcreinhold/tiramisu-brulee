@@ -111,7 +111,7 @@ def binary_combo_loss(
     pred: Tensor,
     target: Tensor,
     reduction: str = "mean",
-    focal_weight: Optional[Tensor] = None,
+    focal_weight: Optional[float] = None,
     focal_gamma: float = 0.0,
     combo_weight: float = 0.5,
 ) -> Tensor:
@@ -145,13 +145,11 @@ def l1_segmentation_loss(
     pred: Tensor, target: Tensor, reduction: str = "mean"
 ) -> Tensor:
     """ l1 loss for segmentation by applying sigmoid to pred -> l1 """
-    pred = torch.sigmoid(pred)
-    return F.l1_loss(pred, target, reduction=reduction)
+    return F.l1_loss(torch.sigmoid(pred), target, reduction=reduction)
 
 
 def mse_segmentation_loss(
     pred: Tensor, target: Tensor, reduction: str = "mean"
 ) -> Tensor:
     """ mse loss for segmentation by applying sigmoid to pred -> mse """
-    pred = torch.sigmoid(pred)
-    return F.mse_loss(pred, target, reduction=reduction)
+    return F.mse_loss(torch.sigmoid(pred), target, reduction=reduction)
