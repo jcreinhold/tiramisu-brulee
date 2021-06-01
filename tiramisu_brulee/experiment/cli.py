@@ -20,10 +20,12 @@ import argparse
 from concurrent.futures import ProcessPoolExecutor
 from collections import deque
 from functools import partial
+import gc
 import inspect
 import logging
 from pathlib import Path
 import tempfile
+import time
 from typing import List, Optional, Tuple, Union
 import warnings
 
@@ -35,6 +37,7 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
+import torch
 
 from tiramisu_brulee.experiment.type import (
     ArgType,
@@ -209,7 +212,14 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         msg = f"Best model path: {best_model_path}" + nth_model + "\n"
         msg += "Finished training" + nth_model
         logger.info(msg)
+        # kill multiprocessing workers, free memory for the next iteration
+        dm.teardown()
+        trainer.teardown()
         del dm, model, trainer, tb_logger, checkpoint_callback
+        gc.collect()
+        torch.cuda.empty_cache()
+        if n_models_to_train > 1 and args.num_workers > 0:
+            time.sleep(5.0)
     if not args.fast_dev_run:
         exp_dirs = []
         for bmp in best_model_paths:
@@ -408,7 +418,9 @@ def _predict_whole_image(
     )
     logging.debug(model)
     trainer.predict(model, datamodule=dm)
-    del dm, model, trainer
+    # kill multiprocessing workers, free memory for the next iteration
+    dm.teardown()
+    trainer.teardown()
 
 
 def _predict_patch_image(
@@ -431,8 +443,11 @@ def _predict_patch_image(
         dm = LesionSegDataModulePredictPatches(subject, **dict_args)
         dm.setup()
         trainer.predict(model, datamodule=dm)
+        # kill multiprocessing workers, free memory for the next iteration
+        dm.teardown()
+        trainer.teardown()
         del dm, trainer
-    del model
+        gc.collect()
 
 
 def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
@@ -458,6 +473,11 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
             else:
                 _predict_whole_image(args, model_path, model_num)
             logger.info("Finished prediction" + nth_model)
+            # kill multiprocessing workers, free memory for the next iteration
+            gc.collect()
+            torch.cuda.empty_cache()
+            if n_models > 1 and args.num_workers > 0:
+                time.sleep(1.0)
     if n_models > 1:
         num_workers = args.num_workers if use_multiprocessing else 0
         aggregate(
