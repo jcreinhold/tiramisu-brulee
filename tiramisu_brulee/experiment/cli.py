@@ -418,7 +418,7 @@ def _predict_whole_image(
     )
     logging.debug(model)
     trainer.predict(model, datamodule=dm)
-    # kill multiprocessing workers, free memory for the next iteration
+    # kill multiprocessing workers for next iteration
     dm.teardown()
     trainer.teardown()
 
@@ -473,11 +473,9 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
             else:
                 _predict_whole_image(args, model_path, model_num)
             logger.info("Finished prediction" + nth_model)
-            # kill multiprocessing workers, free memory for the next iteration
+            # force garbage collection for the next iteration
             gc.collect()
             torch.cuda.empty_cache()
-            if n_models > 1 and args.num_workers > 0:
-                time.sleep(1.0)
     if n_models > 1:
         num_workers = args.num_workers if use_multiprocessing else 0
         aggregate(
