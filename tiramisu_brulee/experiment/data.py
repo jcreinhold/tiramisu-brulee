@@ -43,7 +43,18 @@ from tiramisu_brulee.experiment.type import (
 )
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
 
-VALID_NAMES = ("ct", "flair", "pd", "t1", "t1c", "t2", "label", "weight", "div", "out")
+RECOGNIZED_NAMES = (
+    "ct",
+    "flair",
+    "pd",
+    "t1",
+    "t1c",
+    "t2",
+    "label",
+    "weight",
+    "div",
+    "out",
+)
 
 logger = getLogger(__name__)
 
@@ -733,21 +744,22 @@ def label_to_float() -> tio.Transform:
 
 
 def _get_type(name: str):
-    name_ = name.lower()
-    if name_ == "label":
-        type_ = tio.LABEL
-    elif name_ == "weight" or name_ == "div":
-        type_ = "float"
-    elif name_ == "out":
-        type_ = "path"
-    elif name_ in VALID_NAMES:
-        type_ = tio.INTENSITY
+    name_lower = name.lower()
+    if name_lower == "label":
+        _type = tio.LABEL
+    elif name_lower in ("weight", "div"):
+        _type = "float"
+    elif name_lower == "out":
+        _type = "path"
+    elif name_lower in RECOGNIZED_NAMES:
+        _type = tio.INTENSITY
     else:
         logger.warning(
-            f"{name} not in known {VALID_NAMES}. " f"Assuming an non-label image type."
+            f"{name} not in known {RECOGNIZED_NAMES}. "
+            f"Assuming {name} is a non-label image."
         )
-        type_ = tio.INTENSITY
-    return type_
+        _type = tio.INTENSITY
+    return _type
 
 
 def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
@@ -768,9 +780,6 @@ def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
     """
     df = pd.read_csv(filename, index_col="subject")
     names = df.columns.to_list()
-    if any([name not in VALID_NAMES for name in names]):
-        raise ValueError(f"Column name needs to be in {VALID_NAMES}")
-
     subject_list = []
     for row in df.iterrows():
         subject_name = row[0]
