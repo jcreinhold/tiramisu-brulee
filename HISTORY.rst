@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.14 (2021-06-03)
+-------------------
+
+* Bug fixes for training multiple models, remove unintended restriction on column names
+
 0.1.13 (2021-05-31)
 -------------------
 
