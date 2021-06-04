@@ -33,6 +33,7 @@ import torchio as tio
 
 from tiramisu_brulee.loss import (
     binary_combo_loss,
+    combo_loss,
     l1_segmentation_loss,
     mse_segmentation_loss,
 )
@@ -91,7 +92,7 @@ class LesionSegLightningBase(pl.LightningModule):
         mixup_alpha (float): mixup parameter for beta distribution
         num_input (int): number of different images input to the network,
             differs from in_channels when using pseudo3d
-        num_output (int): number of different images output by the network
+        num_classes (int): number of different images output by the network
             differs from out_channels when using pseudo3d
         _model_num (ModelNum): internal param for ith of n models
     """
@@ -117,7 +118,7 @@ class LesionSegLightningBase(pl.LightningModule):
         mixup: bool = False,
         mixup_alpha: float = 0.4,
         num_input: int = 1,
-        num_output: int = 1,
+        num_classes: int = 1,
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
@@ -130,13 +131,25 @@ class LesionSegLightningBase(pl.LightningModule):
         return self.network(tensor)
 
     def setup(self, stage: Optional[str] = None):
+        if self.hparams.loss_function != "combo" and self.hparams.num_classes != 1:
+            raise ValueError("Only combo loss supported for multi-class segmentation")
         if self.hparams.loss_function == "combo":
-            self.criterion = partial(
-                binary_combo_loss,
-                focal_weight=self.hparams.focal_weight,
-                focal_gamma=self.hparams.focal_gamma,
-                combo_weight=self.hparams.combo_weight,
-            )
+            if self.hparams.num_classes == 1:
+                self.criterion = partial(
+                    binary_combo_loss,
+                    focal_weight=self.hparams.focal_weight,
+                    focal_gamma=self.hparams.focal_gamma,
+                    combo_weight=self.hparams.combo_weight,
+                )
+            elif self.hparams.num_classes > 1:
+                self.criterion = partial(
+                    combo_loss,
+                    num_classes=self.hparams.num_classes,
+                    combo_weight=self.hparams.combo_weight,
+                )
+            else:
+                msg = f"num_classes must be greater than zero. Got {self.num_classes}."
+                raise ValueError(msg)
         elif self.hparams.loss_function == "mse":
             self.criterion = mse_segmentation_loss
         elif self.hparams.loss_function == "l1":
@@ -254,9 +267,12 @@ class LesionSegLightningBase(pl.LightningModule):
     def _predict_patch_image(self, batch: dict) -> Tensor:
         src = batch["src"]
         pred = self(src)
-        pred_seg = torch.sigmoid(pred)
-        if not self.hparams.predict_probability:
-            pred_seg = pred_seg > self.hparams.threshold
+        if self.hparams.num_classes == 1:
+            pred_seg = torch.sigmoid(pred)
+            if not self.hparams.predict_probability:
+                pred_seg = pred_seg > self.hparams.threshold
+        else:
+            pred_seg = torch.softmax(pred, dim=1)
         pred_seg = pred_seg.float()
         return pred_seg
 
@@ -352,8 +368,11 @@ class LesionSegLightningBase(pl.LightningModule):
             if self.hparams.soft_labels and key == "pred":
                 image_slice = torch.sigmoid(image_slice)
             elif key == "pred":
-                threshold = self.hparams.threshold
-                image_slice = torch.sigmoid(image_slice) > threshold
+                if self.hparams.num_classes == 1:
+                    threshold = self.hparams.threshold
+                    image_slice = torch.sigmoid(image_slice) > threshold
+                else:
+                    image_slice = torch.argmax(image_slice, 1, keepdim=True)
             elif key == "truth":
                 image_slice = image_slice > 0.0
             else:
@@ -378,11 +397,11 @@ class LesionSegLightningBase(pl.LightningModule):
             "of non-label/other fields in the input csv)",
         )
         parser.add_argument(
-            "-no",
-            "--num-output",
+            "-nc",
+            "--num-classes",
             type=positive_int(),
             default=1,
-            help="number of output images (usually 1 for segmentation)",
+            help="number of classes to segment (1 for binary segmentation)",
         )
         return parent_parser
 
@@ -532,7 +551,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
     Args:
         network_dim (int): use a 2D or 3D convolutions
         in_channels (int): number of input channels
-        out_channels (int): number of output channels
+        num_classes (int): number of classes to segment with the network
         down_blocks (List[int]): number of layers in each block in down path
         up_blocks (List[int]): number of layers in each block in up path
         bottleneck_layers (int): number of layers in the bottleneck
@@ -563,8 +582,6 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         mixup_alpha (float): mixup parameter for beta distribution
         num_input (int): number of different images input to the network,
             differs from in_channels when using pseudo3d
-        num_output (int): number of different images output by the network
-            differs from out_channels when using pseudo3d
         _model_num (ModelNum): internal param for ith of n models
     """
 
@@ -572,7 +589,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         self,
         network_dim: int = 3,
         in_channels: int = 1,
-        out_channels: int = 1,
+        num_classes: int = 1,
         down_blocks: List[int] = (4, 4, 4, 4, 4),
         up_blocks: List[int] = (4, 4, 4, 4, 4),
         bottleneck_layers: int = 4,
@@ -599,7 +616,6 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         mixup: bool = False,
         mixup_alpha: float = 0.4,
         num_input: int = 1,
-        num_output: int = 1,
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
@@ -611,7 +627,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
             raise ValueError(f"Network dim. must be 2 or 3. Got {network_dim}.")
         network = network_class(
             in_channels,
-            out_channels,
+            num_classes,
             down_blocks,
             up_blocks,
             bottleneck_layers,
@@ -640,7 +656,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
             mixup,
             mixup_alpha,
             num_input,
-            num_output,
+            num_classes,
             _model_num,
             **kwargs,
         )

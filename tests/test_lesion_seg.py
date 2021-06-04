@@ -116,8 +116,18 @@ def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path):
     assert retcode == 0
 
 
+def test_multiclass_train_cli(cli_train_args: List[str], train_csv: Path):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
+    cli_train_args += "--patch-size 8 8 8".split()
+    cli_train_args += "--num-classes 2".split()
+    retcode = train(cli_train_args, False)
+    assert retcode == 0
+
+
 def test_patch_prediction_cli(
-    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path
+    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path,
 ):
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()

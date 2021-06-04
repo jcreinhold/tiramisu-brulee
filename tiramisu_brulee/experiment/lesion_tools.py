@@ -22,6 +22,7 @@ from scipy.ndimage.morphology import (
 from skimage.morphology import remove_small_objects
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 from torchmetrics.functional import (
     dice_score,
     precision,
@@ -46,13 +47,29 @@ def clean_segmentation(
 
 def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
-    batch_size = pred.shape[0]
+    batch_size, num_classes = pred.shape[0:2]
+    multiclass = num_classes > 1
     dice = dice_score(pred.int(), target.int())
     if dice.isnan():
         dice = torch.tensor(0.0, device=pred.device)
-    ppv = precision(pred.int(), target.int(), mdmc_average="samplewise")
+    if multiclass and pred.shape != target.shape:
+        is_integer_label = pred.ndim != target.ndim
+        target = F.one_hot(target.long(), num_classes)
+        if not is_integer_label and target.shape[1] > 1:
+            msg = f"Target channel size must be 1 or 0. Got {target.shape[1]}"
+            raise ValueError(msg)
+        elif not is_integer_label:
+            target = target[:, 0, ...]
+        target = torch.movedim(target, -1, 1)
+    ppv = precision(
+        pred.int(),
+        target.int(),
+        num_classes=num_classes if multiclass else None,
+        mdmc_average="samplewise",
+        multiclass=multiclass or None,
+    )
     isbi15_score = 0.5 * dice + 0.5 * ppv
-    if batch_size > 1:
+    if batch_size > 1 and not multiclass:
         dims = list(range(1, pred.ndim))
         corr = pearson_corrcoef(
             pred.sum(dim=dims).float(), target.sum(dim=dims).float(),
