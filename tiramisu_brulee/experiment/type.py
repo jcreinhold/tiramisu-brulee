@@ -24,8 +24,9 @@ __all__ = [
     "positive_float",
     "positive_int",
     "positive_int_or_none",
-    "positive_odd_int",
+    "positive_odd_int_or_none",
     "probability_float",
+    "probability_float_or_none",
 ]
 
 import argparse
@@ -46,6 +47,21 @@ PatchShape3DOption = Tuple[Optional[int], Optional[int], Optional[int]]
 PatchShapeOption = Union[PatchShape2DOption, PatchShape3DOption]
 ArgType = Optional[Union[Namespace, List[str]]]
 ArgParser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
+
+
+def return_none(func: Callable) -> Callable:
+    def new_func(self, string) -> Any:
+        if string is None:
+            return None
+        elif isinstance(string, str):
+            if string.lower() in ("none", "null"):
+                return None
+            else:
+                return func(self, string)
+        else:
+            return func(self, string)
+
+    return new_func
 
 
 class _ParseType:
@@ -84,8 +100,9 @@ class positive_int(_ParseType):
         return num
 
 
-class positive_odd_int(_ParseType):
-    def __call__(self, string: str) -> int:
+class positive_odd_int_or_none(_ParseType):
+    @return_none
+    def __call__(self, string: str) -> Union[int, None]:
         num = int(string)
         if num <= 0 or not (num % 2):
             msg = f"{string} needs to be a positive odd integer."
@@ -94,13 +111,8 @@ class positive_odd_int(_ParseType):
 
 
 class positive_int_or_none(_ParseType):
-    def __call__(self, string: str) -> int:
-        if isinstance(string, str):
-            str_lower = string.lower()
-            if str_lower in ("none", "null"):
-                return None
-        elif string is None:
-            return None
+    @return_none
+    def __call__(self, string: str) -> Union[int, None]:
         return positive_int()(string)
 
 
@@ -129,6 +141,12 @@ class probability_float(_ParseType):
             msg = f"{string} needs to be between 0 and 1."
             raise argparse.ArgumentTypeError(msg)
         return num
+
+
+class probability_float_or_none(_ParseType):
+    @return_none
+    def __call__(self, string: str) -> Union[float, None]:
+        return probability_float()(string)
 
 
 def new_parse_type(func: Callable, name: str):

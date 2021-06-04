@@ -46,6 +46,7 @@ from tiramisu_brulee.experiment.type import (
     positive_float,
     positive_int,
     probability_float,
+    probability_float_or_none,
 )
 from tiramisu_brulee.experiment.data import Mixup
 from tiramisu_brulee.experiment.lesion_tools import (
@@ -406,7 +407,7 @@ class LesionSegLightningBase(pl.LightningModule):
         parser.add_argument(
             "-fw",
             "--focal-weight",
-            type=probability_float(),
+            type=probability_float_or_none(),
             default=None,
             help="weight of positive class in focal loss "
             "component of combo loss function (None -> equal)",
