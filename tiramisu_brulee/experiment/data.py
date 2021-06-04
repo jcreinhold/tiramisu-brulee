@@ -38,7 +38,7 @@ from tiramisu_brulee.experiment.type import (
     PatchShape,
     positive_float,
     positive_int,
-    positive_odd_int,
+    positive_odd_int_or_none,
     positive_int_or_none,
 )
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
@@ -418,7 +418,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         parser.add_argument(
             "-p3s",
             "--pseudo3d-size",
-            type=positive_odd_int(),
+            type=positive_odd_int_or_none(),
             default=None,
             help="size of the pseudo3d dimension (if -p3d provided)",
         )
@@ -522,7 +522,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         parser.add_argument(
             "-p3s",
             "--pseudo3d-size",
-            type=positive_odd_int(),
+            type=positive_odd_int_or_none(),
             default=None,
             help="size of the pseudo3d dimension (if -p3d provided)",
         )
