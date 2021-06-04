@@ -115,12 +115,37 @@ def binary_combo_loss(
     focal_gamma: float = 0.0,
     combo_weight: float = 0.5,
 ) -> Tensor:
-    """ combo loss (dice + focal weighted by combo_weight) """
+    """ combo loss (dice + focal weighted by combo_weight) for binary labels """
     assert 0.0 <= combo_weight <= 1.0
     assert 0.0 <= focal_gamma
     f_loss = binary_focal_loss(pred, target, focal_weight, reduction, focal_gamma)
     p = torch.sigmoid(pred)
     d_loss = dice_loss(p, target, reduction=reduction)
+    loss = combo_weight * f_loss + (1 - combo_weight) * d_loss
+    return loss
+
+def combo_loss(
+    pred: Tensor,
+    target: Tensor,
+    num_classes: int,
+    reduction: str = "mean",
+    combo_weight: float = 0.5,
+) -> Tensor:
+    """ combo loss (dice + focal weighted by combo_weight) for multi-class labels """
+    assert 0.0 <= combo_weight <= 1.0
+    assert 2 <= num_classes
+    channel_not_removed = pred.ndim == target.ndim
+    if channel_not_removed and target.shape[1] > 1:
+        msg = f"Channel size must be 1 or 0. Got {target.shape[1]}"
+        raise ValueError(msg)
+    _target = target[:, 0, ...] if channel_not_removed else target
+    _target = _target.long()
+    f_loss = F.cross_entropy(pred, _target, reduction=reduction)
+    p = torch.softmax(pred, dim=1)
+    target_one_hot = F.one_hot(_target, num_classes)
+    target_one_hot = torch.movedim(target_one_hot, -1, 1)
+    target_one_hot = target_one_hot.float()
+    d_loss = dice_loss(p, target_one_hot, reduction=reduction)
     loss = combo_weight * f_loss + (1 - combo_weight) * d_loss
     return loss
 

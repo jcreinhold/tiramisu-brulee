@@ -196,7 +196,6 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         dict_args["valid_csv"] = valid_csv
         channels_per_image = args.pseudo3d_size if use_pseudo3d else 1
         dict_args["in_channels"] = args.num_input * channels_per_image
-        dict_args["out_channels"] = args.num_output
         dict_args["pseudo3d_dim"] = p3d
         dm = LesionSegDataModuleTrain.from_csv(**dict_args)
         dm.setup()

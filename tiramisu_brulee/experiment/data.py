@@ -219,6 +219,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         spatial_augmentation: bool = False,
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
+        num_classes: int = 1,
         **kwargs,
     ):
         super().__init__(
@@ -230,6 +231,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.samples_per_volume = samples_per_volume
         self.label_sampler = label_sampler
         self.spatial_augmentation = spatial_augmentation
+        self.num_classes = num_classes
 
     @classmethod
     def from_csv(cls, train_csv: str, valid_csv: str, *args, **kwargs):
@@ -284,7 +286,11 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return val_dataloader
 
     def _get_train_augmentation(self):
-        transforms = [label_to_float()]
+        if self.num_classes >= 1:
+            transforms = [label_to_float()]
+        else:
+            msg = f"num_classes must be positive. Got {self.num_classes}."
+            raise ValueError(msg)
         if self.spatial_augmentation:
             spatial = tio.OneOf(
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
@@ -307,7 +313,11 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.train_dataset = subjects_dataset
 
     def _get_val_augmentation(self):
-        transforms = [label_to_float()]
+        if self.num_classes >= 1:
+            transforms = [label_to_float()]
+        else:
+            msg = f"num_classes must be positive. Got {self.num_classes}."
+            raise ValueError(msg)
         if not self._use_pseudo3d:
             transforms.insert(0, tio.CropOrPad(self.patch_size))
         transform = tio.Compose(transforms)
