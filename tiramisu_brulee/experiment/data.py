@@ -572,15 +572,13 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         self._setup_predict_dataset()
 
     def _setup_predict_dataset(self):
-        subjects_dataset = tio.SubjectsDataset(
-            self.subjects, transform=label_to_float(),
-        )
+        subjects_dataset = tio.SubjectsDataset(self.subjects)
         self.predict_dataset = subjects_dataset
 
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
         src = self._default_collate_fn(batch)
-        # assume affine matrices same across modalities
+        # assume affine matrices and headers same across modalities
         # so arbitrarily choose first
         field = self._input_fields[0]
         images = [nib.load(filepath) for filepath in batch[field]["path"]]
@@ -672,6 +670,10 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             patch_overlap=grid_sampler.patch_overlap,
         )
         self.predict_dataset = grid_sampler
+        field = self._input_fields[0]
+        image = nib.load(self.subjects[field]["path"])
+        self.header = image.header
+        self.extra = image.extra
 
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
@@ -681,12 +683,11 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # assume affine matrices same across modalities
         # so arbitrarily choose first
         field = self._input_fields[0]
-        image = nib.load(batch[field]["path"][0])
         out = dict(
             src=src,
             affine=batch[field][tio.AFFINE],
-            header=image.header,
-            extra=image.extra,
+            header=self.header,
+            extra=self.extra,
             out=batch["out"],  # path to save the prediction
             locations=batch[tio.LOCATION],
             grid_obj=self.grid_obj,
