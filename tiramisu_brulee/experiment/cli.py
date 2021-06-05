@@ -220,6 +220,7 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         if n_models_to_train > 1 and args.num_workers > 0:
             time.sleep(5.0)
     if not args.fast_dev_run:
+        dict_args["pseudo3d_dim"] = args.pseudo3d_dim
         exp_dirs = []
         for bmp in best_model_paths:
             exp_dirs.append(get_experiment_directory(bmp))
