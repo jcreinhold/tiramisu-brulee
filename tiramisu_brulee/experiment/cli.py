@@ -361,16 +361,18 @@ def _aggregate(
     min_lesion_size: int,
 ):
     """ aggregate helper for concurrent/parallel processing """
+    assert n_models >= 1
     n, fn = n_fn
     data = []
     for i in range(1, n_models + 1):
         _fn = append_num_to_filename(fn, i)
-        nib_image = nib.load(_fn)
-        data.append(nib_image.get_fdata())
+        image = nib.load(_fn)
+        data.append(image.get_fdata())
     agg = np.mean(data, axis=0) > threshold
     agg = clean_segmentation(agg, fill_holes, min_lesion_size)
     agg = agg.astype(np.float32)
-    nib.Nifti1Image(agg, nib_image.affine).to_filename(fn)  # noqa
+    pred = nib.Nifti1Image(agg, image.affine, image.header, image.extra)  # noqa
+    pred.to_filename(fn)
     logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
 
 

@@ -22,6 +22,7 @@ from types import SimpleNamespace
 from typing import List, Optional, Tuple, Union
 
 from jsonargparse import ArgumentParser
+import nibabel as nib
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -582,9 +583,12 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         # assume affine matrices same across modalities
         # so arbitrarily choose first
         field = self._input_fields[0]
+        images = [nib.load(filepath) for filepath in batch[field]["path"]]
         out = dict(
             src=src,
             affine=batch[field][tio.AFFINE],
+            header=[image.header for image in images],
+            extra=[image.extra for image in images],
             out=batch["out"],  # path to save the prediction
         )
         return out
@@ -677,9 +681,12 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # assume affine matrices same across modalities
         # so arbitrarily choose first
         field = self._input_fields[0]
+        image = nib.load(batch[field]["path"][0])
         out = dict(
             src=src,
             affine=batch[field][tio.AFFINE],
+            header=image.header,
+            extra=image.extra,
             out=batch["out"],  # path to save the prediction
             locations=batch[tio.LOCATION],
             grid_obj=self.grid_obj,

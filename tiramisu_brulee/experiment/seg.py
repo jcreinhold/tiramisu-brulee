@@ -290,23 +290,27 @@ class LesionSegLightningBase(pl.LightningModule):
     def _predict_save_whole_image(self, pred_step_outputs: Tensor, batch: dict):
         preds = self._clean_prediction(pred_step_outputs)
         affine_matrices = batch["affine"]
+        headers = batch["header"]
+        extras = batch["extra"]
         out_fns = batch["out"]
-        nifti_attrs = zip(preds, affine_matrices, out_fns)
-        for pred, affine, fn in nifti_attrs:
+        nifti_attrs = zip(preds, affine_matrices, headers, extras, out_fns)
+        for pred, affine, header, extra, fn in nifti_attrs:
             if self._model_num != ModelNum(num=1, out_of=1):
                 fn = append_num_to_filename(fn, self._model_num.num)
             logging.info(f"Saving {fn}.")
-            nib.Nifti1Image(pred, affine).to_filename(fn)
+            nib.Nifti1Image(pred, affine, header, extra).to_filename(fn)
 
     def _predict_save_patch_image(self, batch: dict):
         data = self.aggregator.get_output_tensor()
         pred = self._clean_prediction(data)[0]
         affine = batch["affine"][0]
+        header = batch["header"]
+        extra = batch["extra"]
         fn = batch["out"][0]
         if self._model_num != ModelNum(num=1, out_of=1):
             fn = append_num_to_filename(fn, self._model_num.num)
         logging.info(f"Saving {fn}.")
-        nib.Nifti1Image(pred, affine).to_filename(fn)
+        nib.Nifti1Image(pred, affine, header, extra).to_filename(fn)
         del self.aggregator
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
