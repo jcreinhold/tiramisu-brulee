@@ -23,7 +23,6 @@ from typing import List, Optional, Tuple
 
 import nibabel as nib
 import numpy as np
-
 import pytorch_lightning as pl
 import torch
 from torch import nn
