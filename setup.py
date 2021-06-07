@@ -20,7 +20,6 @@ setup_requirements = [
 
 _other_reqs = [
     "jsonargparse",
-    "lesion-metrics",
     "nibabel",
     "pandas",
     "pytorch-lightning",
