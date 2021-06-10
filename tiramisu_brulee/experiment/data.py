@@ -330,6 +330,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             raise ValueError(msg)
         if not self._use_pseudo3d:
             transforms.insert(0, tio.CropOrPad(self.patch_size))
+        if self.pseudo3d_dim == "all":
+            transforms.insert(0, RandomTranspose())
         transform = tio.Compose(transforms)
         return transform
 
