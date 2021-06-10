@@ -64,6 +64,19 @@ def return_none(func: Callable) -> Callable:
     return new_func
 
 
+def return_str(match_string: str) -> Callable:
+    def decorator(func: Callable):
+        def new_func(self, string) -> Any:
+            if string.lower() == match_string:
+                return match_string
+            else:
+                return func(self, string)
+
+        return new_func
+
+    return decorator
+
+
 class _ParseType:
     @property
     def __name__(self):
@@ -123,6 +136,13 @@ class nonnegative_int(_ParseType):
             msg = f"{string} needs to be a nonnegative integer."
             raise argparse.ArgumentTypeError(msg)
         return num
+
+
+class nonnegative_int_or_none_or_all(_ParseType):
+    @return_none
+    @return_str("all")
+    def __call__(self, string: str) -> int:
+        return nonnegative_int()(string)
 
 
 class nonnegative_float(_ParseType):
