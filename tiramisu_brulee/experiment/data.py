@@ -299,14 +299,15 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             msg = f"num_classes must be positive. Got {self.num_classes}."
             raise ValueError(msg)
         if self.spatial_augmentation:
-            flip = tio.RandomFlip()
-            transforms.insert(0, flip)
             spatial = tio.OneOf(
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
             )
             transforms.insert(1, spatial)
+            flip = tio.RandomFlip(axes=(0, 1, 2))
+            transforms.append(flip)
         if self.pseudo3d_dim == "all":
             transforms.insert(1, RandomTranspose())
+            transforms.append(RandomRot90())
         transform = tio.Compose(transforms)
         return transform
 
@@ -781,7 +782,7 @@ class RandomTranspose(
     tio.transforms.augmentation.RandomTransform, tio.SpatialTransform,
 ):
 
-    transposes = ((0, 2, 3, 1), (0, 1, 3, 2), (0, 1, 2, 3))
+    transposes = ((0, 1, 3, 2), (0, 2, 3, 1), (0, 1, 2, 3))
 
     def apply_transform(self, subject: tio.Subject) -> tio.Subject:
         index = self.get_params()
@@ -793,6 +794,23 @@ class RandomTranspose(
     @staticmethod
     def get_params() -> int:
         return torch.randint(0, 3, (1,)).item()
+
+
+class RandomRot90(
+    tio.transforms.augmentation.RandomTransform, tio.SpatialTransform,
+):
+    def apply_transform(self, subject: tio.Subject) -> tio.Subject:
+        k = self.get_params()
+        for image in self.get_images(subject):
+            assert image.data.ndim == 4
+            data = image.data.rot90(k, (1, 2))
+            image.set_data(data)
+        return subject
+
+    @staticmethod
+    def get_params() -> int:
+        k = torch.randint(0, 4, size=(1,)).item()
+        return k
 
 
 def _get_type(name: str):
