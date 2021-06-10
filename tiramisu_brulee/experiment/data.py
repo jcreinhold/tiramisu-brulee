@@ -18,6 +18,7 @@ __all__ = [
 ]
 
 from logging import getLogger
+import random
 from types import SimpleNamespace
 from typing import List, Optional, Tuple, Union
 
@@ -35,6 +36,7 @@ import torchio as tio
 from tiramisu_brulee.experiment.type import (
     file_path,
     nonnegative_int,
+    nonnegative_int_or_none_or_all,
     PatchShapeOption,
     PatchShape,
     positive_float,
@@ -73,6 +75,9 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pseudo3d_dim = pseudo3d_dim
+        self._pseudo3d_dim_internal = (
+            pseudo3d_dim if isinstance(pseudo3d_dim, int) else 0
+        )
         self.pseudo3d_size = pseudo3d_size
         if self._use_pseudo3d and self.pseudo3d_size is None:
             raise ValueError(
@@ -174,7 +179,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
                 "If using pseudo3d, patch size must contain only 2 values."
             )
         if self._use_pseudo3d:
-            patch_size.insert(self.pseudo3d_dim, self.pseudo3d_size)
+            patch_size.insert(self._pseudo3d_dim_internal, self.pseudo3d_size)
         return tuple(patch_size)
 
     @property
@@ -293,10 +298,14 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             msg = f"num_classes must be positive. Got {self.num_classes}."
             raise ValueError(msg)
         if self.spatial_augmentation:
+            flip = tio.RandomFlip()
+            transforms.insert(0, flip)
             spatial = tio.OneOf(
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
             )
-            transforms.insert(0, spatial)
+            transforms.insert(1, spatial)
+        if self.pseudo3d_dim == "all":
+            transforms.insert(0, RandomTranspose())
         transform = tio.Compose(transforms)
         return transform
 
@@ -336,12 +345,13 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _collate_fn(self, batch: dict) -> Tuple[Tensor, Tensor]:
         batch = default_collate(batch)
-        # p3d is the offset by batch/channel dims if pseudo3d used
-        p3d = self.pseudo3d_dim + 2 if self._use_pseudo3d else None
-        src = self._default_collate_fn(batch, p3d)
+        p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
+        # offset by batch/channel dims if pseudo3d used
+        p3d_with_offset = p3d + 2 if self._use_pseudo3d else None
+        src = self._default_collate_fn(batch, p3d_with_offset)
         tgt = batch["label"][tio.DATA]
-        if self.pseudo3d_dim is not None:
-            tgt = self._pseudo3d_label(tgt, self.pseudo3d_dim)
+        if self._use_pseudo3d:
+            tgt = self._pseudo3d_label(tgt, self._pseudo3d_dim_internal)
         return src, tgt
 
     @staticmethod
@@ -416,9 +426,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         parser.add_argument(
             "-p3d",
             "--pseudo3d-dim",
-            type=nonnegative_int(),
+            type=nonnegative_int_or_none_or_all(),
             nargs="+",
-            choices=(0, 1, 2),
+            choices=(0, 1, 2, "all"),
             default=None,
             help="dim on which to concatenate the images for input "
             "to a 2D network. If provided, either provide 1 value"
@@ -677,9 +687,10 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
 
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
-        # p3d is the offset by batch/channel dims if pseudo3d used
-        p3d = self.pseudo3d_dim + 2 if self._use_pseudo3d else None
-        src = self._default_collate_fn(batch, p3d)
+        p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
+        # offset by batch/channel dims if pseudo3d used
+        p3d_with_offset = p3d + 2 if self._use_pseudo3d else None
+        src = self._default_collate_fn(batch, p3d_with_offset)
         # assume affine matrices same across modalities
         # so arbitrarily choose first
         field = self._input_fields[0]
@@ -691,7 +702,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             out=batch["out"],  # path to save the prediction
             locations=batch[tio.LOCATION],
             grid_obj=self.grid_obj,
-            pseudo3d_dim=self.pseudo3d_dim,
+            pseudo3d_dim=p3d,
             total_batches=self.total_batches,
         )
         return out
@@ -759,6 +770,24 @@ def _to_float(tensor: Tensor) -> Tensor:
 def label_to_float() -> tio.Transform:
     """ cast a label image (usually uint8) to a float """
     return tio.Lambda(_to_float, types_to_apply=[tio.LABEL])
+
+
+class RandomTranspose(
+    tio.transforms.augmentation.RandomTransform, tio.SpatialTransform,
+):
+
+    transposes = ((0, 2, 3, 1), (0, 1, 3, 2), (0, 1, 2, 3))
+
+    def apply_transform(self, subject: tio.Subject) -> tio.Subject:
+        index = self.get_params()
+        for image in self.get_images(subject):
+            data = image.data.permute(*self.transposes[index])
+            image.set_data(data)
+        return subject
+
+    @staticmethod
+    def get_params() -> int:
+        return torch.randint(0, 3, (1,)).item()
 
 
 def _get_type(name: str):
