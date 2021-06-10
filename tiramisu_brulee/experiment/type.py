@@ -56,10 +56,7 @@ def return_none(func: Callable) -> Callable:
         elif isinstance(string, str):
             if string.lower() in ("none", "null"):
                 return None
-            else:
-                return func(self, string)
-        else:
-            return func(self, string)
+        return func(self, string)
 
     return new_func
 
@@ -67,10 +64,10 @@ def return_none(func: Callable) -> Callable:
 def return_str(match_string: str) -> Callable:
     def decorator(func: Callable):
         def new_func(self, string) -> Any:
-            if string.lower() == match_string:
-                return match_string
-            else:
-                return func(self, string)
+            if isinstance(string, str):
+                if string.lower() == match_string:
+                    return match_string
+            return func(self, string)
 
         return new_func
 
