@@ -19,6 +19,7 @@ __all__ = [
     "new_parse_type",
     "nonnegative_float",
     "nonnegative_int",
+    "nonnegative_int_or_none_or_all",
     "PatchShapeOption",
     "PatchShape",
     "positive_float",

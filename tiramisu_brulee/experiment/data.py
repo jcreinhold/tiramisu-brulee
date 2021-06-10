@@ -13,17 +13,17 @@ Created on: May 17, 2021
 __all__ = [
     "csv_to_subjectlist",
     "LesionSegDataModulePredictBase",
+    "LesionSegDataModulePredictPatches",
+    "LesionSegDataModulePredictWhole",
     "LesionSegDataModuleTrain",
     "Mixup",
 ]
 
 from logging import getLogger
-import random
 from types import SimpleNamespace
 from typing import List, Optional, Tuple, Union
 
 from jsonargparse import ArgumentParser
-import nibabel as nib
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -292,8 +292,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return val_dataloader
 
     def _get_train_augmentation(self):
+        transforms = [tio.ToCanonical()]
         if self.num_classes >= 1:
-            transforms = [label_to_float()]
+            transforms.append(label_to_float())
         else:
             msg = f"num_classes must be positive. Got {self.num_classes}."
             raise ValueError(msg)
@@ -305,7 +306,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             )
             transforms.insert(1, spatial)
         if self.pseudo3d_dim == "all":
-            transforms.insert(0, RandomTranspose())
+            transforms.insert(1, RandomTranspose())
         transform = tio.Compose(transforms)
         return transform
 
@@ -323,15 +324,16 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.train_dataset = subjects_dataset
 
     def _get_val_augmentation(self):
+        transforms = [tio.ToCanonical()]
         if self.num_classes >= 1:
-            transforms = [label_to_float()]
+            transforms.append(label_to_float())
         else:
             msg = f"num_classes must be positive. Got {self.num_classes}."
             raise ValueError(msg)
         if not self._use_pseudo3d:
-            transforms.insert(0, tio.CropOrPad(self.patch_size))
+            transforms.insert(1, tio.CropOrPad(self.patch_size))
         if self.pseudo3d_dim == "all":
-            transforms.insert(0, RandomTranspose())
+            transforms.insert(1, RandomTranspose())
         transform = tio.Compose(transforms)
         return transform
 
@@ -460,7 +462,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         **kwargs,
     ):
         super().__init__(
-            batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size
+            batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size,
         )
         self.subjects = subjects
 
@@ -584,21 +586,21 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         self._setup_predict_dataset()
 
     def _setup_predict_dataset(self):
-        subjects_dataset = tio.SubjectsDataset(self.subjects)
+        subjects_dataset = tio.SubjectsDataset(
+            self.subjects, transform=tio.ToCanonical(),
+        )
         self.predict_dataset = subjects_dataset
 
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
         src = self._default_collate_fn(batch)
-        # assume affine matrices and headers same across modalities
+        # assume all input images are co-registered
         # so arbitrarily choose first
         field = self._input_fields[0]
-        images = [nib.load(filepath) for filepath in batch[field]["path"]]
         out = dict(
             src=src,
             affine=batch[field][tio.AFFINE],
-            header=[image.header for image in images],
-            extra=[image.extra for image in images],
+            path=[filepath for filepath in batch[field]["path"]],
             out=batch["out"],  # path to save the prediction
         )
         return out
@@ -642,7 +644,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         self.patch_overlap = patch_overlap or self._default_overlap(ps)
 
     def _set_patch_size(
-        self, subject: tio.Subject, patch_size: PatchShapeOption
+        self, subject: tio.Subject, patch_size: PatchShapeOption,
     ) -> PatchShapeOption:
         if any([ps is None for ps in patch_size]):
             image_dim = subject.spatial_shape
@@ -670,8 +672,12 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         return patch_overlap
 
     def _setup_predict_dataset(self):
+        self.canonical_subject = tio.ToCanonical()(self.subjects)
         grid_sampler = tio.GridSampler(
-            self.subjects, self.patch_size, self.patch_overlap, padding_mode="edge",
+            self.canonical_subject,
+            self.patch_size,
+            self.patch_overlap,
+            padding_mode="edge",
         )
         # need to create aggregator in LesionSegLightning* module, which expects
         # the grid sampler we don't want to send the whole sampler over though,
@@ -683,9 +689,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         )
         self.predict_dataset = grid_sampler
         field = self._input_fields[0]
-        image = nib.load(self.subjects[field]["path"])
-        self.header = image.header
-        self.extra = image.extra
+        self.path = self.subjects[field]["path"]
 
     def _collate_fn(self, batch: dict) -> Tensor:
         batch = default_collate(batch)
@@ -693,14 +697,13 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # offset by batch/channel dims if pseudo3d used
         p3d_with_offset = p3d + 2 if self._use_pseudo3d else None
         src = self._default_collate_fn(batch, p3d_with_offset)
-        # assume affine matrices same across modalities
+        # assume input images are co-registered
         # so arbitrarily choose first
         field = self._input_fields[0]
         out = dict(
             src=src,
             affine=batch[field][tio.AFFINE],
-            header=self.header,
-            extra=self.extra,
+            path=self.path,
             out=batch["out"],  # path to save the prediction
             locations=batch[tio.LOCATION],
             grid_obj=self.grid_obj,
