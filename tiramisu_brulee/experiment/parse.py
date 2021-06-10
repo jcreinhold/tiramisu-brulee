@@ -63,9 +63,6 @@ def _generate_config_yaml(
 ):
     """ generate config yaml file(s) for `stage`, store in experiment dir """
     assert stage in ("train", "predict")
-    n_dirs = len(exp_dirs)
-    if best_model_paths is not None:
-        assert n_dirs == len(best_model_paths)
     config = vars(parser.get_defaults())
     for k, v in dict_args.items():
         if k in config:
