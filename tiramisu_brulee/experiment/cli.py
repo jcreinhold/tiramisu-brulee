@@ -220,13 +220,16 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         if n_models_to_train > 1 and args.num_workers > 0:
             time.sleep(5.0)
     if not args.fast_dev_run:
-        dict_args["pseudo3d_dim"] = args.pseudo3d_dim
-        exp_dirs = []
-        for bmp in best_model_paths:
-            exp_dirs.append(get_experiment_directory(bmp))
+        exp_dirs = [get_experiment_directory(bmp) for bmp in best_model_paths]
+        if args.pseudo3d_dim == "all":
+            dict_args["pseudo3d_dim"] = [0, 1, 2] * n_models_to_train
+            best_model_paths = [bmp for bmp in best_model_paths for _ in range(3)]
+        else:
+            dict_args["pseudo3d_dim"] = args.pseudo3d_dim
         config_kwargs = dict(
             exp_dirs=exp_dirs, dict_args=dict_args, best_model_paths=best_model_paths,
         )
+
         generate_train_config_yaml(**config_kwargs, parser=parser)
         generate_predict_config_yaml(**config_kwargs, parser=predict_parser(False))
     if return_best_model_paths:
