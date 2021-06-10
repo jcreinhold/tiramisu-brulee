@@ -21,11 +21,13 @@ setup_requirements = [
 _other_reqs = [
     "jsonargparse",
     "nibabel",
+    "numpy",
     "pandas",
     "pytorch-lightning",
     "PyYAML",
     "ruyaml",
     "scikit-image",
+    "scipy",
     "torchio",
     "torchmetrics",
 ]

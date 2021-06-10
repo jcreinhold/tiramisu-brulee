@@ -10,6 +10,7 @@ Created on: Jul 02, 2020
 """
 
 __all__ = [
+    "ACTIVATION",
     "Bottleneck2d",
     "Bottleneck3d",
     "DenseBlock2d",

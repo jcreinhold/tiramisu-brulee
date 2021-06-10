@@ -57,7 +57,6 @@ from tiramisu_brulee.experiment.util import (
     append_num_to_filename,
     BoundingBox3D,
     minmax_scale_batch,
-    to_np,
 )
 
 
@@ -275,56 +274,70 @@ class LesionSegLightningBase(pl.LightningModule):
         pred_seg = pred_seg.float()
         return pred_seg
 
-    def _clean_prediction(self, pred: Tensor) -> List[Tensor]:
-        pred = to_np(pred).squeeze()
-        if pred.ndim == 5:
-            raise ValueError("Predictions should only have one channel.")
-        elif pred.ndim == 3:
-            pred = pred[None, ...]
+    def _clean_prediction(self, pred: np.ndarray) -> List[np.ndarray]:
+        assert pred.ndim == 3
         if not self.hparams.predict_probability:
-            pred = [clean_segmentation(seg) for seg in pred]
-        pred = [seg.astype(np.float32) for seg in pred]
+            pred = clean_segmentation(pred)
+        pred = pred.astype(np.float32)
         return pred
 
     def _predict_save_whole_image(self, pred_step_outputs: Tensor, batch: dict):
-        preds = self._clean_prediction(pred_step_outputs)
-        affine_matrices = batch["affine"]
-        headers = batch["header"]
-        extras = batch["extra"]
-        out_fns = batch["out"]
-        nifti_attrs = zip(preds, affine_matrices, headers, extras, out_fns)
-        for pred, affine, header, extra, fn in nifti_attrs:
+        assert len(pred_step_outputs) == len(batch["affine"])
+        assert len(batch["affine"]) == len(batch["path"])
+        assert len(batch["path"]) == len(batch["out"])
+        nifti_attrs = zip(
+            pred_step_outputs.detach().cpu(),
+            batch["affine"],
+            batch["path"],
+            batch["out"],
+        )
+        for pred, affine, path, fn in nifti_attrs:
             if self._model_num != ModelNum(num=1, out_of=1):
                 fn = append_num_to_filename(fn, self._model_num.num)
             logging.info(f"Saving {fn}.")
-            nib.Nifti1Image(pred, affine, header, extra).to_filename(fn)
+            pred, affine = self._to_original_orientation(path, pred, affine)
+            pred = pred.numpy().squeeze()
+            pred = self._clean_prediction(pred)
+            nib.Nifti1Image(pred, affine).to_filename(fn)
 
     def _predict_save_patch_image(self, batch: dict):
-        data = self.aggregator.get_output_tensor()
-        pred = self._clean_prediction(data)[0]
+        pred = self.aggregator.get_output_tensor().detach().cpu()
         affine = batch["affine"][0]
-        header = batch["header"]
-        extra = batch["extra"]
+        pred, affine = self._to_original_orientation(batch["path"], pred, affine)
+        pred = pred.numpy().squeeze()
+        pred = self._clean_prediction(pred)
         fn = batch["out"][0]
         if self._model_num != ModelNum(num=1, out_of=1):
             fn = append_num_to_filename(fn, self._model_num.num)
         logging.info(f"Saving {fn}.")
-        nib.Nifti1Image(pred, affine, header, extra).to_filename(fn)
+        nib.Nifti1Image(pred, affine).to_filename(fn)
         del self.aggregator
+
+    @staticmethod
+    def _to_original_orientation(
+        original_path: str, data: Tensor, affine: Tensor,
+    ) -> Tensor:
+        original = tio.ScalarImage(original_path)
+        image = tio.ScalarImage(tensor=data, affine=affine)
+        if original.orientation != image.orientation:
+            tfm = tio.Resample(original, image_interpolation="nearest")
+            image = tfm(image)
+        return image.data, image.affine
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
         p3d = batch["pseudo3d_dim"]
         locations = batch["locations"]
         if not hasattr(self, "aggregator"):
             self.aggregator = tio.GridAggregator(
-                batch["grid_obj"], overlap_mode="average"
+                batch["grid_obj"], overlap_mode="average",
             )
         if p3d is not None:
             locations = self._fix_pseudo3d_locations(locations, p3d)
             pred_step_outputs.unsqueeze_(p3d + 2)  # +2 to offset batch/channel dims
         self.aggregator.add_batch(pred_step_outputs, locations)
 
-    def _fix_pseudo3d_locations(self, locations: Tensor, pseudo3d_dim: int) -> Tensor:
+    @staticmethod
+    def _fix_pseudo3d_locations(locations: Tensor, pseudo3d_dim: int) -> Tensor:
         """Fix locations for aggregator when using pseudo3d
 
         locations were determined by the pseudo3d input, not the 1 channel target.
@@ -382,10 +395,12 @@ class LesionSegLightningBase(pl.LightningModule):
                 image_slice = minmax_scale_batch(image_slice)
             self.logger.experiment.add_images(key, image_slice, n, dataformats="NCHW")
 
-    def _is_3d_image_batch(self, tensor: Tensor) -> bool:
+    @staticmethod
+    def _is_3d_image_batch(tensor: Tensor) -> bool:
         return tensor.ndim == 5
 
-    def _is_2d_image_batch(self, tensor: Tensor) -> bool:
+    @staticmethod
+    def _is_2d_image_batch(tensor: Tensor) -> bool:
         return tensor.ndim == 4
 
     @staticmethod

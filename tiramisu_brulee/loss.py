@@ -124,6 +124,7 @@ def binary_combo_loss(
     loss = combo_weight * f_loss + (1 - combo_weight) * d_loss
     return loss
 
+
 def combo_loss(
     pred: Tensor,
     target: Tensor,
