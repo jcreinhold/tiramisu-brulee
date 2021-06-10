@@ -803,7 +803,7 @@ class RandomRot90(
         k = self.get_params()
         for image in self.get_images(subject):
             assert image.data.ndim == 4
-            data = image.data.rot90(k, (1, 2))
+            data = image.data.rot90(k, (-2, -1))
             image.set_data(data)
         return subject
 
