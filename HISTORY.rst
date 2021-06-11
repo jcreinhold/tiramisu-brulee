@@ -2,6 +2,18 @@
 History
 =======
 
+0.1.16 (2021-06-11)
+-------------------
+
+* Add support for training with all orientations. Convert all inputs to canonical
+  orientation before input to network in training and prediction (and convert back
+  to original orientation in prediction before saving).
+
+0.1.15 (2021-06-05)
+-------------------
+
+* Add multi-class segmentation support, headers to predictions, and other bug fixes.
+
 0.1.14 (2021-06-03)
 -------------------
 
