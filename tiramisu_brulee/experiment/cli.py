@@ -137,6 +137,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     return parser
 
 
+# flake8: noqa: C901
 def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
     """ train a Tiramisu CNN for segmentation """
     parser = train_parser(False)
@@ -229,7 +230,6 @@ def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
         config_kwargs = dict(
             exp_dirs=exp_dirs, dict_args=dict_args, best_model_paths=best_model_paths,
         )
-
         generate_train_config_yaml(**config_kwargs, parser=parser)
         generate_predict_config_yaml(**config_kwargs, parser=predict_parser(False))
     if return_best_model_paths:
