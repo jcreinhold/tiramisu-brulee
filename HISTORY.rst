@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.17 (2021-06-11)
+-------------------
+
+* Migrate to Github actions for testing and deployment.
+
 0.1.16 (2021-06-11)
 -------------------
 
