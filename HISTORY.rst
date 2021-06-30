@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.18 (2021-06-30)
+-------------------
+
+* Fix reorientation to original orientation from canonical in prediction.
+
+
 0.1.17 (2021-06-11)
 -------------------
 
