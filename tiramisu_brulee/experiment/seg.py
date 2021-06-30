@@ -29,6 +29,7 @@ from torch import nn
 from torch import Tensor
 from torch.optim import AdamW, RMSprop, lr_scheduler
 import torchio as tio
+import SimpleITK as sitk
 
 from tiramisu_brulee.loss import (
     binary_combo_loss,
@@ -320,8 +321,10 @@ class LesionSegLightningBase(pl.LightningModule):
         original = tio.ScalarImage(original_path)
         image = tio.ScalarImage(tensor=data, affine=affine)
         if original.orientation != image.orientation:
-            tfm = tio.Resample(original, image_interpolation="nearest")
-            image = tfm(image)
+            orientation = "".join(original.orientation)
+            reoriented = sitk.DICOMOrient(image.as_sitk(), orientation)
+            reoriented_data = sitk.GetArrayFromImage(reoriented).transpose()[np.newaxis]
+            image = tio.ScalarImage(tensor=reoriented_data, affine=original.affine)
         return image.data, image.affine
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
