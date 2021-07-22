@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.19 (2021-07-22)
+-------------------
+
+* Fix Dice score component of almost_isbi15_score metric
+
 0.1.18 (2021-06-30)
 -------------------
 
