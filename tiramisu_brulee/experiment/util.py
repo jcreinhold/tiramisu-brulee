@@ -13,6 +13,7 @@ __all__ = [
     "append_num_to_filename",
     "BoundingBox3D",
     "extract_and_average",
+    "image_one_hot",
     "minmax_scale_batch",
     "reshape_for_broadcasting",
     "to_np",
@@ -27,6 +28,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 
 from tiramisu_brulee.experiment.type import Indices
 
@@ -50,6 +52,16 @@ def extract_and_average(dicts: List[dict], field: str) -> list:
         return dicts[0][field]
     else:
         return torch.cat([d[field] for d in dicts]).mean()
+
+
+def image_one_hot(image: Tensor, num_classes: int):
+    num_channels = image.shape[1]
+    if num_channels > 1:
+        msg = f"Image must only have one channel. Got {num_channels} channels."
+        raise RuntimeError(msg)
+    encoded = F.one_hot(image.long(), num_classes)
+    encoded = encoded.transpose(1, -1)[..., 0].type(image.type())
+    return encoded
 
 
 class BoundingBox3D:
