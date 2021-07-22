@@ -29,6 +29,8 @@ from torchmetrics.functional import (
     pearson_corrcoef,
 )
 
+from tiramisu_brulee.experiment.util import image_one_hot
+
 
 def clean_segmentation(
     label: np.ndarray, fill_holes: bool = True, minimum_lesion_size: int = 3
@@ -49,18 +51,15 @@ def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
     batch_size, num_classes = pred.shape[0:2]
     multiclass = num_classes > 1
-    dice = dice_score(pred.int(), target.int())
-    if dice.isnan():
-        dice = torch.tensor(0.0, device=pred.device)
+    one_hot_classes = num_classes if multiclass else 2
+    pred_one_hot = pred if multiclass else image_one_hot(pred, one_hot_classes)
+    dice = dice_score(pred_one_hot, target.int())
     if multiclass and pred.shape != target.shape:
         is_integer_label = pred.ndim != target.ndim
-        target = F.one_hot(target.long(), num_classes)
-        if not is_integer_label and target.shape[1] > 1:
-            msg = f"Target channel size must be 1 or 0. Got {target.shape[1]}"
-            raise ValueError(msg)
-        elif not is_integer_label:
-            target = target[:, 0, ...]
-        target = torch.movedim(target, -1, 1)
+        if is_integer_label:
+            target.unsqueeze_(1)
+            assert pred.ndim == target.ndim
+        target = image_one_hot(target.long(), num_classes)
     ppv = precision(
         pred.int(),
         target.int(),
