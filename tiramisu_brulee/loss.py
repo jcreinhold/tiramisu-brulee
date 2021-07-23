@@ -84,26 +84,32 @@ def binary_focal_loss(
     gamma: float = 2.0,
 ) -> Tensor:
     """ focal loss for binary classification or segmentation """
-    ce_loss = F.binary_cross_entropy_with_logits(pred, target, reduction="none")
-    if gamma > 0.0:
+    use_focal = gamma > 0.0
+    bce_reduction = "none" if use_focal else reduction
+    bce_pos_weight = None if use_focal else weight
+    bce_loss = F.binary_cross_entropy_with_logits(
+        pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight
+    )
+    if use_focal:
         p = torch.sigmoid(pred)
         p_t = p * target + (1 - p) * (1 - target)
-        loss_val = ce_loss * ((1 - p_t) ** gamma)
+        loss_val = bce_loss * ((1 - p_t) ** gamma)
     else:
-        loss_val = ce_loss
-    if weight is not None:
+        loss_val = bce_loss
+    if weight is not None and use_focal:
         weight_t = weight * target + (1 - weight) * (1 - target)
         loss_val = weight_t * loss_val
-    if reduction == "mean":
-        loss_val = loss_val.mean()
-    elif reduction == "sum":
-        loss_val = loss_val.sum()
-    elif reduction == "batchwise_mean":
-        loss_val = loss_val.sum(0)
-    elif reduction == "none":
-        pass
-    else:
-        raise NotImplementedError(f"{reduction} not implemented.")
+    if use_focal:
+        if reduction == "mean":
+            loss_val = loss_val.mean()
+        elif reduction == "sum":
+            loss_val = loss_val.sum()
+        elif reduction == "batchwise_mean":
+            loss_val = loss_val.sum(0)
+        elif reduction == "none":
+            pass
+        else:
+            raise NotImplementedError(f"{reduction} not implemented.")
     return loss_val
 
 
@@ -161,7 +167,7 @@ def deeply_supervised_loss(
     """ compute loss_func by comparing multiple same-shape preds to target """
     if isinstance(level_weights, float):
         level_weights = [level_weights] * len(preds)
-    loss_val = 0.0
+    loss_val = torch.tensor(0.0, dtype=target.dtype, device=target.device)
     for lw, x in zip(level_weights, preds):
         loss_val += lw * loss_func(x, target, **loss_func_kwargs)
     return loss_val

@@ -26,7 +26,7 @@ from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
 from pprint import pformat
-from typing import Callable, List, Optional, Union
+from typing import Callable, Iterable, List, Optional, Union
 
 from jsonargparse import ArgumentParser, Namespace
 import yaml
@@ -110,7 +110,7 @@ def generate_predict_config_yaml(
     _generate_config_yaml(exp_dirs, parser, dict_args, best_model_paths, "predict")
 
 
-def remove_args(parser: ArgumentParser, args: List[str]):
+def remove_args(parser: ArgumentParser, args: Iterable[str]):
     """ remove a list of args (w/o leading --) from a parser """
     # https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
     for arg in args:
@@ -178,7 +178,9 @@ def path_to_str(args: Namespace) -> Namespace:
     return args
 
 
-def _gpus_allowed_type(val: Union[None, str, float, int]) -> Union[None, float, int]:
+def _gpus_allowed_type(
+    val: Union[None, str, float, int]
+) -> Union[None, float, int, List[int], str]:
     """ replaces pytorch-lightning's version to work w/ parser """
     if val is None:
         return val

@@ -138,7 +138,9 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
 
 
 # flake8: noqa: C901
-def train(args: ArgType = None, return_best_model_paths: bool = False) -> int:
+def train(
+    args: ArgType = None, return_best_model_paths: bool = False
+) -> Union[List[Path], int]:
     """ train a Tiramisu CNN for segmentation """
     parser = train_parser(False)
     if args is None:
@@ -260,7 +262,7 @@ def _pseudo3d_dims_setup(
     return pseudo3d_dims
 
 
-def _check_patch_size(patch_size: List[int], use_pseudo3d: bool) -> List[int]:
+def _check_patch_size(patch_size: List[int], use_pseudo3d: bool):
     n_patch_elems = len(patch_size)
     if n_patch_elems != 2 and use_pseudo3d:
         raise ValueError(
@@ -419,7 +421,7 @@ def _predict_whole_image(
     dm = LesionSegDataModulePredictWhole.from_csv(**dict_args)
     dm.setup()
     model = LesionSegLightningTiramisu.load_from_checkpoint(
-        model_path, predict_probability=pp, _model_num=model_num,
+        str(model_path), predict_probability=pp, _model_num=model_num,
     )
     logging.debug(model)
     trainer.predict(model, datamodule=dm)
@@ -440,7 +442,7 @@ def _predict_patch_image(
     pp = args.predict_probability
     subject_list = csv_to_subjectlist(args.predict_csv)
     model = LesionSegLightningTiramisu.load_from_checkpoint(
-        model_path, predict_probability=pp, _model_num=model_num,
+        str(model_path), predict_probability=pp, _model_num=model_num,
     )
     logging.debug(model)
     for subject in subject_list:

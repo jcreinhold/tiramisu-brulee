@@ -144,7 +144,7 @@ class nonnegative_int_or_none_or_all(_ParseType):
 
 
 class nonnegative_float(_ParseType):
-    def __call__(self, string: str) -> int:
+    def __call__(self, string: str) -> float:
         num = float(string)
         if num < 0.0:
             msg = f"{string} needs to be a nonnegative float."

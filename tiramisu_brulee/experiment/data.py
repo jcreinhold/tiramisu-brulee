@@ -170,7 +170,9 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             raise ValueError(f"pseudo3d_dim must be 0, 1, or 2. Got {pseudo3d_dim}.")
         return label
 
-    def _determine_patch_size(self, patch_size: PatchShapeOption) -> PatchShapeOption:
+    def _determine_patch_size(
+        self, patch_size: PatchShapeOption
+    ) -> Optional[PatchShapeOption]:
         if patch_size is None:
             return patch_size
         patch_size = list(patch_size)
@@ -180,7 +182,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             )
         if self._use_pseudo3d:
             patch_size.insert(self._pseudo3d_dim_internal, self.pseudo3d_size)
-        return tuple(patch_size)
+        return tuple(patch_size)  # noqa
 
     @property
     def _use_pseudo3d(self) -> bool:
@@ -262,7 +264,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             shuffle_patches=True,
         )
         train_dataloader = DataLoader(
-            patches_queue, batch_size=self.batch_size, collate_fn=self._collate_fn,
+            patches_queue,
+            batch_size=self.batch_size,
+            collate_fn=self._collate_fn,  # noqa
         )
         return train_dataloader
 
@@ -279,7 +283,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                 shuffle_patches=False,
             )
             val_dataloader = DataLoader(
-                patches_queue, batch_size=self.batch_size, collate_fn=self._collate_fn,
+                patches_queue,
+                batch_size=self.batch_size,
+                collate_fn=self._collate_fn,  # noqa
             )
         else:
             val_dataloader = DataLoader(
@@ -287,7 +293,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
                 pin_memory=True,
-                collate_fn=self._collate_fn,
+                collate_fn=self._collate_fn,  # noqa
             )
         return val_dataloader
 
@@ -477,7 +483,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
-            collate_fn=self._collate_fn,
+            collate_fn=self._collate_fn,  # noqa
         )
         self.total_batches = len(pred_dataloader)
         return pred_dataloader
@@ -592,7 +598,7 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         )
         self.predict_dataset = subjects_dataset
 
-    def _collate_fn(self, batch: dict) -> Tensor:
+    def _collate_fn(self, batch: dict) -> dict:
         batch = default_collate(batch)
         src = self._default_collate_fn(batch)
         # assume all input images are co-registered
@@ -642,11 +648,11 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         )
         ps = self.patch_size  # result from _determine_patch_size
         self._set_patch_size(subject, ps)
-        self.patch_overlap = patch_overlap or self._default_overlap(ps)
+        self.patch_overlap = patch_overlap or self._default_overlap(ps)  # noqa
 
     def _set_patch_size(
         self, subject: tio.Subject, patch_size: PatchShapeOption,
-    ) -> PatchShapeOption:
+    ):
         if any([ps is None for ps in patch_size]):
             image_dim = subject.spatial_shape
             patch_size = [ps or dim for ps, dim in zip(patch_size, image_dim)]
@@ -670,14 +676,14 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             if overlap % 2:
                 overlap += 1
             patch_overlap.append(overlap)
-        return patch_overlap
+        return patch_overlap  # noqa
 
     def _setup_predict_dataset(self):
         self.canonical_subject = tio.ToCanonical()(self.subjects)
         grid_sampler = tio.GridSampler(
             self.canonical_subject,
             self.patch_size,
-            self.patch_overlap,
+            self.patch_overlap,  # noqa
             padding_mode="edge",
         )
         # need to create aggregator in LesionSegLightning* module, which expects
@@ -692,7 +698,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         field = self._input_fields[0]
         self.path = self.subjects[field]["path"]
 
-    def _collate_fn(self, batch: dict) -> Tensor:
+    def _collate_fn(self, batch: dict) -> dict:
         batch = default_collate(batch)
         p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
         # offset by batch/channel dims if pseudo3d used
