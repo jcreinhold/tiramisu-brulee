@@ -20,9 +20,7 @@ from scipy.ndimage.morphology import (
     generate_binary_structure,
 )
 from skimage.morphology import remove_small_objects
-import torch
 from torch import Tensor
-import torch.nn.functional as F
 from torchmetrics.functional import (
     dice_score,
     precision,

@@ -275,7 +275,7 @@ class LesionSegLightningBase(pl.LightningModule):
         pred_seg = pred_seg.float()
         return pred_seg
 
-    def _clean_prediction(self, pred: np.ndarray) -> List[np.ndarray]:
+    def _clean_prediction(self, pred: np.ndarray) -> np.ndarray:
         assert pred.ndim == 3
         if not self.hparams.predict_probability:
             pred = clean_segmentation(pred)
@@ -317,14 +317,16 @@ class LesionSegLightningBase(pl.LightningModule):
     @staticmethod
     def _to_original_orientation(
         original_path: str, data: Tensor, affine: Tensor,
-    ) -> Tensor:
+    ) -> Tuple[Tensor, np.ndarray]:
         original = tio.ScalarImage(original_path)
-        image = tio.ScalarImage(tensor=data, affine=affine)
+        image = tio.ScalarImage(tensor=data, affine=affine)  # noqa
         if original.orientation != image.orientation:
             orientation = "".join(original.orientation)
             reoriented = sitk.DICOMOrient(image.as_sitk(), orientation)
             reoriented_data = sitk.GetArrayFromImage(reoriented).transpose()[np.newaxis]
-            image = tio.ScalarImage(tensor=reoriented_data, affine=original.affine)
+            image = tio.ScalarImage(
+                tensor=reoriented_data, affine=original.affine
+            )  # noqa
         return image.data, image.affine
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):

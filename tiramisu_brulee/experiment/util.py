@@ -99,7 +99,7 @@ class BoundingBox3D:
         """ places a batch back into the saved original shape """
         assert batch.ndim == 5, "expects tensors with shape NxCxHxWxD"
         batch_size, channel_size = batch.shape[:2]
-        out_shape = (batch_size, channel_size) + self.original_shape
+        out_shape = (batch_size, channel_size) + tuple(self.original_shape)
         out = torch.zeros(out_shape, dtype=batch.dtype, device=batch.device)
         out[..., self.i, self.j, self.k] = batch
         return out
