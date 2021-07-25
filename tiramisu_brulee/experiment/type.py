@@ -23,6 +23,7 @@ __all__ = [
     "PatchShapeOption",
     "PatchShape",
     "positive_float",
+    "positive_float_or_none",
     "positive_int",
     "positive_int_or_none",
     "positive_odd_int_or_none",
@@ -102,6 +103,12 @@ class positive_float(_ParseType):
         return num
 
 
+class positive_float_or_none(_ParseType):
+    @return_none
+    def __call__(self, string: str) -> Union[float, None]:
+        return positive_float()(string)
+
+
 class positive_int(_ParseType):
     def __call__(self, string: str) -> int:
         num = int(string)
@@ -139,7 +146,7 @@ class nonnegative_int(_ParseType):
 class nonnegative_int_or_none_or_all(_ParseType):
     @return_none
     @return_str("all")
-    def __call__(self, string: str) -> int:
+    def __call__(self, string: str) -> Union[int, None, str]:
         return nonnegative_int()(string)
 
 
