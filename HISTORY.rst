@@ -2,6 +2,15 @@
 History
 =======
 
+0.1.20 (2021-07-25)
+-------------------
+
+* Make reorientation to canonical optional
+* Add option to track best network on validation Dice, PPV, loss, or ISBI15 score
+* Unify and simplify the positive weight in focal/bce component of combo loss
+* Change flip in spatial augmentation to only do lateral flips
+* Fix predict_probability flag in CLI
+
 0.1.19 (2021-07-22)
 -------------------
 
