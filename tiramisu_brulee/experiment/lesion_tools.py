@@ -45,7 +45,9 @@ def clean_segmentation(
     return label
 
 
-def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
+def almost_isbi15_score(
+    pred: Tensor, target: Tensor, return_dice_ppv: bool = False,
+) -> Tensor:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
     batch_size, num_classes = pred.shape[0:2]
     multiclass = num_classes > 1
@@ -72,4 +74,7 @@ def almost_isbi15_score(pred: Tensor, target: Tensor) -> Tensor:
             pred.sum(dim=dims).float(), target.sum(dim=dims).float(),
         )
         isbi15_score = 0.5 * isbi15_score + 0.5 * corr
-    return isbi15_score
+    if return_dice_ppv:
+        return isbi15_score, dice, ppv
+    else:
+        return isbi15_score

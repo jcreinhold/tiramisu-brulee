@@ -172,7 +172,7 @@ class LesionSegLightningBase(pl.LightningModule):
         pred = self(src)
         loss = self.criterion(pred, tgt)
         pred_seg = torch.sigmoid(pred) > self.hparams.threshold
-        isbi15_score = almost_isbi15_score(pred_seg, tgt)
+        isbi15_score, dice, ppv = almost_isbi15_score(pred_seg, tgt, True)
         self.log(
             "val_loss", loss, on_step=False, on_epoch=True, prog_bar=True,
         )
@@ -182,6 +182,20 @@ class LesionSegLightningBase(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             prog_bar=False,
+        )
+        self.log(
+            "val_dice", dice, on_step=False, on_epoch=True, prog_bar=False,
+        )
+        self.log(
+            "val_ppv", ppv, on_step=False, on_epoch=True, prog_bar=False,
+        )
+        # note that the metrics above will be accumulated and averaged over the epoch
+        # whereas metrics printed in the debug will be on a per iteration/batch basis
+        logging.debug(
+            f"ISBI15: {isbi15_score.item():0.3f}; "
+            f"Dice: {dice.item():0.3f}; "
+            f"PPV: {ppv.item():0.3f}; "
+            f"Loss: {loss.item():0.3f}."
         )
         if batch_idx == 0 and self._is_3d_image_batch(src):
             images = dict(truth=tgt, pred=pred, dim=3)
@@ -520,6 +534,15 @@ class LesionSegLightningBase(pl.LightningModule):
             action="store_true",
             default=False,
             help="use soft labels (i.e., non-binary labels) for training",
+        )
+        parser.add_argument(
+            "-tm",
+            "--track-metric",
+            type=str,
+            default="isbi15_score",
+            choices=("dice", "isbi15_score", "loss", "ppv"),
+            help="pick the best network based on this metric; "
+            "metric is the mean over a validation epoch.",
         )
         return parent_parser
 

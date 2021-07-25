@@ -163,9 +163,10 @@ def train(
             "Number of training and validation CSVs must be equal.\n"
             f"Got {n_models_to_train} != {len(args.valid_csv)}"
         )
+    checkpoint_format = f"{{epoch}}-{{val_loss:.3f}}-{{val_{args.track_metric}:.3f}}"
     checkpoint_kwargs = dict(
-        filename="{epoch}-{val_loss:.3f}-{val_isbi15_score:.3f}",
-        monitor="val_isbi15_score",
+        filename=checkpoint_format,
+        monitor=f"val_{args.track_metric}",
         save_top_k=3,
         save_last=True,
         mode="max",
