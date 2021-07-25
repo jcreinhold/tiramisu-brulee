@@ -79,7 +79,7 @@ def dice_loss(
 def binary_focal_loss(
     pred: Tensor,
     target: Tensor,
-    weight: Optional[Tensor] = None,
+    pos_weight: Optional[Tensor] = None,
     reduction: str = "mean",
     gamma: float = 2.0,
 ) -> Tensor:
@@ -89,11 +89,11 @@ def binary_focal_loss(
     bce_pos_weight = (
         None
         if use_focal
-        else weight
-        and torch.tensor(weight / (1.0 - weight), dtype=pred.dtype, device=pred.device)
+        else pos_weight
+        and torch.tensor(pos_weight, dtype=pred.dtype, device=pred.device)
     )
     bce_loss = F.binary_cross_entropy_with_logits(
-        pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight
+        pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight,
     )
     if use_focal:
         p = torch.sigmoid(pred)
@@ -101,7 +101,8 @@ def binary_focal_loss(
         loss_val = bce_loss * ((1 - p_t) ** gamma)
     else:
         loss_val = bce_loss
-    if weight is not None and use_focal:
+    if pos_weight is not None and use_focal:
+        weight = 1.0 - (1.0 / (1.0 + pos_weight))
         weight_t = weight * target + (1 - weight) * (1 - target)
         loss_val = weight_t * loss_val
     if use_focal:
@@ -122,14 +123,14 @@ def binary_combo_loss(
     pred: Tensor,
     target: Tensor,
     reduction: str = "mean",
-    focal_weight: Optional[float] = None,
+    pos_weight: Optional[float] = None,
     focal_gamma: float = 0.0,
     combo_weight: float = 0.5,
 ) -> Tensor:
     """ combo loss (dice + focal weighted by combo_weight) for binary labels """
     assert 0.0 <= combo_weight <= 1.0
     assert 0.0 <= focal_gamma
-    f_loss = binary_focal_loss(pred, target, focal_weight, reduction, focal_gamma)
+    f_loss = binary_focal_loss(pred, target, pos_weight, reduction, focal_gamma,)
     p = torch.sigmoid(pred)
     d_loss = dice_loss(p, target, reduction=reduction)
     loss = combo_weight * f_loss + (1 - combo_weight) * d_loss

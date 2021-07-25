@@ -45,9 +45,9 @@ from tiramisu_brulee.experiment.type import (
     nonnegative_int,
     ArgParser,
     positive_float,
+    positive_float_or_none,
     positive_int,
     probability_float,
-    probability_float_or_none,
 )
 from tiramisu_brulee.experiment.data import Mixup
 from tiramisu_brulee.experiment.lesion_tools import (
@@ -74,8 +74,8 @@ class LesionSegLightningBase(pl.LightningModule):
         betas (Tuple[float, float]): momentum parameters for adam
         weight_decay (float): weight decay for optimizer
         loss_function (str): loss function to use in training
-        focal_weight (Optional[float]): weight for positive class
-            in focal loss if using combo loss function
+        pos_weight (Optional[float]): weight for positive class
+            in focal/bce loss if using combo loss function
         focal_gamma (float): gamma param for focal loss
             if using combo loss function (0. -> BCE)
         combo_weight (float): weight by which to balance focal and Dice
@@ -104,7 +104,7 @@ class LesionSegLightningBase(pl.LightningModule):
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7,
         loss_function: str = "combo",
-        focal_weight: Optional[float] = None,
+        pos_weight: Optional[float] = None,
         focal_gamma: float = 0.0,
         combo_weight: float = 0.6,
         decay_after: int = 8,
@@ -136,7 +136,7 @@ class LesionSegLightningBase(pl.LightningModule):
             if self.hparams.num_classes == 1:
                 self.criterion = partial(
                     binary_combo_loss,
-                    focal_weight=self.hparams.focal_weight,
+                    pos_weight=self.hparams.pos_weight,
                     focal_gamma=self.hparams.focal_gamma,
                     combo_weight=self.hparams.combo_weight,
                 )
@@ -449,19 +449,20 @@ class LesionSegLightningBase(pl.LightningModule):
             help="save model weights (checkpoint) every n epochs",
         )
         parser.add_argument(
-            "-fw",
-            "--focal-weight",
-            type=probability_float_or_none(),
+            "-pw",
+            "--pos-weight",
+            type=positive_float_or_none(),
             default=None,
-            help="weight of positive class in focal loss "
-            "component of combo loss function (None -> equal)",
+            help="weight of positive class in focal/bce loss component of "
+            "combo loss function (None -> equal, which is equivalent to "
+            "setting this to 1.0)",
         )
         parser.add_argument(
             "-fg",
             "--focal-gamma",
             type=nonnegative_float(),
             default=0.0,
-            help="gamma parameter for focal loss component of combo loss",
+            help="gamma parameter for focal loss component of combo loss (0.0 -> BCE)",
         )
         parser.add_argument(
             "-cw",
@@ -590,8 +591,8 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         betas (Tuple[float, float]): momentum parameters for adam
         weight_decay (float): weight decay for optimizer
         loss_function (str): loss function to use in training
-        focal_weight (Optional[float]): weight for positive class
-            in focal loss if using combo loss function
+        pos_weight (Optional[float]): weight for positive class
+            in focal/bce loss if using combo loss function
         focal_gamma (float): gamma param for focal loss
             if using combo loss function (0. -> BCE)
         combo_weight (float): weight by which to balance focal and Dice
@@ -628,7 +629,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         betas: Tuple[int, int] = (0.9, 0.99),
         weight_decay: float = 1e-7,
         loss_function: str = "combo",
-        focal_weight: Optional[float] = None,
+        pos_weight: Optional[float] = None,
         focal_gamma: float = 0.0,
         combo_weight: float = 0.6,
         decay_after: int = 8,
@@ -651,38 +652,38 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         else:
             raise ValueError(f"Network dim. must be 2 or 3. Got {network_dim}.")
         network = network_class(
-            in_channels,
-            num_classes,
-            down_blocks,
-            up_blocks,
-            bottleneck_layers,
-            growth_rate,
-            first_conv_out_channels,
-            dropout_rate,
+            in_channels=in_channels,
+            out_channels=num_classes,
+            down_blocks=down_blocks,
+            up_blocks=up_blocks,
+            bottleneck_layers=bottleneck_layers,
+            growth_rate=growth_rate,
+            first_conv_out_channels=first_conv_out_channels,
+            dropout_rate=dropout_rate,
         )
         init_weights(network, init_type, gain)
         super().__init__(
-            network,
-            n_epochs,
-            learning_rate,
-            betas,
-            weight_decay,
-            loss_function,
-            focal_weight,
-            focal_gamma,
-            combo_weight,
-            decay_after,
-            rmsprop,
-            soft_labels,
-            threshold,
-            min_lesion_size,
-            fill_holes,
-            predict_probability,
-            mixup,
-            mixup_alpha,
-            num_input,
-            num_classes,
-            _model_num,
+            network=network,
+            n_epochs=n_epochs,
+            learning_rate=learning_rate,
+            betas=betas,
+            weight_decay=weight_decay,
+            loss_function=loss_function,
+            pos_weight=pos_weight,
+            focal_gamma=focal_gamma,
+            combo_weight=combo_weight,
+            decay_after=decay_after,
+            rmsprop=rmsprop,
+            soft_labels=soft_labels,
+            threshold=threshold,
+            min_lesion_size=min_lesion_size,
+            fill_holes=fill_holes,
+            predict_probability=predict_probability,
+            mixup=mixup,
+            mixup_alpha=mixup_alpha,
+            num_input=num_input,
+            num_classes=num_classes,
+            _model_num=_model_num,
             **kwargs,
         )
         self.save_hyperparameters(ignore="_model_num")

@@ -80,7 +80,7 @@ def cli_train_args(temp_dir: Path) -> List[str]:
     args += "--bottleneck-layers 2".split()
     args += "--first-conv-out-channels 2".split()
     args += "--num-workers 0".split()
-    args += "--focal-weight 0.75".split()
+    args += "--pos-weight 2.0".split()
     return args
 
 
