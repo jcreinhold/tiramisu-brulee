@@ -99,6 +99,7 @@ def test_cli(cli_train_args: List[str], cli_predict_args: List[str], train_csv: 
     cli_train_args += f"--train-csv {csv_}".split()
     cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
+    cli_train_args += "--track-metric dice".split()
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
