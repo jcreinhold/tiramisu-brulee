@@ -256,6 +256,7 @@ class LesionSegLightningBase(pl.LightningModule):
         return "grid_obj" in batch
 
     def _predict_whole_image(self, batch: dict) -> Tensor:
+        """ for 3D networks, predict the whole image foreground at once """
         src = batch["src"]
         bbox = BoundingBox3D.from_batch(src, pad=0)
         batch["src"] = bbox(src)
@@ -264,6 +265,7 @@ class LesionSegLightningBase(pl.LightningModule):
         return pred_seg
 
     def _predict_patch_image(self, batch: dict) -> Tensor:
+        """ for all 2D networks and 3D networks with a specified patch size """
         src = batch["src"]
         pred = self(src)
         if self.hparams.num_classes == 1:
@@ -296,7 +298,8 @@ class LesionSegLightningBase(pl.LightningModule):
             if self._model_num != ModelNum(num=1, out_of=1):
                 fn = append_num_to_filename(fn, self._model_num.num)
             logging.info(f"Saving {fn}.")
-            pred, affine = self._to_original_orientation(path, pred, affine)
+            if batch["reorient"]:
+                pred, affine = self._to_original_orientation(path, pred, affine)
             pred = pred.numpy().squeeze()
             pred = self._clean_prediction(pred)
             nib.Nifti1Image(pred, affine).to_filename(fn)
@@ -304,7 +307,8 @@ class LesionSegLightningBase(pl.LightningModule):
     def _predict_save_patch_image(self, batch: dict):
         pred = self.aggregator.get_output_tensor().detach().cpu()
         affine = batch["affine"][0]
-        pred, affine = self._to_original_orientation(batch["path"], pred, affine)
+        if batch["reorient"]:
+            pred, affine = self._to_original_orientation(batch["path"], pred, affine)
         pred = pred.numpy().squeeze()
         pred = self._clean_prediction(pred)
         fn = batch["out"][0]
@@ -324,9 +328,7 @@ class LesionSegLightningBase(pl.LightningModule):
             orientation = "".join(original.orientation)
             reoriented = sitk.DICOMOrient(image.as_sitk(), orientation)
             reoriented_data = sitk.GetArrayFromImage(reoriented).transpose()[np.newaxis]
-            image = tio.ScalarImage(
-                tensor=reoriented_data, affine=original.affine
-            )  # noqa
+            image = tio.ScalarImage(tensor=reoriented_data, affine=original.affine)
         return image.data, image.affine
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):

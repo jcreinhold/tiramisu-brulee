@@ -70,6 +70,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         num_workers: int = 16,
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
+        reorient_to_canonical: bool = True,
     ):
         super().__init__()
         self.batch_size = batch_size
@@ -84,6 +85,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
                 "If pseudo3d_dim provided, pseudo3d_size must be provided."
             )
         self.patch_size = self._determine_patch_size(patch_size)
+        self.reorient_to_canonical = reorient_to_canonical
 
     def _determine_input(
         self,
@@ -188,6 +190,55 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
     def _use_pseudo3d(self) -> bool:
         return self.pseudo3d_dim is not None
 
+    @staticmethod
+    def _add_common_arguments(parser: ArgumentParser) -> ArgumentParser:
+        parser.add_argument(
+            "-bs",
+            "--batch-size",
+            type=positive_int(),
+            default=1,
+            help="training/validation batch size",
+        )
+        parser.add_argument(
+            "-nw",
+            "--num-workers",
+            type=nonnegative_int(),
+            default=16,
+            help="number of CPUs to use for loading data",
+        )
+        parser.add_argument(
+            "-rtc",
+            "--reorient-to-canonical",
+            action="store_true",
+            default=False,
+            help="reorient inputs images to canonical orientation "
+            "(useful when using data from heterogeneous sources "
+            "or using pseudo3d_dim == all; otherwise, e.g., the "
+            "axis corresponding to left-right in one image might "
+            "be anterior-posterior in another.)",
+        )
+        parser.add_argument(
+            "-p3d",
+            "--pseudo3d-dim",
+            type=nonnegative_int_or_none_or_all(),
+            nargs="+",
+            choices=(0, 1, 2, "all"),
+            default=None,
+            help="dim on which to concatenate the images for input "
+            "to a 2D network. If provided, either provide 1 value"
+            "to be used for each CSV or provide N values "
+            "corresponding to the N CSVs. If not provided, "
+            "use 3D network.",
+        )
+        parser.add_argument(
+            "-p3s",
+            "--pseudo3d-size",
+            type=positive_odd_int_or_none(),
+            default=None,
+            help="size of the pseudo3d dimension (if -p3d provided)",
+        )
+        return parser
+
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     """Data module for training and validation for lesion segmentation
@@ -227,11 +278,17 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         spatial_augmentation: bool = False,
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
+        reorient_to_canonical: bool = True,
         num_classes: int = 1,
         **kwargs,
     ):
         super().__init__(
-            batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size,
+            batch_size=batch_size,
+            patch_size=patch_size,
+            num_workers=num_workers,
+            pseudo3d_dim=pseudo3d_dim,
+            pseudo3d_size=pseudo3d_size,
+            reorient_to_canonical=reorient_to_canonical,
         )
         self.train_subject_list = train_subject_list
         self.val_subject_list = val_subject_list
@@ -298,7 +355,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return val_dataloader
 
     def _get_train_augmentation(self):
-        transforms = [tio.ToCanonical()]
+        transforms = []
+        if self.reorient_to_canonical:
+            transforms.append(tio.ToCanonical())
         if self.num_classes >= 1:
             transforms.append(label_to_float())
         else:
@@ -309,7 +368,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
             )
             transforms.insert(1, spatial)
-            flip = tio.RandomFlip(axes=(0, 1, 2))
+            flip = tio.RandomFlip(axes=("LR",))
             transforms.append(flip)
         if self.pseudo3d_dim == "all":
             transforms.insert(1, RandomTranspose())
@@ -331,7 +390,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.train_dataset = subjects_dataset
 
     def _get_val_augmentation(self):
-        transforms = [tio.ToCanonical()]
+        transforms = []
+        if self.reorient_to_canonical:
+            transforms.append(tio.ToCanonical())
         if self.num_classes >= 1:
             transforms.append(label_to_float())
         else:
@@ -385,26 +446,12 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             help="path(s) to CSV(s) with validation images",
         )
         parser.add_argument(
-            "-bs",
-            "--batch-size",
-            type=positive_int(),
-            default=2,
-            help="training/validation batch size",
-        )
-        parser.add_argument(
             "-ps",
             "--patch-size",
             type=positive_int(),
             nargs="+",
             default=[96, 96, 96],
             help="training/validation patch size extracted from image",
-        )
-        parser.add_argument(
-            "-nw",
-            "--num-workers",
-            type=nonnegative_int(),
-            default=16,
-            help="number of CPUs to use for loading data",
         )
         parser.add_argument(
             "-ql",
@@ -434,26 +481,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             default=False,
             help="use spatial (affine and elastic) data augmentation",
         )
-        parser.add_argument(
-            "-p3d",
-            "--pseudo3d-dim",
-            type=nonnegative_int_or_none_or_all(),
-            nargs="+",
-            choices=(0, 1, 2, "all"),
-            default=None,
-            help="dim on which to concatenate the images for input "
-            "to a 2D network. If provided, either provide 1 value"
-            "to be used for all train/valid CSVs or provide N values "
-            "corresponding to the N train/valid CSVs. If not provided, "
-            "use 3D network.",
-        )
-        parser.add_argument(
-            "-p3s",
-            "--pseudo3d-size",
-            type=positive_odd_int_or_none(),
-            default=None,
-            help="size of the pseudo3d dimension (if -p3d provided)",
-        )
+        LesionSegDataModuleBase._add_common_arguments(parser)
         return parent_parser
 
 
@@ -466,10 +494,16 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         num_workers: int = 16,
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
+        reorient_to_canonical: bool = True,
         **kwargs,
     ):
         super().__init__(
-            batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size,
+            batch_size,
+            patch_size,
+            num_workers,
+            pseudo3d_dim,
+            pseudo3d_size,
+            reorient_to_canonical,
         )
         self.subjects = subjects
 
@@ -497,7 +531,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
 
     @staticmethod
     def add_arguments(
-        parent_parser: ArgumentParser, add_csv: bool = True
+        parent_parser: ArgumentParser, add_csv: bool = True,
     ) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Data")
         if add_csv:
@@ -508,13 +542,6 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
                 default="SET ME!",
                 help="path to csv of prediction images",
             )
-        parser.add_argument(
-            "-bs",
-            "--batch-size",
-            type=positive_int(),
-            default=1,
-            help="number of patches to run at a time",
-        )
         parser.add_argument(
             "-ps",
             "--patch-size",
@@ -531,33 +558,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
             default=None,
             help="patches will overlap by this much (None -> patch-size // 2)",
         )
-        parser.add_argument(
-            "-nw",
-            "--num-workers",
-            type=nonnegative_int(),
-            default=16,
-            help="number of CPUs to use for loading data",
-        )
-        parser.add_argument(
-            "-p3d",
-            "--pseudo3d-dim",
-            type=nonnegative_int(),
-            nargs="+",
-            choices=(0, 1, 2),
-            default=None,
-            help="dim on which to concatenate the images for input "
-            "to a 2D network. If provided, either provide 1 value"
-            "to be used for all train/valid CSVs or provide N values "
-            "corresponding to the N train/valid CSVs. If not provided, "
-            "use 3D network.",
-        )
-        parser.add_argument(
-            "-p3s",
-            "--pseudo3d-size",
-            type=positive_odd_int_or_none(),
-            default=None,
-            help="size of the pseudo3d dimension (if -p3d provided)",
-        )
+        LesionSegDataModuleBase._add_common_arguments(parser)
         return parent_parser
 
 
@@ -577,10 +578,17 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         subjects: Union[tio.Subject, List[tio.Subject]],
         batch_size: int,
         num_workers: int = 16,
+        reorient_to_canonical: bool = True,
         **kwargs,
     ):
         super().__init__(
-            subjects, batch_size, None, num_workers, None, None,
+            subjects=subjects,
+            batch_size=batch_size,
+            patch_size=None,
+            num_workers=num_workers,
+            pseudo3d_dim=None,
+            pseudo3d_size=None,
+            reorient_to_canonical=reorient_to_canonical,
         )
 
     @classmethod
@@ -593,9 +601,8 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         self._setup_predict_dataset()
 
     def _setup_predict_dataset(self):
-        subjects_dataset = tio.SubjectsDataset(
-            self.subjects, transform=tio.ToCanonical(),
-        )
+        transform = tio.ToCanonical() if self.reorient_to_canonical else None
+        subjects_dataset = tio.SubjectsDataset(self.subjects, transform=transform)
         self.predict_dataset = subjects_dataset
 
     def _collate_fn(self, batch: dict) -> dict:
@@ -609,6 +616,7 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
             affine=batch[field][tio.AFFINE],
             path=[filepath for filepath in batch[field]["path"]],
             out=batch["out"],  # path to save the prediction
+            reorient=self.reorient_to_canonical,
         )
         return out
 
@@ -641,10 +649,17 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         num_workers: int = 16,
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
+        reorient_to_canonical: bool = True,
         **kwargs,
     ):
         super().__init__(
-            subject, batch_size, patch_size, num_workers, pseudo3d_dim, pseudo3d_size,
+            subjects=subject,
+            batch_size=batch_size,
+            patch_size=patch_size,
+            num_workers=num_workers,
+            pseudo3d_dim=pseudo3d_dim,
+            pseudo3d_size=pseudo3d_size,
+            reorient_to_canonical=reorient_to_canonical,
         )
         ps = self.patch_size  # result from _determine_patch_size
         self._set_patch_size(subject, ps)
@@ -679,9 +694,13 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         return patch_overlap  # noqa
 
     def _setup_predict_dataset(self):
-        self.canonical_subject = tio.ToCanonical()(self.subjects)
+        field = self._input_fields[0]
+        self.path = self.subjects[field]["path"]
+        # `subjects` is only one subject in this class
+        if self.reorient_to_canonical:
+            self.subjects = tio.ToCanonical()(self.subjects)
         grid_sampler = tio.GridSampler(
-            self.canonical_subject,
+            self.subjects,
             self.patch_size,
             self.patch_overlap,  # noqa
             padding_mode="edge",
@@ -695,8 +714,6 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             patch_overlap=grid_sampler.patch_overlap,
         )
         self.predict_dataset = grid_sampler
-        field = self._input_fields[0]
-        self.path = self.subjects[field]["path"]
 
     def _collate_fn(self, batch: dict) -> dict:
         batch = default_collate(batch)
@@ -716,6 +733,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             grid_obj=self.grid_obj,
             pseudo3d_dim=p3d,
             total_batches=self.total_batches,
+            reorient=self.reorient_to_canonical,
         )
         return out
 
