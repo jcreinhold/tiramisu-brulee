@@ -86,7 +86,12 @@ def binary_focal_loss(
     """ focal loss for binary classification or segmentation """
     use_focal = gamma > 0.0
     bce_reduction = "none" if use_focal else reduction
-    bce_pos_weight = None if use_focal else weight
+    bce_pos_weight = (
+        None
+        if use_focal
+        else weight
+        and torch.tensor(weight / (1.0 - weight), dtype=pred.dtype, device=pred.device)
+    )
     bce_loss = F.binary_cross_entropy_with_logits(
         pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight
     )
