@@ -465,7 +465,7 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
     seed_everything(args.seed, workers=True)
     n_models = len(args.model_path)
     if not args.only_aggregate:
-        args.predict_probability = n_models > 1
+        args.predict_probability = n_models > 1 or args.predict_probability
         patch_predict = args.patch_size is not None
         use_pseudo3d = args.pseudo3d_dim is not None
         if patch_predict:
