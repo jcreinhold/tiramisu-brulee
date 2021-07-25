@@ -107,6 +107,23 @@ def test_cli(cli_train_args: List[str], cli_predict_args: List[str], train_csv: 
     assert retcode == 0
 
 
+def test_reorient_cli(
+    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path
+):
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
+    cli_train_args += "--patch-size 8 8 8".split()
+    cli_train_args += ["--reorient-to-canonical"]
+    best_model_paths = train(cli_train_args, True)
+    best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
+    cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += ["--fast_dev_run"]
+    cli_predict_args += ["--reorient-to-canonical"]
+    retcode = predict(cli_predict_args)
+    assert retcode == 0
+
+
 def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path):
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
