@@ -14,6 +14,8 @@ __all__ = [
     "clean_segmentation",
 ]
 
+from typing import Tuple, Union
+
 import numpy as np
 from scipy.ndimage.morphology import (
     binary_fill_holes,
@@ -47,7 +49,7 @@ def clean_segmentation(
 
 def almost_isbi15_score(
     pred: Tensor, target: Tensor, return_dice_ppv: bool = False,
-) -> Tensor:
+) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
     """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
     batch_size, num_classes = pred.shape[0:2]
     multiclass = num_classes > 1

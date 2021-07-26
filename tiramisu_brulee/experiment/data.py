@@ -368,7 +368,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
             )
             transforms.insert(1, spatial)
-            flip = tio.RandomFlip(axes=("LR",))
+            flip = tio.RandomFlip(axes=("LR",))  # noqa
             transforms.append(flip)
         if self.pseudo3d_dim == "all":
             transforms.insert(1, RandomTranspose())

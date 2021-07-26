@@ -342,7 +342,9 @@ class LesionSegLightningBase(pl.LightningModule):
             orientation = "".join(original.orientation)
             reoriented = sitk.DICOMOrient(image.as_sitk(), orientation)
             reoriented_data = sitk.GetArrayFromImage(reoriented).transpose()[np.newaxis]
-            image = tio.ScalarImage(tensor=reoriented_data, affine=original.affine)
+            image = tio.ScalarImage(
+                tensor=reoriented_data, affine=original.affine,  # noqa
+            )
         return image.data, image.affine
 
     def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
