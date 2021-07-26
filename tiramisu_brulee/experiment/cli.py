@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import MLFlowLogger, TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
 import torch
 
@@ -109,6 +109,13 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
         default=0,
         help="increase output verbosity (e.g., -vv is more than -v)",
     )
+    exp_parser.add_argument(
+        "-uri",
+        "--tracking-uri",
+        type=str,
+        default=None,
+        help="use this URI for tracking metrics and artifacts with an MLFlow server",
+    )
     parser = LesionSegLightningTiramisu.add_io_arguments(parser)
     parser = LesionSegLightningTiramisu.add_model_arguments(parser)
     parser = LesionSegLightningTiramisu.add_other_arguments(parser)
@@ -155,7 +162,6 @@ def train(
         root_dir = Path(args.default_root_dir).resolve()
     else:
         root_dir = Path.cwd()
-    name = EXPERIMENT_NAME
     args = path_to_str(args)
     n_models_to_train = len(args.train_csv)
     if n_models_to_train != len(args.valid_csv):
@@ -183,14 +189,17 @@ def train(
     use_multigpus = not (args.gpus is None or args.gpus <= 1)
     train_iter_data = zip(args.train_csv, args.valid_csv, pseudo3d_dims)
     for i, (train_csv, valid_csv, p3d) in enumerate(train_iter_data, 1):
-        tb_logger = TensorBoardLogger(str(root_dir), name=name)
+        if args.tracking_uri is not None:
+            exp_logger = MLFlowLogger(EXPERIMENT_NAME, tracking_uri=args.tracking_uri)
+        else:
+            exp_logger = TensorBoardLogger(str(root_dir), name=EXPERIMENT_NAME)
         checkpoint_callback = ModelCheckpoint(**checkpoint_kwargs)
         plugins = args.plugins
         if use_multigpus and args.accelerator == "ddp":
             plugins = DDPPlugin(find_unused_parameters=False)
         trainer = Trainer.from_argparse_args(
             args,
-            logger=tb_logger,
+            logger=exp_logger,
             checkpoint_callback=True,
             callbacks=[checkpoint_callback],
             plugins=plugins,
@@ -218,7 +227,7 @@ def train(
         # kill multiprocessing workers, free memory for the next iteration
         dm.teardown()
         trainer.teardown()
-        del dm, model, trainer, tb_logger, checkpoint_callback
+        del dm, model, trainer, exp_logger, checkpoint_callback
         gc.collect()
         torch.cuda.empty_cache()
         if n_models_to_train > 1 and args.num_workers > 0:
