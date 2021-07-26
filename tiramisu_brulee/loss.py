@@ -90,7 +90,7 @@ def binary_focal_loss(
         None
         if use_focal
         else pos_weight
-        and torch.tensor(pos_weight, dtype=pred.dtype, device=pred.device)
+        and torch.tensor([pos_weight], dtype=pred.dtype, device=pred.device)
     )
     bce_loss = F.binary_cross_entropy_with_logits(
         pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight,
@@ -102,7 +102,7 @@ def binary_focal_loss(
     else:
         loss_val = bce_loss
     if pos_weight is not None and use_focal:
-        weight = 1.0 - (1.0 / (1.0 + pos_weight))
+        weight = pos_weight / (1.0 + pos_weight)
         weight_t = weight * target + (1 - weight) * (1 - target)
         loss_val = weight_t * loss_val
     if use_focal:
