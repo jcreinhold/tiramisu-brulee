@@ -359,7 +359,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         if self.reorient_to_canonical:
             transforms.append(tio.ToCanonical())
         if self.num_classes >= 1:
-            transforms.append(label_to_float())
+            transforms.append(image_to_float())
         else:
             msg = f"num_classes must be positive. Got {self.num_classes}."
             raise ValueError(msg)
@@ -394,7 +394,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         if self.reorient_to_canonical:
             transforms.append(tio.ToCanonical())
         if self.num_classes >= 1:
-            transforms.append(label_to_float())
+            transforms.append(image_to_float())
         else:
             msg = f"num_classes must be positive. Got {self.num_classes}."
             raise ValueError(msg)
@@ -797,9 +797,9 @@ def _to_float(tensor: Tensor) -> Tensor:
     return tensor.float()
 
 
-def label_to_float() -> tio.Transform:
-    """ cast a label image (usually uint8) to a float """
-    return tio.Lambda(_to_float, types_to_apply=[tio.LABEL])
+def image_to_float() -> tio.Transform:
+    """ cast an image from any type (e.g., uint8 or float64) to float32 """
+    return tio.Lambda(_to_float, types_to_apply=[tio.INTENSITY, tio.LABEL])
 
 
 class RandomTranspose(
