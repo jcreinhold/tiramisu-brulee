@@ -2,6 +2,13 @@
 History
 =======
 
+0.1.21 (2021-07-27)
+-------------------
+
+* Add MLFlow logging option
+* Add support for reading DICOM images and writing DICOM (Segmentation Objects)
+* Fix some type hints and make pos_weight a vector of length 1
+
 0.1.20 (2021-07-25)
 -------------------
 
