@@ -28,7 +28,7 @@ _other_reqs = [
     "ruyaml",
     "scikit-image",
     "scipy",
-    "SimpleITK>=2.0.2",
+    "SimpleITK>=2.1.0",
     "torchio",
     "torchmetrics",
 ]
