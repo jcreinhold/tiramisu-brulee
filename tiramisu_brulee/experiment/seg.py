@@ -21,7 +21,6 @@ from functools import partial
 import logging
 from typing import List, Optional, Tuple
 
-import nibabel as nib
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -316,7 +315,7 @@ class LesionSegLightningBase(pl.LightningModule):
                 pred, affine = self._to_original_orientation(path, pred, affine)
             pred = pred.numpy().squeeze()
             pred = self._clean_prediction(pred)
-            nib.Nifti1Image(pred, affine).to_filename(fn)
+            self._write_image(pred, affine, fn)
 
     def _predict_save_patch_image(self, batch: dict):
         pred = self.aggregator.get_output_tensor().detach().cpu()
@@ -329,8 +328,30 @@ class LesionSegLightningBase(pl.LightningModule):
         if self._model_num != ModelNum(num=1, out_of=1):
             fn = append_num_to_filename(fn, self._model_num.num)
         logging.info(f"Saving {fn}.")
-        nib.Nifti1Image(pred, affine).to_filename(fn)
+        self._write_image(pred, affine, fn)
         del self.aggregator
+
+    def _save_as_dicom(self, filename: str):
+        save_dicom = str(filename).endswith(".dcm")
+        self.__dicom_warned = hasattr(self, "__dicom_warned")
+        if not self.__dicom_warned and save_dicom:
+            logging.warning(
+                "DICOM Segmentation Objects only support uint8. "
+                "Cannot save a probability image."
+            )
+            self.__dicom_warned = True
+        return save_dicom
+
+    def _write_image(
+        self, image: np.ndarray, affine: np.ndarray, filename: str,
+    ):
+        if image.ndim != 4:
+            image = image[np.newaxis]
+        assert image.ndim == 4
+        if self._save_as_dicom(filename):
+            image = (image > self.hparams.threshold).astype(np.uint8)
+        output_image = tio.ScalarImage(tensor=image, affine=affine)  # noqa
+        output_image.save(filename)
 
     @staticmethod
     def _to_original_orientation(

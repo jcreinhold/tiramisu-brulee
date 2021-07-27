@@ -601,7 +601,11 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         self._setup_predict_dataset()
 
     def _setup_predict_dataset(self):
-        transform = tio.ToCanonical() if self.reorient_to_canonical else None
+        transforms = []
+        if self.reorient_to_canonical:
+            transforms.append(tio.ToCanonical())
+        transforms.append(image_to_float())
+        transform = tio.Compose(transforms)
         subjects_dataset = tio.SubjectsDataset(self.subjects, transform=transform)
         self.predict_dataset = subjects_dataset
 
@@ -699,6 +703,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # `subjects` is only one subject in this class
         if self.reorient_to_canonical:
             self.subjects = tio.ToCanonical()(self.subjects)
+        self.subjects = image_to_float()(self.subjects)
         grid_sampler = tio.GridSampler(
             self.subjects,
             self.patch_size,
