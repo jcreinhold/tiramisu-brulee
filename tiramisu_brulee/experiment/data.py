@@ -20,10 +20,12 @@ __all__ = [
 ]
 
 from logging import getLogger
+from pathlib import Path
 from types import SimpleNamespace
 from typing import List, Optional, Tuple, Union
 
 from jsonargparse import ArgumentParser
+import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -237,6 +239,24 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             default=None,
             help="size of the pseudo3d dimension (if -p3d provided)",
         )
+        parser.add_argument(
+            "-nsa",
+            "--non-strict-affine",
+            dest="strict_affine",
+            action="store_false",
+            default=True,
+            help="if images have different affine matrices, "
+            "resample the images to be consistent; avoid using"
+            "this by coregistering your images within a subject.",
+        )
+        parser.add_argument(
+            "-cd",
+            "--check-dicom",
+            action="store_true",
+            default=False,
+            help="check DICOM images to see if they have uniform "
+            "spacing between slices; warn the user if not.",
+        )
         return parser
 
 
@@ -300,8 +320,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     @classmethod
     def from_csv(cls, train_csv: str, valid_csv: str, *args, **kwargs):
-        tsl = csv_to_subjectlist(train_csv)
-        vsl = csv_to_subjectlist(valid_csv)
+        strict_affine = kwargs.get("strict_affine", True)
+        check_dicom = kwargs.get("check_dicom", False)
+        tsl = csv_to_subjectlist(train_csv, strict_affine, check_dicom)
+        vsl = csv_to_subjectlist(valid_csv, strict_affine, check_dicom)
         return cls(tsl, vsl, *args, **kwargs)
 
     def setup(self, stage: Optional[str] = None):
@@ -593,7 +615,9 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
 
     @classmethod
     def from_csv(cls, predict_csv: str, *args, **kwargs):
-        subject_list = csv_to_subjectlist(predict_csv)
+        strict_affine = kwargs.get("strict_affine", True)
+        check_dicom = kwargs.get("check_dicom", False)
+        subject_list = csv_to_subjectlist(predict_csv, strict_affine, check_dicom)
         return cls(subject_list, *args, **kwargs)
 
     def setup(self, stage: Optional[str] = None):
@@ -860,7 +884,9 @@ def _get_type(name: str):
     return _type
 
 
-def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
+def csv_to_subjectlist(
+    filename: str, strict: bool = True, check_dicom: bool = False,
+) -> List[tio.Subject]:
     """Convert a csv file to a list of torchio subjects
 
     Args:
@@ -872,7 +898,13 @@ def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
             ct, flair, label, pd, t1, t1c, t2, weight, div
             (`label` should correspond to a segmentation mask)
             (`weight` and `div` should correspond to a float)
-
+        strict: if affine matrices are different enough
+            (according to torchio tolerance), raise a
+            runtime error. Otherwise, resample the images
+            of the subject to the first image.
+        check_dicom: if true, check dicom images for uniform
+            spacing and warn the user about image if there
+            is serious non-uniformity in slice distances
     Returns:
         subject_list (List[torchio.Subject]): list of torchio Subjects
     """
@@ -890,8 +922,88 @@ def csv_to_subjectlist(filename: str) -> List[tio.Subject]:
             elif val_type == "path":
                 data[name] = val
             else:
-                data[name] = tio.Image(val, type=val_type)
+                image_path = Path(val)
+                if image_path.is_dir() and check_dicom:
+                    _check_spacing_between_dicom_slices(image_path)
+                data[name] = tio.Image(image_path, type=val_type)
         subject = tio.Subject(name=subject_name, **data)
+        subject = _check_consistent_space_and_resample(subject, strict)
         subject_list.append(subject)
-
     return subject_list
+
+
+def _check_consistent_space_and_resample(subject: tio.Subject, strict: bool = True):
+    """Check space of images in subject consistent; if not strict, resample."""
+    # spatial shape always needs to be the same
+    subject.check_consistent_spatial_shape()
+    if strict:
+        subject.check_consistent_affine()
+    else:
+        default_printoptions = np.get_printoptions()
+        np.set_printoptions(precision=5, suppress=True)
+        try:
+            subject.check_consistent_affine()
+        except RuntimeError as e:
+            logger.warning(f"{subject['name']} has inconsistent affine matrices.")
+            logger.info(e)
+            logger.info("Attempting to resample the images to be consistent.")
+            affine = None
+            first_image = None
+            first_image_name = None
+            iterable = subject.get_images_dict(intensity_only=False).items()
+            for image_name, image in iterable:
+
+                if affine is None:
+                    affine = image.affine
+                    first_image = image
+                    first_image_name = image_name
+                elif not np.allclose(affine, image.affine, rtol=1e-6, atol=1e-6):
+                    aff_mtx_dist = np.linalg.norm(affine - image.affine)
+                    logger.info(
+                        f"Frobenius dist. between {first_image_name} and {image_name} "
+                        f"affine matrices {aff_mtx_dist:0.4e}"
+                    )
+                    if aff_mtx_dist >= 1e-4:
+                        msg = (
+                            "Distance between affine matrices is large. "
+                            "Consider aborting and registering the images manually."
+                        )
+                        logger.warning(msg)
+                    if image.type == tio.LABEL:
+                        resampler = tio.Resample(first_image, "nearest")
+                    else:
+                        resampler = tio.Resample(first_image)
+                    resampled = resampler(image)
+                    subject[image_name] = resampled
+        np.set_printoptions(**default_printoptions)
+    return subject
+
+
+def _check_spacing_between_dicom_slices(dicom_dir: Union[Path, str]):
+    try:
+        import pydicom
+    except (ImportError, ModuleNotFoundError):
+        logger.warning("pydicom not found. Cannot validate DICOM image.")
+        return
+    images = [pydicom.dcmread(path) for path in Path(dicom_dir).glob("*.dcm")]
+    slice_thickness = float(images[0].SliceThickness)
+    sorted_images = sorted(images, key=lambda x: x.InStackPositionNumber)
+    positions = np.array([img.ImagePositionPatient for img in sorted_images])
+    space_between_positions = np.diff(positions, axis=0)
+    dist_between_slices = np.linalg.norm(space_between_positions, axis=1)
+    diff_in_dist = np.abs(np.diff(dist_between_slices))
+    median_dist_between_slices = np.median(dist_between_slices)
+    if not np.isclose(slice_thickness, median_dist_between_slices):
+        msg = (
+            f"Slice thickness: {slice_thickness:0.6f} != "
+            f"(Median) computed slice thickness {median_dist_between_slices:0.6f}"
+        )
+        logger.warning(msg)
+    max_diff_in_dist = diff_in_dist.max()  # noqa
+    if max_diff_in_dist > 5e-4:
+        # TODO: why is max_diff_in_dist different from ITK "Maximum nonuniformity"
+        msg = (
+            "Maximum difference in distance between slices: "
+            f"{max_diff_in_dist:0.5e}."
+        )
+        logger.warning(msg)
