@@ -18,7 +18,7 @@ setup_requirements = [
     "pytest-runner",
 ]
 
-_other_reqs = [
+_lesionseg_reqs = [
     "jsonargparse",
     "nibabel",
     "numpy",
@@ -33,12 +33,17 @@ _other_reqs = [
     "torchmetrics",
 ]
 
-test_requirements = _other_reqs + [
+_aws_reqs = [
+    "mlflow",
+]
+
+test_requirements = _lesionseg_reqs + [
     "pytest>=3",
 ]
 
 extras_requirements = {
-    "lesionseg": _other_reqs,
+    "lesionseg": _lesionseg_reqs,
+    "aws": _aws_reqs,
 }
 
 setup(
@@ -55,13 +60,6 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
     description="A 2D and 3D PyTorch implementation of the Tiramisu CNN",
-    entry_points={
-        "console_scripts": [
-            "lesion-train=tiramisu_brulee.experiment.cli:train",
-            "lesion-predict=tiramisu_brulee.experiment.cli:predict",
-            "lesion-predict-image=tiramisu_brulee.experiment.cli:predict_image",
-        ],
-    },
     install_requires=requirements,
     extras_require=extras_requirements,
     license="Apache Software License 2.0",
