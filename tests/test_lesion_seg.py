@@ -8,11 +8,14 @@ Created on: May 18, 2021
 """
 
 from pathlib import Path
+import sys
 from typing import List
 
 import pytest
 
 from tiramisu_brulee.experiment.cli import train, predict, predict_image
+from tiramisu_brulee.experiment.cli import predict_parser, predict_image_parser
+from tiramisu_brulee.experiment.parse import parse_unknown_to_dict, remove_args
 
 
 @pytest.fixture
@@ -94,6 +97,24 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     return args
 
 
+def _fix_predict_args(predict_args, image_only=False):
+    """ py36-compatible pytorch-lightning has problem parsing fast_dev_run """
+    py_version = sys.version_info
+    assert py_version.major == 3
+    unknown = None
+    if py_version.minor > 6:
+        predict_args += ["--fast_dev_run"]
+    else:
+        parser = predict_image_parser() if image_only else predict_parser()
+        remove_args(parser, ["--fast_dev_run"])
+        if image_only:
+            predict_args, unknown = parser.parse_known_args(predict_args)
+            unknown = parse_unknown_to_dict(unknown)
+        else:
+            predict_args = parser.parse_args(predict_args)
+    return predict_args, unknown
+
+
 def test_cli(cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path):
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -103,7 +124,7 @@ def test_cli(cli_train_args: List[str], cli_predict_args: List[str], train_csv: 
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
-    cli_predict_args += ["--fast_dev_run"]
+    cli_predict_args, _ = _fix_predict_args(cli_predict_args)
     retcode = predict(cli_predict_args)
     assert retcode == 0
 
@@ -119,8 +140,8 @@ def test_reorient_cli(
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_args += f"--model-path {best_model_paths}".split()
-    cli_predict_args += ["--fast_dev_run"]
     cli_predict_args += ["--reorient-to-canonical"]
+    cli_predict_args, _ = _fix_predict_args(cli_predict_args)
     retcode = predict(cli_predict_args)
     assert retcode == 0
 
@@ -172,7 +193,6 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
     args += f"--out {out_path}".split()
     args += "--progress_bar_refresh_rate 0".split()
     args += "--num-workers 0".split()
-    args += ["--fast_dev_run"]
     return args
 
 
@@ -184,7 +204,8 @@ def test_predict_image_cli(cli_train_args, cli_predict_image_args, train_csv: Pa
     best_model_paths = train(cli_train_args, True)
     best_model_paths = " ".join([str(bmp) for bmp in best_model_paths])
     cli_predict_image_args += f"--model-path {best_model_paths}".split()
-    retcode = predict_image(cli_predict_image_args)
+    cli_predict_image_args, unknown = _fix_predict_args(cli_predict_image_args, True)
+    retcode = predict_image(cli_predict_image_args, unknown)
     assert retcode == 0
 
 
