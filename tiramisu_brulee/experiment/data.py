@@ -924,7 +924,7 @@ def csv_to_subjectlist(
             else:
                 image_path = Path(val)
                 if image_path.is_dir() and check_dicom:
-                    _check_spacing_between_dicom_slices(image_path)
+                    _check_spacing_between_dicom_slices(image_path, strict)
                 data[name] = tio.Image(image_path, type=val_type)
         subject = tio.Subject(name=subject_name, **data)
         subject = _check_consistent_space_and_resample(subject, strict)
@@ -952,7 +952,6 @@ def _check_consistent_space_and_resample(subject: tio.Subject, strict: bool = Tr
             first_image_name = None
             iterable = subject.get_images_dict(intensity_only=False).items()
             for image_name, image in iterable:
-
                 if affine is None:
                     affine = image.affine
                     first_image = image
@@ -979,7 +978,9 @@ def _check_consistent_space_and_resample(subject: tio.Subject, strict: bool = Tr
     return subject
 
 
-def _check_spacing_between_dicom_slices(dicom_dir: Union[Path, str]):
+def _check_spacing_between_dicom_slices(
+    dicom_dir: Union[Path, str], strict: bool = True,
+):
     try:
         import pydicom
     except (ImportError, ModuleNotFoundError):
@@ -993,17 +994,27 @@ def _check_spacing_between_dicom_slices(dicom_dir: Union[Path, str]):
     dist_between_slices = np.linalg.norm(space_between_positions, axis=1)
     diff_in_dist = np.abs(np.diff(dist_between_slices))
     median_dist_between_slices = np.median(dist_between_slices)
+    slice_thickness_msg = ""
     if not np.isclose(slice_thickness, median_dist_between_slices):
-        msg = (
+        slice_thickness_msg = (
             f"Slice thickness: {slice_thickness:0.6f} != "
             f"(Median) computed slice thickness {median_dist_between_slices:0.6f}"
         )
-        logger.warning(msg)
     max_diff_in_dist = diff_in_dist.max()  # noqa
+    inconsistent_dist_msg = ""
     if max_diff_in_dist > 5e-4:
         # TODO: why is max_diff_in_dist different from ITK "Maximum nonuniformity"
-        msg = (
+        inconsistent_dist_msg = (
             "Maximum difference in distance between slices: "
             f"{max_diff_in_dist:0.5e}."
         )
-        logger.warning(msg)
+    if slice_thickness_msg or inconsistent_dist_msg:
+        msg = (
+            (slice_thickness_msg + "\n" + inconsistent_dist_msg)
+            if slice_thickness_msg and inconsistent_dist_msg
+            else (slice_thickness_msg or inconsistent_dist_msg)
+        )
+        if strict:
+            raise RuntimeError(msg)
+        else:
+            logger.warning(msg)
