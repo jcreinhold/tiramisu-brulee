@@ -30,7 +30,6 @@ from typing import List, Optional, Tuple, Union
 import warnings
 
 import jsonargparse
-import nibabel as nib
 import numpy as np
 import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
@@ -38,6 +37,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger, TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
 import torch
+import torchio as tio
 
 from tiramisu_brulee.experiment.type import (
     ArgType,
@@ -382,13 +382,14 @@ def _aggregate(
     data = []
     for i in range(1, n_models + 1):
         _fn = append_num_to_filename(fn, i)
-        image = nib.load(_fn)
-        data.append(image.get_fdata())
+        image = tio.ScalarImage(_fn)
+        array = image.numpy()
+        data.append(array.squeeze())
     agg = np.mean(data, axis=0) > threshold
     agg = clean_segmentation(agg, fill_holes, min_lesion_size)
-    agg = agg.astype(np.float32)
-    pred = nib.Nifti1Image(agg, image.affine, image.header, image.extra)  # noqa
-    pred.to_filename(fn)
+    agg = agg.astype(array.dtype)
+    image.set_data(agg[np.newaxis])
+    image.save(fn)
     logging.info(f"Save aggregated prediction: {fn} ({n}/{n_fns})")
 
 
@@ -503,7 +504,11 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
             args.min_lesion_size,
             num_workers,
         )
-    if not args.fast_dev_run and not args.only_aggregate:
+    if (
+        not args.fast_dev_run
+        and not args.only_aggregate
+        and hasattr(parser, "get_defaults")
+    ):
         exp_dirs = []
         for mp in args.model_path:
             exp_dirs.append(get_experiment_directory(mp))
@@ -521,16 +526,21 @@ def predict(args: ArgType = None) -> int:
     return 0
 
 
-def predict_image(args: ArgType = None) -> int:
+def predict_image(args: ArgType = None, modality_paths: Optional[dict] = None) -> int:
     """ use a Tiramisu CNN for prediction for a single time-point """
     parser = predict_image_parser()
     if args is None:
         args, unknown = parser.parse_known_args()
     elif isinstance(args, list):
         args, unknown = parser.parse_known_args(args)
-    else:
-        raise ValueError("input args must be None or a list of strings to parse")
-    modality_paths = parse_unknown_to_dict(unknown)
+    elif modality_paths is None:
+        msg = (
+            "input args must be None or a list of strings to parse; "
+            "or the args must already be parsed and a modality paths dict provided."
+        )
+        raise ValueError(msg)
+    if modality_paths is None:
+        modality_paths = parse_unknown_to_dict(unknown)
     with tempfile.NamedTemporaryFile("w") as f:
         dict_to_csv(modality_paths, f)  # noqa
         args.predict_csv = f.name

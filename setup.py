@@ -20,7 +20,6 @@ setup_requirements = [
 
 _lesionseg_reqs = [
     "jsonargparse",
-    "nibabel",
     "numpy",
     "pandas",
     "pytorch-lightning",
@@ -49,7 +48,7 @@ extras_requirements = {
 setup(
     author="Jacob Reinhold",
     author_email="jcreinhold@gmail.com",
-    python_requires=">=3.7",
+    python_requires=">=3.6",
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",
