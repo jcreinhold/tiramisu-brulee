@@ -13,7 +13,8 @@ from typing import List
 
 import pytest
 
-from tiramisu_brulee.experiment.cli import train, predict, predict_image
+from tiramisu_brulee.experiment.cli.train import train
+from tiramisu_brulee.experiment.cli.predict import predict, predict_image
 
 
 @pytest.fixture
