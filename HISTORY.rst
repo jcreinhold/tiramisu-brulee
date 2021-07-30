@@ -2,6 +2,15 @@
 History
 =======
 
+0.1.22 (2021-07-30)
+-------------------
+
+* Add AWS extras (MLFlow and `train` and `serve` console scripts)
+* Add option to resample images within a subject for consistent orientation
+* Add optional check of DICOM images to determine if they are uniformly sampled
+* Make package compatible with Python 3.6 and 3.9
+* Split CLI functions into a subpackage for better organization
+
 0.1.21 (2021-07-27)
 -------------------
 
