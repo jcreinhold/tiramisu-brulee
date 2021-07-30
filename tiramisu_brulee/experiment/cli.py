@@ -24,9 +24,10 @@ import gc
 import inspect
 import logging
 from pathlib import Path
+import sys
 import tempfile
 import time
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 import warnings
 
 import jsonargparse
@@ -81,6 +82,15 @@ train_dataloader_warning = (
 )
 val_dataloader_warning = "The dataloader, val dataloader 0, does not have many workers"
 warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning)
+
+
+def _handle_fast_dev_run(unnecessary_args: Set[str]) -> Set[str]:
+    """ fast_dev_run is problematic with py36 so remove it """
+    py_version = sys.version_info
+    assert py_version.major == 3
+    if py_version.minor > 6:
+        unnecessary_args.add("fast_dev_run")
+    return unnecessary_args
 
 
 def train_parser(use_python_argparse: bool = True) -> ArgParser:
@@ -139,6 +149,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     else:
         parser.link_arguments("n_epochs", "min_epochs")  # noqa
         parser.link_arguments("n_epochs", "max_epochs")  # noqa
+    unnecessary_args = _handle_fast_dev_run(unnecessary_args)
     remove_args(parser, unnecessary_args)
     fix_type_funcs(parser)
     return parser
@@ -146,7 +157,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
 
 # flake8: noqa: C901
 def train(
-    args: ArgType = None, return_best_model_paths: bool = False
+    args: ArgType = None, return_best_model_paths: bool = False,
 ) -> Union[List[Path], int]:
     """ train a Tiramisu CNN for segmentation """
     parser = train_parser(False)
@@ -232,7 +243,10 @@ def train(
         torch.cuda.empty_cache()
         if n_models_to_train > 1 and args.num_workers > 0:
             time.sleep(5.0)
-    if not args.fast_dev_run:
+    generate_config_yaml = (
+        (not args.fast_dev_run) if hasattr(args, "fast_dev_run") else True
+    )
+    if generate_config_yaml:
         exp_dirs = [get_experiment_directory(bmp) for bmp in best_model_paths]
         if args.pseudo3d_dim == "all":
             dict_args["pseudo3d_dim"] = [0, 1, 2] * n_models_to_train
@@ -251,7 +265,7 @@ def train(
 
 
 def _pseudo3d_dims_setup(
-    pseudo3d_dim: Union[None, List[int]], n_models: int, stage: str
+    pseudo3d_dim: Union[None, List[int]], n_models: int, stage: str,
 ) -> Union[List[None], List[int]]:
     assert stage in ("train", "predict")
     if stage == "predict":
@@ -287,7 +301,7 @@ def _check_patch_size(patch_size: List[int], use_pseudo3d: bool):
 
 
 def _predict_parser_shared(
-    parser: ArgParser, necessary_trainer_args: set, add_csv: bool
+    parser: ArgParser, necessary_trainer_args: set, add_csv: bool,
 ) -> ArgParser:
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
@@ -322,6 +336,7 @@ def _predict_parser_shared(
     parser = Trainer.add_argparse_args(parser)
     trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
     unnecessary_args = trainer_args - necessary_trainer_args
+    unnecessary_args = _handle_fast_dev_run(unnecessary_args)
     remove_args(parser, unnecessary_args)
     fix_type_funcs(parser)
     return parser
@@ -344,7 +359,6 @@ def predict_parser(use_python_argparse: bool = True) -> ArgParser:
     )
     necessary_trainer_args = {
         "benchmark",
-        "fast_dev_run",
         "gpus",
         "precision",
         "progress_bar_refresh_rate",
@@ -359,7 +373,6 @@ def predict_image_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
         "benchmark",
-        "fast_dev_run",
         "gpus",
         "precision",
         "progress_bar_refresh_rate",
@@ -504,8 +517,9 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
             args.min_lesion_size,
             num_workers,
         )
+    is_fast_dev_run = args.fast_dev_run if hasattr(args, "fast_dev_run") else False
     if (
-        not args.fast_dev_run
+        not is_fast_dev_run
         and not args.only_aggregate
         and hasattr(parser, "get_defaults")
     ):
