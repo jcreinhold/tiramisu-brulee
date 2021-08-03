@@ -99,6 +99,14 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
         default=None,
         help="use this URI for tracking metrics and artifacts with an MLFlow server",
     )
+    exp_parser.add_argument(
+        "-md",
+        "--model-dir",
+        type=str,
+        default=None,
+        help="save models to this directory if provided, "
+        "otherwise save in default_root_dir",
+    )
     parser = LesionSegLightningTiramisu.add_io_arguments(parser)
     parser = LesionSegLightningTiramisu.add_model_arguments(parser)
     parser = LesionSegLightningTiramisu.add_other_arguments(parser)
@@ -199,6 +207,7 @@ def _compute_num_models_to_train(args: ArgType) -> int:
 def _format_checkpoints(args: ArgType) -> dict:
     checkpoint_format = f"{{epoch}}-{{val_loss:.3f}}-{{val_{args.track_metric}:.3f}}"
     checkpoint_kwargs = dict(
+        dirpath=args.model_dir,
         filename=checkpoint_format,
         monitor=f"val_{args.track_metric}",
         save_top_k=3,
