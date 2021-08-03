@@ -26,9 +26,10 @@ from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
 from pprint import pformat
-from typing import Callable, Iterable, List, Optional, Union
+from typing import Callable, Dict, IO, Iterable, List, Optional, Union
 
 from jsonargparse import ArgumentParser, Namespace
+from pytorch_lightning.callbacks import ModelCheckpoint
 import yaml
 
 from tiramisu_brulee.experiment.type import new_parse_type
@@ -37,7 +38,9 @@ from tiramisu_brulee.experiment.util import append_num_to_filename
 logger = getLogger(__name__)
 
 
-def get_best_model_path(checkpoint_callback, only_best: bool = False) -> Path:
+def get_best_model_path(
+    checkpoint_callback: ModelCheckpoint, only_best: bool = False
+) -> Path:
     """ gets the best model path from a ModelCheckpoint instance """
     best_model_path = checkpoint_callback.best_model_path
     if only_best and not best_model_path:
@@ -60,7 +63,7 @@ def _generate_config_yaml(
     dict_args: dict,
     best_model_paths: Union[List[Path], None],
     stage: str,
-):
+) -> None:
     """ generate config yaml file(s) for `stage`, store in experiment dir """
     assert stage in ("train", "predict")
     config = vars(parser.get_defaults())
@@ -87,8 +90,11 @@ def _generate_config_yaml(
 
 
 def generate_train_config_yaml(
-    exp_dirs: List[Path], parser: ArgumentParser, dict_args: dict, **kwargs
-):
+    exp_dirs: List[Path],
+    parser: ArgumentParser,
+    dict_args: dict,
+    best_model_paths: Optional[List[Path]] = None,  # noqa
+) -> None:
     """ generate config yaml file(s) for training, store in experiment dir """
     if dict_args["config"] is not None:
         return  # user used config file, so we do not need to generate one
@@ -102,7 +108,7 @@ def generate_predict_config_yaml(
     parser: ArgumentParser,
     dict_args: dict,
     best_model_paths: Optional[List[Path]] = None,
-):
+) -> None:
     """ generate config yaml file(s) for prediction, store in experiment dir """
     if isinstance(exp_dirs, Path):
         exp_dirs = [exp_dirs]
@@ -110,7 +116,7 @@ def generate_predict_config_yaml(
     _generate_config_yaml(exp_dirs, parser, dict_args, best_model_paths, "predict")
 
 
-def remove_args(parser: ArgumentParser, args: Iterable[str]):
+def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
     """ remove a list of args (w/o leading --) from a parser """
     # https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
     for arg in args:
@@ -130,7 +136,7 @@ def remove_args(parser: ArgumentParser, args: Iterable[str]):
 
 
 # flake8: noqa: E731
-def fix_type_funcs(parser: ArgumentParser):
+def fix_type_funcs(parser: ArgumentParser) -> None:
     """ fixes type functions in pytorch-lightning's `add_argparse_args` """
     for action in parser._actions:
         if action.type is not None:
@@ -220,7 +226,7 @@ def parse_unknown_to_dict(unknown: List[str]) -> dict:
     return modality_path
 
 
-def dict_to_csv(modality_path: dict, open_file):
+def dict_to_csv(modality_path: Dict[str, str], open_file: IO) -> None:
     """
     takes a dictionary of modalities and paths
     (one for each modality) and an open file
@@ -236,8 +242,8 @@ def dict_to_csv(modality_path: dict, open_file):
     for modality, path in modality_path.items():
         headers.append(modality)
         paths.append(path)
-    headers = ",".join(headers) + "\n"
-    paths = ",".join(paths)
-    open_file.write(headers)
-    open_file.write(paths)
+    headers_str = ",".join(headers) + "\n"
+    paths_str = ",".join(paths)
+    open_file.write(headers_str)
+    open_file.write(paths_str)
     open_file.flush()

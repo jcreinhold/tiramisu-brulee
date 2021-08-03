@@ -13,6 +13,7 @@ __all__ = [
     "init_weights",
 ]
 
+from torch import Tensor
 from torch.nn import init, Module
 
 
@@ -26,26 +27,35 @@ def _is_norm(layer: Module) -> bool:
     return hasattr(layer, "weight") and "Norm" in classname
 
 
-def init_weights(net: Module, init_type: str = "normal", gain: float = 0.02):
-    def init_func(layer):
+def init_weights(net: Module, init_type: str = "normal", gain: float = 0.02) -> None:
+    def init_func(layer: Module) -> None:
+        assert isinstance(layer.weight.data, Tensor)
+        weight_data = layer.weight.data
+        assert weight_data is layer.weight.data
+        has_bias = hasattr(layer, "bias") and layer.bias is not None
+        if has_bias:
+            assert isinstance(layer.bias.data, Tensor)
+            bias_data = layer.bias.data
+            assert bias_data is layer.bias.data
         if _is_conv(layer):
             if init_type == "normal":
-                init.normal_(layer.weight.data, 0.0, gain)
+                init.normal_(weight_data, 0.0, gain)
             elif init_type == "xavier_normal":
-                init.xavier_normal_(layer.weight.data, gain=gain)
+                init.xavier_normal_(weight_data, gain=gain)
             elif init_type == "he_normal":
-                init.kaiming_normal_(layer.weight.data, a=0.0, mode="fan_in")
+                init.kaiming_normal_(weight_data, a=0.0, mode="fan_in")
             elif init_type == "he_uniform":
-                init.kaiming_uniform_(layer.weight.data, a=0.0, mode="fan_in")
+                init.kaiming_uniform_(weight_data, a=0.0, mode="fan_in")
             elif init_type == "orthogonal":
-                init.orthogonal_(layer.weight.data, gain=gain)
+                init.orthogonal_(weight_data, gain=gain)
             else:
                 err_msg = f"initialization type [{init_type}] not implemented"
                 raise NotImplementedError(err_msg)
-            if hasattr(layer, "bias") and layer.bias is not None:
-                init.constant_(layer.bias.data, 0.0)
+            if has_bias:
+                init.constant_(bias_data, 0.0)
         elif _is_norm(layer):
-            init.normal_(layer.weight.data, 1.0, gain)
-            init.constant_(layer.bias.data, 0.0)
+            init.normal_(weight_data, 1.0, gain)
+            if has_bias:
+                init.constant_(bias_data, 0.0)
 
     net.apply(init_func)
