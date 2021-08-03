@@ -19,7 +19,7 @@ __all__ = [
 
 from functools import partial
 import logging
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -100,7 +100,7 @@ class LesionSegLightningBase(pl.LightningModule):
         network: nn.Module,
         n_epochs: int = 1,
         learning_rate: float = 1e-3,
-        betas: Tuple[int, int] = (0.9, 0.99),
+        betas: Tuple[float, float] = (0.9, 0.99),
         weight_decay: float = 1e-7,
         loss_function: str = "combo",
         pos_weight: Optional[float] = None,
@@ -624,8 +624,8 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         network_dim (int): use a 2D or 3D convolutions
         in_channels (int): number of input channels
         num_classes (int): number of classes to segment with the network
-        down_blocks (List[int]): number of layers in each block in down path
-        up_blocks (List[int]): number of layers in each block in up path
+        down_blocks (Iterable[int]): number of layers in each block in down path
+        up_blocks (Iterable[int]): number of layers in each block in up path
         bottleneck_layers (int): number of layers in the bottleneck
         growth_rate (int): number of channels to grow by in each layer
         first_conv_out_channels (int): number of output channels in first conv
@@ -662,8 +662,8 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         network_dim: int = 3,
         in_channels: int = 1,
         num_classes: int = 1,
-        down_blocks: List[int] = (4, 4, 4, 4, 4),
-        up_blocks: List[int] = (4, 4, 4, 4, 4),
+        down_blocks: Iterable[int] = (4, 4, 4, 4, 4),
+        up_blocks: Iterable[int] = (4, 4, 4, 4, 4),
         bottleneck_layers: int = 4,
         growth_rate: int = 16,
         first_conv_out_channels: int = 48,
@@ -672,7 +672,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         gain: float = 0.02,
         n_epochs: int = 1,
         learning_rate: float = 1e-3,
-        betas: Tuple[int, int] = (0.9, 0.99),
+        betas: Tuple[float, float] = (0.9, 0.99),
         weight_decay: float = 1e-7,
         loss_function: str = "combo",
         pos_weight: Optional[float] = None,
@@ -691,6 +691,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
+        network_class: Union[Tiramisu2d, Tiramisu3d]
         if network_dim == 2:
             network_class = Tiramisu2d
         elif network_dim == 3:

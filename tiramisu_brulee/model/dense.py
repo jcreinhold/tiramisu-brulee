@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 from functools import partial
-from typing import List
+from typing import List, Union
 
 import torch
 from torch import Tensor
@@ -32,12 +32,12 @@ ACTIVATION = partial(nn.ReLU, inplace=True)
 
 
 class ConvLayer(nn.Sequential):
-    _conv = None
-    _dropout = None
-    _kernel_size = None
-    _maxpool = None
-    _norm = None
-    _pad = None
+    _conv: Union[nn.Conv2d, nn.Conv3d]
+    _dropout: Union[nn.Dropout2d, nn.Dropout3d]
+    _kernel_size: int
+    _maxpool: Union[None, nn.MaxPool2d, nn.MaxPool3d]
+    _norm: Union[nn.BatchNorm2d, nn.BatchNorm3d]
+    _pad = Union[nn.ReplicationPad2d, nn.ReplicationPad3d]
 
     def __init__(self, in_channels: int, growth_rate: int, dropout_rate: float = 0.2):
         super().__init__()
@@ -82,7 +82,7 @@ class ConvLayer3d(ConvLayer):
 
 
 class DenseBlock(nn.Module):
-    _layer = None
+    _layer: Union[ConvLayer2d, ConvLayer3d]
 
     def __init__(
         self,
@@ -155,7 +155,7 @@ class TransitionDown3d(ConvLayer):
 
 
 class TransitionUp(nn.Module):
-    _conv_trans = None
+    _conv_trans: Union[nn.ConvTranspose2d, nn.ConvTranspose3d]
 
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
@@ -206,7 +206,7 @@ class TransitionUp3d(TransitionUp):
 
 
 class Bottleneck(nn.Sequential):
-    _layer = None
+    _layer: Union[DenseBlock2d, DenseBlock3d]
 
     def __init__(
         self,

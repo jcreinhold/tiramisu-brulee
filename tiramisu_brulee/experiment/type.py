@@ -14,6 +14,7 @@ __all__ = [
     "ArgType",
     "file_path",
     "Indices",
+    "KwArg",
     "ModelNum",
     "Namespace",
     "new_parse_type",
@@ -29,15 +30,18 @@ __all__ = [
     "positive_odd_int_or_none",
     "probability_float",
     "probability_float_or_none",
+    "VarArg",
 ]
 
 import argparse
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Collection, Callable, Iterable, Optional, Tuple, Union
 
 import jsonargparse
+from torch import Tensor
 
+BatchType = Union[Tensor, Collection[Any]]
 Indices = Tuple[int, int, int, int, int, int]
 ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 Namespace = Union[argparse.Namespace, jsonargparse.Namespace]
@@ -47,12 +51,22 @@ PatchShape = Union[PatchShape2D, PatchShape3D]
 PatchShape2DOption = Tuple[Optional[int], Optional[int]]
 PatchShape3DOption = Tuple[Optional[int], Optional[int], Optional[int]]
 PatchShapeOption = Union[PatchShape2DOption, PatchShape3DOption]
-ArgType = Optional[Union[Namespace, List[str]]]
+ArgType = Optional[Union[Namespace, Iterable[str]]]
 ArgParser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
+
+# from mypy-extensions
+def VarArg(type=Any):
+    """A *args-style variadic positional argument"""
+    return type
+
+
+def KwArg(type=Any):
+    """A **kwargs-style variadic keyword argument"""
+    return type
 
 
 def return_none(func: Callable) -> Callable:
-    def new_func(self, string) -> Any:
+    def new_func(self, string: Any) -> Any:  # type: ignore
         if string is None:
             return None
         elif isinstance(string, str):
@@ -64,8 +78,8 @@ def return_none(func: Callable) -> Callable:
 
 
 def return_str(match_string: str) -> Callable:
-    def decorator(func: Callable):
-        def new_func(self, string) -> Any:
+    def decorator(func: Callable) -> Callable:
+        def new_func(self, string: Any) -> Any:  # type: ignore
             if isinstance(string, str):
                 if string.lower() == match_string:
                     return match_string
@@ -78,10 +92,12 @@ def return_str(match_string: str) -> Callable:
 
 class _ParseType:
     @property
-    def __name__(self):
-        return self.__class__.__name__
+    def __name__(self) -> str:
+        name = self.__class__.__name__
+        assert isinstance(name, str)
+        return name
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__name__
 
 
@@ -174,12 +190,17 @@ class probability_float_or_none(_ParseType):
         return probability_float()(string)
 
 
-def new_parse_type(func: Callable, name: str):
-    class NewParseType:
-        def __str__(self):
-            return name
+class NewParseType:
+    def __init__(self, func: Callable, name: str):
+        self.name = name
+        self.func = func
 
-        def __call__(self, val: Any):
-            return func(val)
+    def __str__(self) -> str:
+        return self.name
 
-    return NewParseType()
+    def __call__(self, val: Any) -> Any:
+        return self.func(val)
+
+
+def new_parse_type(func: Callable, name: str) -> NewParseType:
+    return NewParseType(func, name)

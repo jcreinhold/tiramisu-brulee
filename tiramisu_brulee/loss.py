@@ -79,19 +79,26 @@ def dice_loss(
 def binary_focal_loss(
     pred: Tensor,
     target: Tensor,
-    pos_weight: Optional[Tensor] = None,
+    pos_weight: Optional[Union[float, Tensor]] = None,
     reduction: str = "mean",
     gamma: float = 2.0,
 ) -> Tensor:
     """ focal loss for binary classification or segmentation """
     use_focal = gamma > 0.0
     bce_reduction = "none" if use_focal else reduction
-    bce_pos_weight = (
-        None
-        if use_focal
-        else pos_weight
-        and torch.tensor([pos_weight], dtype=pred.dtype, device=pred.device)
-    )
+    if use_focal:
+        bce_pos_weight = None
+    else:
+        if pos_weight is not None and isinstance(pos_weight, float):
+            bce_pos_weight = torch.tensor(
+                [pos_weight], dtype=pred.dtype, device=pred.device
+            )
+        elif pos_weight is None or isinstance(pos_weight, torch.Tensor):
+            bce_pos_weight = pos_weight
+        else:
+            raise ValueError(
+                f"pos_weight must be a none, float, or tensor. Got {type(pos_weight)}."
+            )
     bce_loss = F.binary_cross_entropy_with_logits(
         pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight,
     )

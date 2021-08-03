@@ -27,7 +27,7 @@ __all__ = [
     "Tiramisu3d",
 ]
 
-from typing import List
+from typing import Collection, List, Union
 
 from torch import Tensor
 from torch import nn
@@ -45,19 +45,19 @@ from tiramisu_brulee.model.dense import (
 
 
 class Tiramisu(nn.Module):
-    _bottleneck = None
-    _conv = None
-    _denseblock = None
-    _pad = None
-    _trans_down = None
-    _trans_up = None
+    _bottleneck: Union[Bottleneck2d, Bottleneck3d]
+    _conv: Union[nn.Conv2d, nn.Conv3d]
+    _denseblock: Union[DenseBlock2d, DenseBlock3d]
+    _pad: Union[nn.ReplicationPad2d, nn.ReplicationPad3d]
+    _trans_down: Union[TransitionDown2d, TransitionDown3d]
+    _trans_up: Union[TransitionUp2d, TransitionUp3d]
 
     def __init__(
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        down_blocks: List[int] = (5, 5, 5, 5, 5),
-        up_blocks: List[int] = (5, 5, 5, 5, 5),
+        down_blocks: Collection = (5, 5, 5, 5, 5),
+        up_blocks: Collection = (5, 5, 5, 5, 5),
         bottleneck_layers: int = 5,
         growth_rate: int = 16,
         first_conv_out_channels: int = 48,
@@ -88,7 +88,7 @@ class Tiramisu(nn.Module):
         self.up_blocks = up_blocks
         first_kernel_size = 3
         final_kernel_size = 1
-        skip_connection_channel_counts = []
+        skip_connection_channel_counts: List[int] = []
 
         self.first_conv = nn.Sequential(
             self._pad(first_kernel_size // 2),
@@ -164,6 +164,7 @@ class Tiramisu(nn.Module):
             out = tub(out, skip)
             out = ubd(out)
         out = self.final_conv(out)
+        assert isinstance(out, Tensor)
         return out
 
 
