@@ -15,6 +15,7 @@ __all__ = [
 ]
 
 import argparse
+from copy import deepcopy
 import gc
 import logging
 from pathlib import Path
@@ -143,25 +144,25 @@ def train(
     args = path_to_str(args)
     n_models_to_train = _compute_num_models_to_train(args)
     best_model_paths = []
-    dict_args = vars(args)
     use_pseudo3d = args.pseudo3d_dim is not None
     if use_pseudo3d:
         warnings.filterwarnings("ignore", val_dataloader_warning, category=UserWarning)
     check_patch_size(args.patch_size, use_pseudo3d)
     pseudo3d_dims = pseudo3d_dims_setup(args.pseudo3d_dim, n_models_to_train, "train")
-    dict_args["network_dim"] = 2 if use_pseudo3d else 3
+    individual_run_args = deepcopy(vars(args))
+    individual_run_args["network_dim"] = 2 if use_pseudo3d else 3
     train_iter_data = zip(args.train_csv, args.valid_csv, pseudo3d_dims)
     for i, (train_csv, valid_csv, p3d) in enumerate(train_iter_data, 1):
         trainer, checkpoint_callback = _setup_trainer_and_checkpoint(args)
         nth_model = f" ({i}/{n_models_to_train})"
-        dict_args["train_csv"] = train_csv
-        dict_args["valid_csv"] = valid_csv
+        individual_run_args["train_csv"] = train_csv
+        individual_run_args["valid_csv"] = valid_csv
         channels_per_image = args.pseudo3d_size if use_pseudo3d else 1
-        dict_args["in_channels"] = args.num_input * channels_per_image
-        dict_args["pseudo3d_dim"] = p3d
-        dm = LesionSegDataModuleTrain.from_csv(**dict_args)
+        individual_run_args["in_channels"] = args.num_input * channels_per_image
+        individual_run_args["pseudo3d_dim"] = p3d
+        dm = LesionSegDataModuleTrain.from_csv(**individual_run_args)
         dm.setup()
-        model = LesionSegLightningTiramisu(**dict_args)
+        model = LesionSegLightningTiramisu(**individual_run_args)
         logger.debug(model)
         if args.auto_scale_batch_size or args.auto_lr_find:
             tuning_output = trainer.tune(model, datamodule=dm)
