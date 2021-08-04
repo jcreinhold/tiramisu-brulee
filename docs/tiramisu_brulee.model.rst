@@ -4,14 +4,6 @@ tiramisu\_brulee.model package
 Submodules
 ----------
 
-tiramisu\_brulee.model.attention module
----------------------------------------
-
-.. automodule:: tiramisu_brulee.model.attention
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 tiramisu\_brulee.model.dense module
 -----------------------------------
 

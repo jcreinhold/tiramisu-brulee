@@ -187,7 +187,7 @@ lesion-train
 ------------
 
 .. argparse::
-   :module: tiramisu_brulee.experiment.cli
+   :module: tiramisu_brulee.experiment.cli.train
    :func: train_parser
    :prog: lesion-train
 
@@ -195,7 +195,7 @@ lesion-predict
 --------------
 
 .. argparse::
-   :module: tiramisu_brulee.experiment.cli
+   :module: tiramisu_brulee.experiment.cli.predict
    :func: predict_parser
    :prog: lesion-predict
 
@@ -203,6 +203,6 @@ lesion-predict-image
 --------------------
 
 .. argparse::
-   :module: tiramisu_brulee.experiment.cli
+   :module: tiramisu_brulee.experiment.cli.predict
    :func: predict_image_parser
    :prog: lesion-predict-image
