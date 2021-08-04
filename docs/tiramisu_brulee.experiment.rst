@@ -1,16 +1,16 @@
 tiramisu\_brulee.experiment package
 ===================================
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   tiramisu_brulee.experiment.cli
+
 Submodules
 ----------
-
-tiramisu\_brulee.experiment.cli module
---------------------------------------
-
-.. automodule:: tiramisu_brulee.experiment.cli
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 tiramisu\_brulee.experiment.data module
 ---------------------------------------
