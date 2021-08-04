@@ -142,7 +142,7 @@ def _predict_parser_shared(
     parser = LesionSegLightningTiramisu.add_testing_arguments(parser)
     parser = LesionSegDataModulePredictBase.add_arguments(parser, add_csv=add_csv)
     parser = Trainer.add_argparse_args(parser)
-    trainer_args = set(inspect.signature(Trainer).parameters.keys())  # noqa
+    trainer_args = set(inspect.signature(Trainer).parameters.keys())
     unnecessary_args = trainer_args - necessary_trainer_args
     unnecessary_args = handle_fast_dev_run(unnecessary_args)
     remove_args(parser, unnecessary_args)
@@ -172,7 +172,7 @@ def predict_image(args: ArgType = None) -> int:
         raise ValueError("input args must be None or a list of strings to parse")
     modality_paths = parse_unknown_to_dict(unknown)
     with tempfile.NamedTemporaryFile("w") as f:
-        dict_to_csv(modality_paths, f)  # noqa
+        dict_to_csv(modality_paths, f)
         args.predict_csv = f.name
         _predict(args, parser, False)
     return 0
