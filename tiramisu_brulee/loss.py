@@ -37,7 +37,7 @@ import torch.nn.functional as F
 
 
 def per_channel_dice(
-    tensor1: Tensor, tensor2: Tensor, eps: float = 1e-3, keepdim: bool = False
+    tensor1: Tensor, tensor2: Tensor, eps: float = 1e-3, keepdim: bool = False,
 ) -> Tensor:
     """ compute dice score for each channel separately and reduce """
     spatial_dims = tuple(range(2 - len(tensor1.shape), 0))
@@ -64,6 +64,7 @@ def dice_loss(
     """ sorensen-dice coefficient loss function """
     keepdim = reduction != "mean"
     pc_dice = per_channel_dice(pred, target, eps=eps, keepdim=keepdim)
+    dice: Tensor
     if reduction == "mean":
         if weight is None:
             dice = torch.mean(pc_dice)
@@ -73,7 +74,8 @@ def dice_loss(
         dice = pc_dice
     else:
         raise NotImplementedError(f"{reduction} not implemented.")
-    return 1 - dice
+    one_minus_dice: Tensor = 1.0 - dice
+    return one_minus_dice
 
 
 def binary_focal_loss(
@@ -102,6 +104,7 @@ def binary_focal_loss(
     bce_loss = F.binary_cross_entropy_with_logits(
         pred, target, reduction=bce_reduction, pos_weight=bce_pos_weight,
     )
+    loss_val: Tensor
     if use_focal:
         p = torch.sigmoid(pred)
         p_t = p * target + (1 - p) * (1 - target)
@@ -170,7 +173,7 @@ def combo_loss(
     return loss
 
 
-def deeply_supervised_loss(
+def deeply_supervised_loss(  # type: ignore[no-untyped-def]
     preds: List[Tensor],
     target: Tensor,
     loss_func: Callable,
@@ -187,14 +190,14 @@ def deeply_supervised_loss(
 
 
 def l1_segmentation_loss(
-    pred: Tensor, target: Tensor, reduction: str = "mean"
+    pred: Tensor, target: Tensor, reduction: str = "mean",
 ) -> Tensor:
     """ l1 loss for segmentation by applying sigmoid to pred -> l1 """
     return F.l1_loss(torch.sigmoid(pred), target, reduction=reduction)
 
 
 def mse_segmentation_loss(
-    pred: Tensor, target: Tensor, reduction: str = "mean"
+    pred: Tensor, target: Tensor, reduction: str = "mean",
 ) -> Tensor:
     """ mse loss for segmentation by applying sigmoid to pred -> mse """
     return F.mse_loss(torch.sigmoid(pred), target, reduction=reduction)

@@ -81,7 +81,7 @@ def predict_parser(use_python_argparse: bool = True) -> ArgParser:
     parser = ArgumentParser(prog="lesion-predict", description=desc)
     parser.add_argument(
         "--config",
-        action=config_action,
+        action=config_action,  # type: ignore[arg-type]
         help="path to a configuration file in json or yaml format",
     )
     necessary_trainer_args = {
@@ -154,9 +154,9 @@ def predict(args: ArgType = None) -> int:
     """ use a Tiramisu CNN for prediction """
     parser = predict_parser(False)
     if args is None:
-        args = parser.parse_args(_skip_check=True)  # noqa
+        args = parser.parse_args(_skip_check=True)  # type: ignore[call-overload]
     elif isinstance(args, list):
-        args = parser.parse_args(args, _skip_check=True)  # noqa
+        args = parser.parse_args(args, _skip_check=True)  # type: ignore[call-overload]
     _predict(args, parser, True)
     return 0
 
@@ -180,7 +180,7 @@ def predict_image(args: ArgType = None) -> int:
 
 def _predict_whole_image(
     args: Namespace, model_path: Path, model_num: ModelNum,
-):
+) -> None:
     """ predict a whole image volume as opposed to patches """
     dict_args = vars(args)
     pp = args.predict_probability
@@ -202,7 +202,7 @@ def _predict_patch_image(
     model_path: Path,
     model_num: ModelNum,
     pseudo3d_dim: Union[None, int],
-):
+) -> None:
     """ predict a volume with patches as opposed to a whole volume """
     dict_args = vars(args)
     dict_args["pseudo3d_dim"] = pseudo3d_dim
@@ -224,7 +224,7 @@ def _predict_patch_image(
         gc.collect()
 
 
-def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
+def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool) -> None:
     args = none_string_to_none(args)
     args = path_to_str(args)
     setup_log(args.verbosity)
@@ -263,7 +263,8 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool):
     _generate_config_yamls_in_predict(args, parser)
 
 
-def _generate_config_yamls_in_predict(args: ArgType, parser: ArgParser):
+def _generate_config_yamls_in_predict(args: ArgType, parser: ArgParser) -> None:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     is_fast_dev_run = args.fast_dev_run if hasattr(args, "fast_dev_run") else False
     if (
         not is_fast_dev_run
@@ -283,7 +284,7 @@ def aggregate(
     fill_holes: bool = False,
     min_lesion_size: int = 3,
     num_workers: Optional[int] = None,
-):
+) -> None:
     """ aggregate output from multiple model predictions """
     df = pd.read_csv(predict_csv)
     out_fns = df["out"]
@@ -305,6 +306,7 @@ def aggregate(
         deque(map(_aggregator, out_fn_iter), maxlen=0)
 
 
+# noinspection PyUnboundLocalVariable
 def _aggregate(
     n_fn: Tuple[int, str],
     threshold: float,
@@ -312,7 +314,7 @@ def _aggregate(
     n_fns: int,
     fill_holes: bool,
     min_lesion_size: int,
-):
+) -> None:
     """ aggregate helper for concurrent/parallel processing """
     assert n_models >= 1
     n, fn = n_fn

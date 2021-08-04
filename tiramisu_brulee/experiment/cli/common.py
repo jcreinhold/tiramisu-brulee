@@ -16,12 +16,12 @@ __all__ = [
 ]
 
 import sys
-from typing import List, Set, Union
+from typing import List, Optional, Set, Union
 
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 
 
-def check_patch_size(patch_size: List[int], use_pseudo3d: bool):
+def check_patch_size(patch_size: List[int], use_pseudo3d: bool) -> None:
     n_patch_elems = len(patch_size)
     if n_patch_elems != 2 and use_pseudo3d:
         raise ValueError(
@@ -45,15 +45,16 @@ def handle_fast_dev_run(unnecessary_args: Set[str]) -> Set[str]:
 
 
 def pseudo3d_dims_setup(
-    pseudo3d_dim: Union[None, List[int]], n_models: int, stage: str,
+    pseudo3d_dim: Optional[List[int]], n_models: int, stage: str,
 ) -> Union[List[None], List[int]]:
     assert stage in ("train", "predict")
     if stage == "predict":
         stage = "us"
     n_p3d = 0 if pseudo3d_dim is None else len(pseudo3d_dim)
-    if n_p3d == 1:
+    pseudo3d_dims: Union[List[None], List[int]]
+    if n_p3d == 1 and pseudo3d_dim is not None:
         pseudo3d_dims = pseudo3d_dim * n_models
-    elif n_p3d == n_models:
+    elif n_p3d == n_models and pseudo3d_dim is not None:
         pseudo3d_dims = pseudo3d_dim
     elif pseudo3d_dim is None:
         pseudo3d_dims = [None] * n_models

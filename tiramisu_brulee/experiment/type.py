@@ -12,9 +12,10 @@ Created on: May 28, 2021
 __all__ = [
     "ArgParser",
     "ArgType",
+    "Batch",
+    "BatchElement",
     "file_path",
     "Indices",
-    "KwArg",
     "ModelNum",
     "Namespace",
     "new_parse_type",
@@ -30,18 +31,18 @@ __all__ = [
     "positive_odd_int_or_none",
     "probability_float",
     "probability_float_or_none",
-    "VarArg",
 ]
 
 import argparse
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Collection, Callable, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import jsonargparse
 from torch import Tensor
 
-BatchType = Union[Tensor, Collection[Any]]
+BatchElement = Union[Tensor, Dict[str, Any], List[Any]]
+Batch = Dict[str, BatchElement]
 Indices = Tuple[int, int, int, int, int, int]
 ModelNum = namedtuple("ModelNum", ["num", "out_of"])
 Namespace = Union[argparse.Namespace, jsonargparse.Namespace]
@@ -54,19 +55,9 @@ PatchShapeOption = Union[PatchShape2DOption, PatchShape3DOption]
 ArgType = Optional[Union[Namespace, Iterable[str]]]
 ArgParser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
 
-# from mypy-extensions
-def VarArg(type=Any):
-    """A *args-style variadic positional argument"""
-    return type
-
-
-def KwArg(type=Any):
-    """A **kwargs-style variadic keyword argument"""
-    return type
-
 
 def return_none(func: Callable) -> Callable:
-    def new_func(self, string: Any) -> Any:  # type: ignore
+    def new_func(self, string: Any) -> Any:  # type: ignore[no-untyped-def]
         if string is None:
             return None
         elif isinstance(string, str):
@@ -79,7 +70,7 @@ def return_none(func: Callable) -> Callable:
 
 def return_str(match_string: str) -> Callable:
     def decorator(func: Callable) -> Callable:
-        def new_func(self, string: Any) -> Any:  # type: ignore
+        def new_func(self, string: Any) -> Any:  # type: ignore[no-untyped-def]
             if isinstance(string, str):
                 if string.lower() == match_string:
                     return match_string
