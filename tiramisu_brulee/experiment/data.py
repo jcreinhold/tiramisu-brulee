@@ -405,7 +405,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
                 {tio.RandomAffine(): 0.8, tio.RandomElasticDeformation(): 0.2}, p=0.75,
             )
             transforms.insert(1, spatial)
-            flip = tio.RandomFlip(axes=("LR",))  # noqa
+            # noinspection PyTypeChecker
+            flip = tio.RandomFlip(axes=("LR",))
             transforms.append(flip)
         if self.pseudo3d_dim == "all":
             transforms.insert(1, RandomTranspose())
@@ -1117,7 +1118,7 @@ def _check_spacing_between_dicom_slices(
             f"Slice thickness: {slice_thickness:0.6f} != "
             f"(Median) computed slice thickness {median_dist_between_slices:0.6f}"
         )
-    max_diff_in_dist = diff_in_dist.max()  # noqa
+    max_diff_in_dist = diff_in_dist.max()
     inconsistent_dist_msg = ""
     if max_diff_in_dist > 5e-4:
         # TODO: why is max_diff_in_dist different from ITK "Maximum nonuniformity"

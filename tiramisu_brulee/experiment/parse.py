@@ -61,7 +61,7 @@ def _generate_config_yaml(
     exp_dirs: List[Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_paths: Union[List[Path], None],
+    best_model_paths: Optional[List[Path]],
     stage: str,
 ) -> None:
     """ generate config yaml file(s) for `stage`, store in experiment dir """
@@ -93,7 +93,7 @@ def generate_train_config_yaml(
     exp_dirs: List[Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_paths: Optional[List[Path]] = None,  # noqa
+    best_model_paths: Optional[List[Path]] = None,
 ) -> None:
     """ generate config yaml file(s) for training, store in experiment dir """
     if dict_args["config"] is not None:
