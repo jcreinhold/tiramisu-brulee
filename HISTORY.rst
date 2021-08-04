@@ -2,6 +2,13 @@
 History
 =======
 
+0.1.23 (2021-08-04)
+-------------------
+
+* Change AWS option to just MLFlow
+* Compliant with mypy
+* Other minor bug fixes and fix docs
+
 0.1.22 (2021-07-30)
 -------------------
 
