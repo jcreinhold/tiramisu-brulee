@@ -12,7 +12,6 @@ import sys
 from typing import List
 
 import pytest
-from pytest import TempdirFactory
 
 from tiramisu_brulee.experiment.cli.train import train
 from tiramisu_brulee.experiment.cli.predict import predict, predict_image
@@ -34,7 +33,7 @@ def data_dir(cwd: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def temp_dir(tmpdir_factory: TempdirFactory) -> Path:
+def temp_dir(tmpdir_factory) -> Path:  # type: ignore[no-untyped-def]
     return Path(tmpdir_factory.mktemp("out"))
 
 
