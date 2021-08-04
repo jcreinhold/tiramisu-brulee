@@ -78,7 +78,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     parser = ArgumentParser(prog="lesion-train", description=desc,)
     parser.add_argument(
         "--config",
-        action=config_action,
+        action=config_action,  # type: ignore[arg-type]
         help="path to a configuration file in json or yaml format",
     )
     exp_parser = parser.add_argument_group("Experiment")
@@ -128,8 +128,8 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     if use_python_argparse:
         unnecessary_args.union({"min_epochs", "max_epochs"})
     else:
-        parser.link_arguments("n_epochs", "min_epochs")  # noqa
-        parser.link_arguments("n_epochs", "max_epochs")  # noqa
+        parser.link_arguments("n_epochs", "min_epochs")  # type: ignore[attr-defined]
+        parser.link_arguments("n_epochs", "max_epochs")  # type: ignore[attr-defined]
     unnecessary_args = handle_fast_dev_run(unnecessary_args)
     remove_args(parser, unnecessary_args)
     fix_type_funcs(parser)
@@ -142,16 +142,16 @@ def train(
     """ train a Tiramisu CNN for segmentation """
     parser = train_parser(False)
     if args is None:
-        args = parser.parse_args(_skip_check=True)  # noqa
+        args = parser.parse_args(_skip_check=True)  # type: ignore[call-overload]
     elif isinstance(args, list):
-        args = parser.parse_args(args, _skip_check=True)  # noqa
+        args = parser.parse_args(args, _skip_check=True)  # type: ignore[call-overload]
     args = none_string_to_none(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
     seed_everything(args.seed, workers=True)
     args = path_to_str(args)
     n_models_to_train = _compute_num_models_to_train(args)
-    best_model_paths = []
+    best_model_paths: List[Path] = []
     use_pseudo3d = args.pseudo3d_dim is not None
     if use_pseudo3d:
         warnings.filterwarnings("ignore", val_dataloader_warning, category=UserWarning)
@@ -195,6 +195,7 @@ def train(
 
 
 def _compute_num_models_to_train(args: ArgType) -> int:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     n_models_to_train = len(args.train_csv)
     if n_models_to_train != len(args.valid_csv):
         raise ValueError(
@@ -205,6 +206,7 @@ def _compute_num_models_to_train(args: ArgType) -> int:
 
 
 def _format_checkpoints(args: ArgType) -> dict:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     checkpoint_format = f"{{epoch}}-{{val_loss:.3f}}-{{val_{args.track_metric}:.3f}}"
     checkpoint_kwargs = dict(
         dirpath=args.model_dir,
@@ -219,6 +221,7 @@ def _format_checkpoints(args: ArgType) -> dict:
 
 
 def _artifact_directory(args: ArgType) -> str:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     if args.default_root_dir is not None:
         artifact_dir = Path(args.default_root_dir).resolve()
     else:
@@ -227,7 +230,9 @@ def _artifact_directory(args: ArgType) -> str:
 
 
 def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLogger]:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     artifact_dir = _artifact_directory(args)
+    exp_logger: Union[TensorBoardLogger, MLFlowLogger]
     if args.tracking_uri is not None:
         exp_logger = MLFlowLogger(EXPERIMENT_NAME, tracking_uri=args.tracking_uri)
     else:
@@ -235,7 +240,10 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
     return exp_logger
 
 
-def _generate_config_yamls_in_train(args: ArgType, best_model_paths: str):
+def _generate_config_yamls_in_train(
+    args: ArgType, best_model_paths: List[Path]
+) -> None:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     generate_config_yaml = (
         (not args.fast_dev_run) if hasattr(args, "fast_dev_run") else True
     )
@@ -248,14 +256,22 @@ def _generate_config_yamls_in_train(args: ArgType, best_model_paths: str):
             best_model_paths = [bmp for bmp in best_model_paths for _ in range(3)]
         else:
             dict_args["pseudo3d_dim"] = args.pseudo3d_dim
-        config_kwargs = dict(
-            exp_dirs=exp_dirs, dict_args=dict_args, best_model_paths=best_model_paths,
+        generate_train_config_yaml(
+            exp_dirs=exp_dirs,
+            dict_args=dict_args,
+            best_model_paths=best_model_paths,
+            parser=train_parser(False),
         )
-        generate_train_config_yaml(**config_kwargs, parser=train_parser(False))
-        generate_predict_config_yaml(**config_kwargs, parser=predict_parser(False))
+        generate_predict_config_yaml(
+            exp_dirs=exp_dirs,
+            dict_args=dict_args,
+            best_model_paths=best_model_paths,
+            parser=predict_parser(False),
+        )
 
 
 def _setup_trainer_and_checkpoint(args: ArgType) -> Tuple[Trainer, ModelCheckpoint]:
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     use_multigpus = not (args.gpus is None or args.gpus <= 1)
     checkpoint_kwargs = _format_checkpoints(args)
     exp_logger = _setup_experiment_logger(args)

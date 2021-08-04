@@ -27,7 +27,7 @@ __all__ = [
     "Tiramisu3d",
 ]
 
-from typing import Collection, List, Union
+from typing import Collection, List, Type, Tuple, Union
 
 from torch import Tensor
 from torch import nn
@@ -45,19 +45,21 @@ from tiramisu_brulee.model.dense import (
 
 
 class Tiramisu(nn.Module):
-    _bottleneck: Union[Bottleneck2d, Bottleneck3d]
-    _conv: Union[nn.Conv2d, nn.Conv3d]
-    _denseblock: Union[DenseBlock2d, DenseBlock3d]
-    _pad: Union[nn.ReplicationPad2d, nn.ReplicationPad3d]
-    _trans_down: Union[TransitionDown2d, TransitionDown3d]
-    _trans_up: Union[TransitionUp2d, TransitionUp3d]
+    _bottleneck: Union[Type[Bottleneck2d], Type[Bottleneck3d]]
+    _conv: Union[Type[nn.Conv2d], Type[nn.Conv3d]]
+    _denseblock: Union[Type[DenseBlock2d], Type[DenseBlock3d]]
+    _pad: Union[Type[nn.ReplicationPad2d], Type[nn.ReplicationPad3d]]
+    _trans_down: Union[Type[TransitionDown2d], Type[TransitionDown3d]]
+    _trans_up: Union[Type[TransitionUp2d], Type[TransitionUp3d]]
+    _first_kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
+    _final_kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
 
     def __init__(
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        down_blocks: Collection = (5, 5, 5, 5, 5),
-        up_blocks: Collection = (5, 5, 5, 5, 5),
+        down_blocks: Collection[int] = (5, 5, 5, 5, 5),
+        up_blocks: Collection[int] = (5, 5, 5, 5, 5),
         bottleneck_layers: int = 5,
         growth_rate: int = 16,
         first_conv_out_channels: int = 48,
@@ -75,8 +77,8 @@ class Tiramisu(nn.Module):
         Args:
             in_channels (int): number of input channels
             out_channels (int): number of output channels
-            down_blocks (List[int]): number of layers in each block in down path
-            up_blocks (List[int]): number of layers in each block in up path
+            down_blocks (Collection[int]): number of layers in each block in down path
+            up_blocks (Collection[int]): number of layers in each block in up path
             bottleneck_layers (int): number of layers in the bottleneck
             growth_rate (int): number of channels to grow by in each layer
             first_conv_out_channels (int): number of output channels in first conv
@@ -86,36 +88,38 @@ class Tiramisu(nn.Module):
         assert len(down_blocks) == len(up_blocks)
         self.down_blocks = down_blocks
         self.up_blocks = up_blocks
-        first_kernel_size = 3
-        final_kernel_size = 1
         skip_connection_channel_counts: List[int] = []
 
+        first_padding = 2 * [fks // 2 for fks in self._first_kernel_size]
         self.first_conv = nn.Sequential(
-            self._pad(first_kernel_size // 2),
+            self._pad(first_padding),  # type: ignore[arg-type]
             self._conv(
-                in_channels, first_conv_out_channels, first_kernel_size, bias=False,
+                in_channels,
+                first_conv_out_channels,
+                self._first_kernel_size,  # type: ignore[arg-type]
+                bias=False,
             ),
         )
-        cur_channels_count = first_conv_out_channels
+        cur_channels_count: int = first_conv_out_channels
 
         # Downsampling path
         self.dense_down = nn.ModuleList([])
         self.trans_down = nn.ModuleList([])
         for n_layers in down_blocks:
-            block = self._denseblock(
+            denseblock = self._denseblock(
                 cur_channels_count,
                 growth_rate,
                 n_layers,
                 upsample=False,
                 dropout_rate=dropout_rate,
             )
-            self.dense_down.append(block)
+            self.dense_down.append(denseblock)
             cur_channels_count += growth_rate * n_layers
             skip_connection_channel_counts.insert(0, cur_channels_count)
-            block = self._trans_down(
+            trans_down_block = self._trans_down(
                 cur_channels_count, cur_channels_count, dropout_rate=dropout_rate,
             )
-            self.trans_down.append(block)
+            self.trans_down.append(trans_down_block)
 
         # Bottleneck
         self.bottleneck = self._bottleneck(
@@ -132,23 +136,26 @@ class Tiramisu(nn.Module):
         self.trans_up = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
-            block = self._trans_up(prev_block_channels, prev_block_channels)
-            self.trans_up.append(block)
+            trans_up_block = self._trans_up(prev_block_channels, prev_block_channels)
+            self.trans_up.append(trans_up_block)
             cur_channels_count = prev_block_channels + sccc
             upsample = i < len(up_blocks)  # do not upsample on last block
-            block = self._denseblock(
+            denseblock = self._denseblock(
                 cur_channels_count,
                 growth_rate,
                 n_layers,
                 upsample=upsample,
                 dropout_rate=dropout_rate,
             )
-            self.dense_up.append(block)
+            self.dense_up.append(denseblock)
             prev_block_channels = growth_rate * n_layers
             cur_channels_count += prev_block_channels
 
         self.final_conv = self._conv(
-            cur_channels_count, out_channels, final_kernel_size, bias=True
+            cur_channels_count,
+            out_channels,
+            self._final_kernel_size,  # type: ignore[arg-type]
+            bias=True,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -175,6 +182,8 @@ class Tiramisu2d(Tiramisu):
     _pad = nn.ReplicationPad2d
     _trans_down = TransitionDown2d
     _trans_up = TransitionUp2d
+    _first_kernel_size = (3, 3)
+    _final_kernel_size = (1, 1)
 
 
 class Tiramisu3d(Tiramisu):
@@ -184,3 +193,5 @@ class Tiramisu3d(Tiramisu):
     _pad = nn.ReplicationPad3d
     _trans_down = TransitionDown3d
     _trans_up = TransitionUp3d
+    _first_kernel_size = (3, 3, 3)
+    _final_kernel_size = (1, 1, 1)

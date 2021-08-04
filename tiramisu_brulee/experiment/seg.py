@@ -19,14 +19,16 @@ __all__ = [
 
 from functools import partial
 import logging
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pytorch_lightning as pl
+from pytorch_lightning.utilities import AttributeDict
 import torch
 from torch import nn
 from torch import Tensor
-from torch.optim import AdamW, RMSprop, lr_scheduler
+from torch.optim import AdamW, RMSprop, Optimizer
+from torch.optim.lr_scheduler import LambdaLR
 import torchio as tio
 import SimpleITK as sitk
 
@@ -48,7 +50,11 @@ from tiramisu_brulee.experiment.type import (
     positive_int,
     probability_float,
 )
-from tiramisu_brulee.experiment.data import Mixup
+from tiramisu_brulee.experiment.data import (
+    Mixup,
+    PatchesImagePredictBatch,
+    WholeImagePredictBatch,
+)
 from tiramisu_brulee.experiment.lesion_tools import (
     almost_isbi15_score,
     clean_segmentation,
@@ -58,6 +64,9 @@ from tiramisu_brulee.experiment.util import (
     BoundingBox3D,
     minmax_scale_batch,
 )
+
+
+PredictBatch = Union[PatchesImagePredictBatch, WholeImagePredictBatch]
 
 
 class LesionSegLightningBase(pl.LightningModule):
@@ -95,7 +104,7 @@ class LesionSegLightningBase(pl.LightningModule):
         _model_num (ModelNum): internal param for ith of n models
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-untyped-def]
         self,
         network: nn.Module,
         n_epochs: int = 1,
@@ -124,13 +133,17 @@ class LesionSegLightningBase(pl.LightningModule):
         self.network = network
         self._model_num = _model_num
         self.save_hyperparameters(ignore=["network", "_model_num"])
+        # noinspection PyPropertyAccess
+        self.hparams: AttributeDict
 
-    def forward(self, tensor: Tensor) -> Tensor:
-        return self.network(tensor)
+    def forward(self, tensor: Tensor) -> Tensor:  # type: ignore[override]
+        out: Tensor = self.network(tensor)
+        return out
 
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: Optional[str] = None) -> None:
         if self.hparams.loss_function != "combo" and self.hparams.num_classes != 1:
             raise ValueError("Only combo loss supported for multi-class segmentation")
+        self.criterion: Callable
         if self.hparams.loss_function == "combo":
             if self.hparams.num_classes == 1:
                 self.criterion = partial(
@@ -157,16 +170,20 @@ class LesionSegLightningBase(pl.LightningModule):
         if self.hparams.mixup:
             self._mix = Mixup(self.hparams.mixup_alpha)
 
-    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
+    def training_step(  # type: ignore[override]
+        self, batch: Tuple[Tensor, Tensor], batch_idx: int,
+    ) -> Tensor:
         src, tgt = batch
         if self.hparams.mixup:
             src, tgt = self._mix(src, tgt)
         pred = self(src)
-        loss = self.criterion(pred, tgt)
+        loss: Tensor = self.criterion(pred, tgt)
         self.log("loss", loss)
         return loss
 
-    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> dict:
+    def validation_step(  # type: ignore[override]
+        self, batch: Tuple[Tensor, Tensor], batch_idx: int
+    ) -> Dict[str, Any]:
         src, tgt = batch
         pred = self(src)
         loss = self.criterion(pred, tgt)
@@ -196,6 +213,7 @@ class LesionSegLightningBase(pl.LightningModule):
             f"PPV: {ppv.item():0.3f}; "
             f"Loss: {loss.item():0.3f}."
         )
+        images: Optional[Dict[str, Union[int, Tensor]]]
         if batch_idx == 0 and self._is_3d_image_batch(src):
             images = dict(truth=tgt, pred=pred, dim=3)
             for i in range(src.shape[1]):
@@ -211,33 +229,38 @@ class LesionSegLightningBase(pl.LightningModule):
             images = None
         return dict(val_loss=loss, images=images)
 
-    def validation_epoch_end(self, outputs: list):
+    def validation_epoch_end(self, outputs: List[Any]) -> None:
         self._log_images(outputs[0]["images"])
 
     def predict_step(
-        self, batch: dict, batch_idx: int, dataloader_idx: Optional[int] = None
+        self, batch: PredictBatch, batch_idx: int, dataloader_idx: Optional[int] = None
     ) -> Tensor:
         if self._predict_with_patches(batch):
+            assert isinstance(batch, PatchesImagePredictBatch)
             return self._predict_patch_image(batch)
         else:
+            assert isinstance(batch, WholeImagePredictBatch)
             return self._predict_whole_image(batch)
 
-    def on_predict_batch_end(
+    def on_predict_batch_end(  # type: ignore[override]
         self,
         pred_step_outputs: Tensor,
-        batch: dict,
+        batch: PredictBatch,
         batch_idx: int,
         dataloader_idx: int,
-    ):
+    ) -> PredictBatch:
         if self._predict_with_patches(batch):
+            assert isinstance(batch, PatchesImagePredictBatch)
             self._predict_accumulate_patches(pred_step_outputs, batch)
-            if (batch_idx + 1) == batch["total_batches"]:
+            if (batch_idx + 1) == batch.total_batches:
                 self._predict_save_patch_image(batch)
         else:
+            assert isinstance(batch, WholeImagePredictBatch)
             self._predict_save_whole_image(pred_step_outputs, batch)
         return batch
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> Tuple[List[Optimizer], List[LambdaLR]]:
+        optimizer: Union[AdamW, RMSprop]
         if self.hparams.rmsprop:
             momentum, alpha = self.hparams.betas
             optimizer = RMSprop(
@@ -255,31 +278,31 @@ class LesionSegLightningBase(pl.LightningModule):
                 weight_decay=self.hparams.weight_decay,
             )
 
-        scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=self.decay_rule)
+        scheduler = LambdaLR(optimizer, lr_lambda=self.decay_rule)
         return [optimizer], [scheduler]
 
     def decay_rule(self, epoch: int) -> float:
         numerator = max(0, epoch - self.hparams.decay_after)
         denominator = float(self.hparams.n_epochs + 1)
-        lr = 1.0 - numerator / denominator
+        lr: float = 1.0 - numerator / denominator
         return lr
 
     @staticmethod
-    def _predict_with_patches(batch: dict) -> bool:
-        return "grid_obj" in batch
+    def _predict_with_patches(batch: PredictBatch) -> bool:
+        return hasattr(batch, "grid_obj")
 
-    def _predict_whole_image(self, batch: dict) -> Tensor:
+    def _predict_whole_image(self, batch: WholeImagePredictBatch) -> Tensor:
         """ for 3D networks, predict the whole image foreground at once """
-        src = batch["src"]
+        src = batch.src
         bbox = BoundingBox3D.from_batch(src, pad=0)
-        batch["src"] = bbox(src)
+        batch.src = bbox(src)
         pred_seg = self._predict_patch_image(batch)
         pred_seg = bbox.uncrop_batch(pred_seg)
         return pred_seg
 
-    def _predict_patch_image(self, batch: dict) -> Tensor:
+    def _predict_patch_image(self, batch: PredictBatch) -> Tensor:
         """ for all 2D networks and 3D networks with a specified patch size """
-        src = batch["src"]
+        src = batch.src
         pred = self(src)
         if self.hparams.num_classes == 1:
             pred_seg = torch.sigmoid(pred)
@@ -297,41 +320,41 @@ class LesionSegLightningBase(pl.LightningModule):
         pred = pred.astype(np.float32)
         return pred
 
-    def _predict_save_whole_image(self, pred_step_outputs: Tensor, batch: dict):
-        assert len(pred_step_outputs) == len(batch["affine"])
-        assert len(batch["affine"]) == len(batch["path"])
-        assert len(batch["path"]) == len(batch["out"])
+    def _predict_save_whole_image(
+        self, pred_step_outputs: Tensor, batch: WholeImagePredictBatch,
+    ) -> None:
+        assert len(pred_step_outputs) == len(batch.affine)
         nifti_attrs = zip(
-            pred_step_outputs.detach().cpu(),
-            batch["affine"],
-            batch["path"],
-            batch["out"],
+            pred_step_outputs.detach().cpu(), batch.affine, batch.path, batch.out,
         )
         for pred, affine, path, fn in nifti_attrs:
             if self._model_num != ModelNum(num=1, out_of=1):
-                fn = append_num_to_filename(fn, self._model_num.num)
+                fn = str(append_num_to_filename(fn, self._model_num.num))
             logging.info(f"Saving {fn}.")
-            if batch["reorient"]:
+            if batch.reorient:
                 pred, affine = self._to_original_orientation(path, pred, affine)
             pred = pred.numpy().squeeze()
             pred = self._clean_prediction(pred)
             self._write_image(pred, affine, fn)
 
-    def _predict_save_patch_image(self, batch: dict):
-        pred = self.aggregator.get_output_tensor().detach().cpu()
-        affine = batch["affine"][0]
-        if batch["reorient"]:
-            pred, affine = self._to_original_orientation(batch["path"], pred, affine)
-        pred = pred.numpy().squeeze()
+    def _predict_save_patch_image(self, batch: PatchesImagePredictBatch) -> None:
+        pred_tensor = self.aggregator.get_output_tensor().detach().cpu()
+        affine_tensor = batch.affine[0]
+        if batch.reorient:
+            pred_tensor, affine_tensor = self._to_original_orientation(
+                batch.path, pred_tensor, affine_tensor
+            )
+        pred = pred_tensor.numpy().squeeze()
+        affine = affine_tensor.numpy()
         pred = self._clean_prediction(pred)
-        fn = batch["out"][0]
+        fn = batch.out[0]
         if self._model_num != ModelNum(num=1, out_of=1):
-            fn = append_num_to_filename(fn, self._model_num.num)
+            fn = str(append_num_to_filename(fn, self._model_num.num))
         logging.info(f"Saving {fn}.")
         self._write_image(pred, affine, fn)
         del self.aggregator
 
-    def _save_as_dicom(self, filename: str):
+    def _save_as_dicom(self, filename: str) -> bool:
         save_dicom = str(filename).endswith(".dcm")
         self.__dicom_warned = hasattr(self, "__dicom_warned")
         if not self.__dicom_warned and save_dicom:
@@ -344,36 +367,41 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def _write_image(
         self, image: np.ndarray, affine: np.ndarray, filename: str,
-    ):
+    ) -> None:
         if image.ndim != 4:
             image = image[np.newaxis]
         assert image.ndim == 4
         if self._save_as_dicom(filename):
             image = (image > self.hparams.threshold).astype(np.uint8)
-        output_image = tio.ScalarImage(tensor=image, affine=affine)  # noqa
+        output_image = tio.ScalarImage(tensor=image, affine=affine)
         output_image.save(filename)
 
     @staticmethod
     def _to_original_orientation(
         original_path: str, data: Tensor, affine: Tensor,
-    ) -> Tuple[Tensor, np.ndarray]:
+    ) -> Tuple[Tensor, Tensor]:
         original = tio.ScalarImage(original_path)
-        image = tio.ScalarImage(tensor=data, affine=affine)  # noqa
+        image = tio.ScalarImage(tensor=data, affine=affine)
         if original.orientation != image.orientation:
             orientation = "".join(original.orientation)
             reoriented = sitk.DICOMOrient(image.as_sitk(), orientation)
             reoriented_data = sitk.GetArrayFromImage(reoriented).transpose()[np.newaxis]
-            image = tio.ScalarImage(
-                tensor=reoriented_data, affine=original.affine,  # noqa
-            )
-        return image.data, image.affine
+            image = tio.ScalarImage(tensor=reoriented_data, affine=original.affine)
+        new_affine = (
+            torch.from_numpy(image.affine)
+            if isinstance(image.affine, np.ndarray)
+            else image.affine
+        )
+        return image.data, new_affine
 
-    def _predict_accumulate_patches(self, pred_step_outputs: Tensor, batch: dict):
-        p3d = batch["pseudo3d_dim"]
-        locations = batch["locations"]
+    def _predict_accumulate_patches(
+        self, pred_step_outputs: Tensor, batch: PatchesImagePredictBatch,
+    ) -> None:
+        p3d = batch.pseudo3d_dim
+        locations = batch.locations
         if not hasattr(self, "aggregator"):
             self.aggregator = tio.GridAggregator(
-                batch["grid_obj"], overlap_mode="average",
+                batch.grid_obj, overlap_mode="average",
             )
         if p3d is not None:
             locations = self._fix_pseudo3d_locations(locations, p3d)
@@ -412,10 +440,10 @@ class LesionSegLightningBase(pl.LightningModule):
             )
         return locations
 
-    def _log_images(self, images: dict):
+    def _log_images(self, images: Dict[str, Any]) -> None:
         n = self.current_epoch
         mid_slice = None
-        dim = images.pop("dim")
+        dim: int = images.pop("dim")
         for key, image in images.items():
             if dim == 3:
                 if mid_slice is None:
@@ -624,8 +652,8 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         network_dim (int): use a 2D or 3D convolutions
         in_channels (int): number of input channels
         num_classes (int): number of classes to segment with the network
-        down_blocks (Iterable[int]): number of layers in each block in down path
-        up_blocks (Iterable[int]): number of layers in each block in up path
+        down_blocks (Collection[int]): number of layers in each block in down path
+        up_blocks (Collection[int]): number of layers in each block in up path
         bottleneck_layers (int): number of layers in the bottleneck
         growth_rate (int): number of channels to grow by in each layer
         first_conv_out_channels (int): number of output channels in first conv
@@ -657,13 +685,13 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         _model_num (ModelNum): internal param for ith of n models
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-untyped-def]
         self,
         network_dim: int = 3,
         in_channels: int = 1,
         num_classes: int = 1,
-        down_blocks: Iterable[int] = (4, 4, 4, 4, 4),
-        up_blocks: Iterable[int] = (4, 4, 4, 4, 4),
+        down_blocks: Collection[int] = (4, 4, 4, 4, 4),
+        up_blocks: Collection[int] = (4, 4, 4, 4, 4),
         bottleneck_layers: int = 4,
         growth_rate: int = 16,
         first_conv_out_channels: int = 48,
@@ -691,7 +719,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
-        network_class: Union[Tiramisu2d, Tiramisu3d]
+        network_class: Union[Type[Tiramisu2d], Type[Tiramisu3d]]
         if network_dim == 2:
             network_class = Tiramisu2d
         elif network_dim == 3:

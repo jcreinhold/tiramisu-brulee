@@ -29,33 +29,39 @@ def _is_norm(layer: Module) -> bool:
 
 def init_weights(net: Module, init_type: str = "normal", gain: float = 0.02) -> None:
     def init_func(layer: Module) -> None:
-        assert isinstance(layer.weight.data, Tensor)
-        weight_data = layer.weight.data
-        assert weight_data is layer.weight.data
+        is_conv = _is_conv(layer)
+        is_norm = _is_norm(layer)
+        if not is_conv and not is_norm:
+            return
+        assert isinstance(layer.weight, Tensor)
+        weight = layer.weight
+        assert weight is layer.weight
         has_bias = hasattr(layer, "bias") and layer.bias is not None
         if has_bias:
-            assert isinstance(layer.bias.data, Tensor)
-            bias_data = layer.bias.data
-            assert bias_data is layer.bias.data
-        if _is_conv(layer):
+            assert isinstance(layer.bias, Tensor)
+            bias = layer.bias
+            assert bias is layer.bias
+        if is_conv:
             if init_type == "normal":
-                init.normal_(weight_data, 0.0, gain)
+                init.normal_(weight, 0.0, gain)
             elif init_type == "xavier_normal":
-                init.xavier_normal_(weight_data, gain=gain)
+                init.xavier_normal_(weight, gain=gain)
             elif init_type == "he_normal":
-                init.kaiming_normal_(weight_data, a=0.0, mode="fan_in")
+                init.kaiming_normal_(weight, a=0.0, mode="fan_in")
             elif init_type == "he_uniform":
-                init.kaiming_uniform_(weight_data, a=0.0, mode="fan_in")
+                init.kaiming_uniform_(weight, a=0.0, mode="fan_in")
             elif init_type == "orthogonal":
-                init.orthogonal_(weight_data, gain=gain)
+                init.orthogonal_(weight, gain=gain)
             else:
                 err_msg = f"initialization type [{init_type}] not implemented"
                 raise NotImplementedError(err_msg)
             if has_bias:
-                init.constant_(bias_data, 0.0)
-        elif _is_norm(layer):
-            init.normal_(weight_data, 1.0, gain)
+                # noinspection PyUnboundLocalVariable
+                init.constant_(bias, 0.0)
+        elif is_norm:
+            init.normal_(weight, 1.0, gain)
             if has_bias:
-                init.constant_(bias_data, 0.0)
+                # noinspection PyUnboundLocalVariable
+                init.constant_(bias, 0.0)
 
     net.apply(init_func)
