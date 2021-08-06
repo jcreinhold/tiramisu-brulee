@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.25 (2021-08-06)
+-------------------
+
+* Detect and use tensorboard directory (``/opt/ml/output/tensorboard``) for logging on SageMaker
+
 0.1.24 (2021-08-06)
 -------------------
 
