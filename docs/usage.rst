@@ -106,9 +106,13 @@ and ``version_15``.
 
 You can montior your experiment with tensorboard by running, e.g.,::
 
-    tensorboard --logdir=lesion_tiramisu_experiment/version_13
+    tensorboard --logdir=lesion_tiramisu_experiment/version_13/tensorboard
 
 (where the version number is changed appropriately based on your experiment.)
+
+You can change the experiment name from ``lesion_tiramisu_experiment``
+by setting ``experiment_name`` in the config file. Similarly, you can set
+a more descriptive trial name than ``version_*`` by setting ``trial_name``.
 
 Prediction
 ~~~~~~~~~~

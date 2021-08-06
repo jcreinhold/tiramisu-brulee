@@ -18,6 +18,7 @@ import argparse
 from copy import deepcopy
 import gc
 import logging
+import os
 from pathlib import Path
 import time
 from typing import List, Tuple, Union
@@ -250,12 +251,19 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
     if args.tracking_uri is not None:
         exp_logger = MLFlowLogger(args.experiment_name, tracking_uri=args.tracking_uri)
     else:
-        exp_logger = TensorBoardLogger(
-            artifact_dir,
-            name=args.experiment_name,
-            version=args.trial_name,
-            sub_dir="tensorboard",
-        )
+        ignore_tensorboard_dir = bool(os.getenv("TIRAMISU_IGNORE_TB_DIR", False))
+        tensorboard_dir = Path("/opt/ml/output/tensorboard").resolve()  # for SageMaker
+        if not tensorboard_dir.is_dir() or ignore_tensorboard_dir:
+            exp_logger = TensorBoardLogger(
+                artifact_dir,
+                name=args.experiment_name,
+                version=args.trial_name,
+                sub_dir="tensorboard",
+            )
+        else:
+            logging.info(f"Saving tensorboard logs to {tensorboard_dir}.")
+            logging.info("Set an env variable TIRAMISU_IGNORE_TB_DIR=true to prevent.")
+            exp_logger = TensorBoardLogger(str(tensorboard_dir), name="", version="")
     return exp_logger
 
 
