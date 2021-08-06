@@ -107,6 +107,20 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
         help="save models to this directory if provided, "
         "otherwise save in default_root_dir",
     )
+    exp_parser.add_argument(
+        "-en",
+        "--experiment-name",
+        type=str,
+        default=EXPERIMENT_NAME,
+        help="name of the experiment/output directory",
+    )
+    exp_parser.add_argument(
+        "-tn",
+        "--trial-name",
+        type=str,
+        default=None,
+        help="name of the trial/output version directory",
+    )
     parser = LesionSegLightningTiramisu.add_io_arguments(parser)
     parser = LesionSegLightningTiramisu.add_model_arguments(parser)
     parser = LesionSegLightningTiramisu.add_other_arguments(parser)
@@ -234,9 +248,14 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
     artifact_dir = _artifact_directory(args)
     exp_logger: Union[TensorBoardLogger, MLFlowLogger]
     if args.tracking_uri is not None:
-        exp_logger = MLFlowLogger(EXPERIMENT_NAME, tracking_uri=args.tracking_uri)
+        exp_logger = MLFlowLogger(args.experiment_name, tracking_uri=args.tracking_uri)
     else:
-        exp_logger = TensorBoardLogger(artifact_dir, name=EXPERIMENT_NAME)
+        exp_logger = TensorBoardLogger(
+            artifact_dir,
+            name=args.experiment_name,
+            version=args.trial_name,
+            sub_dir="tensorboard",
+        )
     return exp_logger
 
 
