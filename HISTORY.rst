@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.24 (2021-08-06)
+-------------------
+
+* Add experiment and trial name as options to explicitly specify artifact locations
+
 0.1.23 (2021-08-04)
 -------------------
 
