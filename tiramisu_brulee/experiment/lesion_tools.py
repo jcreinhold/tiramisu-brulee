@@ -33,24 +33,30 @@ from tiramisu_brulee.experiment.util import image_one_hot
 
 
 def clean_segmentation(
-    label: np.ndarray, fill_holes: bool = True, minimum_lesion_size: int = 3
+    label: np.ndarray,
+    fill_holes: bool = True,
+    minimum_lesion_size: int = 3,
 ) -> np.ndarray:
-    """ clean binary array by removing small objs & filling holes """
+    """clean binary array by removing small objs & filling holes"""
     d = label.ndim
     if fill_holes:
         structure = generate_binary_structure(d, d)
         label = binary_fill_holes(label, structure=structure)
     if minimum_lesion_size > 0:
         label = remove_small_objects(
-            label, min_size=minimum_lesion_size, connectivity=d,
+            label,
+            min_size=minimum_lesion_size,
+            connectivity=d,
         )
     return label
 
 
 def almost_isbi15_score(
-    pred: Tensor, target: Tensor, return_dice_ppv: bool = False,
+    pred: Tensor,
+    target: Tensor,
+    return_dice_ppv: bool = False,
 ) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
-    """ ISBI 15 MS challenge score excluding the LTPR & LFPR components """
+    """ISBI 15 MS challenge score excluding the LTPR & LFPR components"""
     batch_size, num_classes = pred.shape[0:2]
     multiclass = num_classes > 1
     one_hot_classes = num_classes if multiclass else 2
@@ -73,7 +79,8 @@ def almost_isbi15_score(
     if batch_size > 1 and not multiclass:
         dims = list(range(1, pred.ndim))
         corr = pearson_corrcoef(
-            pred.sum(dim=dims).float(), target.sum(dim=dims).float(),
+            pred.sum(dim=dims).float(),
+            target.sum(dim=dims).float(),
         )
         isbi15_score = 0.5 * isbi15_score + 0.5 * corr
     if return_dice_ppv:

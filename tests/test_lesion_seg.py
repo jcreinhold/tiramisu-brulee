@@ -97,7 +97,7 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
 
 
 def _handle_fast_dev_run(predict_args: List[str]) -> List[str]:
-    """ py36-compatible pytorch-lightning has problem parsing fast_dev_run """
+    """py36-compatible pytorch-lightning has problem parsing fast_dev_run"""
     py_version = sys.version_info
     assert py_version.major == 3
     if py_version.minor > 6:
@@ -114,7 +114,9 @@ def _get_and_format_best_model_paths(args: List[str]) -> str:
 
 
 def test_cli(
-    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path,
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -129,7 +131,9 @@ def test_cli(
 
 
 def test_reorient_cli(
-    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path,
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -165,7 +169,9 @@ def test_multiclass_train_cli(cli_train_args: List[str], train_csv: Path) -> Non
 
 
 def test_patch_prediction_cli(
-    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path,
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -194,7 +200,9 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
 
 
 def test_predict_image_cli(
-    cli_train_args: List[str], cli_predict_image_args: List[str], train_csv: Path
+    cli_train_args: List[str],
+    cli_predict_image_args: List[str],
+    train_csv: Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -208,7 +216,9 @@ def test_predict_image_cli(
 
 
 def test_pseudo3d_cli(
-    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 3])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -227,7 +237,9 @@ def test_pseudo3d_cli(
 
 
 def test_pseudo3d_all_cli(
-    cli_train_args: List[str], cli_predict_args: List[str], train_csv: Path,
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
 ) -> None:
     cli_train_args += f"--train-csv {train_csv}".split()
     cli_train_args += f"--valid-csv {train_csv}".split()

@@ -70,7 +70,7 @@ from tiramisu_brulee.experiment.cli.common import (
 
 
 def predict_parser(use_python_argparse: bool = True) -> ArgParser:
-    """ argument parser for using a Tiramisu CNN for prediction """
+    """argument parser for using a Tiramisu CNN for prediction"""
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
         config_action = None
@@ -95,7 +95,7 @@ def predict_parser(use_python_argparse: bool = True) -> ArgParser:
 
 
 def predict_image_parser() -> argparse.ArgumentParser:
-    """ argument parser for using a Tiramisu CNN for single time-point prediction """
+    """argument parser for using a Tiramisu CNN for single time-point prediction"""
     desc = "Use a Tiramisu CNN to segment lesions for a single time-point prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
@@ -109,7 +109,9 @@ def predict_image_parser() -> argparse.ArgumentParser:
 
 
 def _predict_parser_shared(
-    parser: ArgParser, necessary_trainer_args: set, add_csv: bool,
+    parser: ArgParser,
+    necessary_trainer_args: set,
+    add_csv: bool,
 ) -> ArgParser:
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
@@ -122,7 +124,11 @@ def _predict_parser_shared(
         help="path to output the trained model",
     )
     exp_parser.add_argument(
-        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
+        "-sd",
+        "--seed",
+        type=int,
+        default=0,
+        help="set seed for reproducibility",
     )
     exp_parser.add_argument(
         "-oa",
@@ -151,7 +157,7 @@ def _predict_parser_shared(
 
 
 def predict(args: ArgType = None) -> int:
-    """ use a Tiramisu CNN for prediction """
+    """use a Tiramisu CNN for prediction"""
     parser = predict_parser(False)
     if args is None:
         args = parser.parse_args(_skip_check=True)  # type: ignore[call-overload]
@@ -162,7 +168,7 @@ def predict(args: ArgType = None) -> int:
 
 
 def predict_image(args: ArgType = None) -> int:
-    """ use a Tiramisu CNN for prediction for a single time-point """
+    """use a Tiramisu CNN for prediction for a single time-point"""
     parser = predict_image_parser()
     if args is None:
         args, unknown = parser.parse_known_args()
@@ -179,16 +185,20 @@ def predict_image(args: ArgType = None) -> int:
 
 
 def _predict_whole_image(
-    args: Namespace, model_path: Path, model_num: ModelNum,
+    args: Namespace,
+    model_path: Path,
+    model_num: ModelNum,
 ) -> None:
-    """ predict a whole image volume as opposed to patches """
+    """predict a whole image volume as opposed to patches"""
     dict_args = vars(args)
     pp = args.predict_probability
     trainer = Trainer.from_argparse_args(args)
     dm = LesionSegDataModulePredictWhole.from_csv(**dict_args)
     dm.setup()
     model = LesionSegLightningTiramisu.load_from_checkpoint(
-        str(model_path), predict_probability=pp, _model_num=model_num,
+        str(model_path),
+        predict_probability=pp,
+        _model_num=model_num,
     )
     logging.debug(model)
     trainer.predict(model, datamodule=dm)
@@ -203,13 +213,15 @@ def _predict_patch_image(
     model_num: ModelNum,
     pseudo3d_dim: Union[None, int],
 ) -> None:
-    """ predict a volume with patches as opposed to a whole volume """
+    """predict a volume with patches as opposed to a whole volume"""
     dict_args = vars(args)
     dict_args["pseudo3d_dim"] = pseudo3d_dim
     pp = args.predict_probability
     subject_list = csv_to_subjectlist(args.predict_csv)
     model = LesionSegLightningTiramisu.load_from_checkpoint(
-        str(model_path), predict_probability=pp, _model_num=model_num,
+        str(model_path),
+        predict_probability=pp,
+        _model_num=model_num,
     )
     logging.debug(model)
     for subject in subject_list:
@@ -285,7 +297,7 @@ def aggregate(
     min_lesion_size: int = 3,
     num_workers: Optional[int] = None,
 ) -> None:
-    """ aggregate output from multiple model predictions """
+    """aggregate output from multiple model predictions"""
     df = pd.read_csv(predict_csv)
     out_fns = df["out"]
     n_fns = len(out_fns)
@@ -315,7 +327,7 @@ def _aggregate(
     fill_holes: bool,
     min_lesion_size: int,
 ) -> None:
-    """ aggregate helper for concurrent/parallel processing """
+    """aggregate helper for concurrent/parallel processing"""
     assert n_models >= 1
     n, fn = n_fn
     data = []
