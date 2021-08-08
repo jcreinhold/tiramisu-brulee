@@ -36,7 +36,7 @@ def check_patch_size(patch_size: List[int], use_pseudo3d: bool) -> None:
 
 
 def handle_fast_dev_run(unnecessary_args: Set[str]) -> Set[str]:
-    """ fast_dev_run is problematic with py36 so remove it """
+    """fast_dev_run is problematic with py36 so remove it"""
     py_version = sys.version_info
     assert py_version.major == 3
     if py_version.minor == 6:
@@ -45,7 +45,9 @@ def handle_fast_dev_run(unnecessary_args: Set[str]) -> Set[str]:
 
 
 def pseudo3d_dims_setup(
-    pseudo3d_dim: Optional[List[int]], n_models: int, stage: str,
+    pseudo3d_dim: Optional[List[int]],
+    n_models: int,
+    stage: str,
 ) -> Union[List[None], List[int]]:
     assert stage in ("train", "predict")
     if stage == "predict":

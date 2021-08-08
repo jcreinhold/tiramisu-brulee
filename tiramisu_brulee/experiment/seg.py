@@ -171,7 +171,9 @@ class LesionSegLightningBase(pl.LightningModule):
             self._mix = Mixup(self.hparams.mixup_alpha)
 
     def training_step(  # type: ignore[override]
-        self, batch: Tuple[Tensor, Tensor], batch_idx: int,
+        self,
+        batch: Tuple[Tensor, Tensor],
+        batch_idx: int,
     ) -> Tensor:
         src, tgt = batch
         if self.hparams.mixup:
@@ -182,7 +184,9 @@ class LesionSegLightningBase(pl.LightningModule):
         return loss
 
     def validation_step(  # type: ignore[override]
-        self, batch: Tuple[Tensor, Tensor], batch_idx: int
+        self,
+        batch: Tuple[Tensor, Tensor],
+        batch_idx: int,
     ) -> Dict[str, Any]:
         src, tgt = batch
         pred = self(src)
@@ -190,7 +194,11 @@ class LesionSegLightningBase(pl.LightningModule):
         pred_seg = torch.sigmoid(pred) > self.hparams.threshold
         isbi15_score, dice, ppv = almost_isbi15_score(pred_seg, tgt, True)
         self.log(
-            "val_loss", loss, on_step=False, on_epoch=True, prog_bar=True,
+            "val_loss",
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
         )
         self.log(
             "val_isbi15_score",
@@ -200,10 +208,18 @@ class LesionSegLightningBase(pl.LightningModule):
             prog_bar=False,
         )
         self.log(
-            "val_dice", dice, on_step=False, on_epoch=True, prog_bar=False,
+            "val_dice",
+            dice,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
         )
         self.log(
-            "val_ppv", ppv, on_step=False, on_epoch=True, prog_bar=False,
+            "val_ppv",
+            ppv,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
         )
         # note that the metrics above will be accumulated and averaged over the epoch
         # whereas metrics printed in the debug will be on a per iteration/batch basis
@@ -233,7 +249,10 @@ class LesionSegLightningBase(pl.LightningModule):
         self._log_images(outputs[0]["images"])
 
     def predict_step(
-        self, batch: PredictBatch, batch_idx: int, dataloader_idx: Optional[int] = None
+        self,
+        batch: PredictBatch,
+        batch_idx: int,
+        dataloader_idx: Optional[int] = None,
     ) -> Tensor:
         if self._predict_with_patches(batch):
             assert isinstance(batch, PatchesImagePredictBatch)
@@ -292,7 +311,7 @@ class LesionSegLightningBase(pl.LightningModule):
         return hasattr(batch, "grid_obj")
 
     def _predict_whole_image(self, batch: WholeImagePredictBatch) -> Tensor:
-        """ for 3D networks, predict the whole image foreground at once """
+        """for 3D networks, predict the whole image foreground at once"""
         src = batch.src
         bbox = BoundingBox3D.from_batch(src, pad=0)
         batch.src = bbox(src)
@@ -301,7 +320,7 @@ class LesionSegLightningBase(pl.LightningModule):
         return pred_seg
 
     def _predict_patch_image(self, batch: PredictBatch) -> Tensor:
-        """ for all 2D networks and 3D networks with a specified patch size """
+        """for all 2D networks and 3D networks with a specified patch size"""
         src = batch.src
         pred = self(src)
         if self.hparams.num_classes == 1:
@@ -321,11 +340,16 @@ class LesionSegLightningBase(pl.LightningModule):
         return pred
 
     def _predict_save_whole_image(
-        self, pred_step_outputs: Tensor, batch: WholeImagePredictBatch,
+        self,
+        pred_step_outputs: Tensor,
+        batch: WholeImagePredictBatch,
     ) -> None:
         assert len(pred_step_outputs) == len(batch.affine)
         nifti_attrs = zip(
-            pred_step_outputs.detach().cpu(), batch.affine, batch.path, batch.out,
+            pred_step_outputs.detach().cpu(),
+            batch.affine,
+            batch.path,
+            batch.out,
         )
         for pred, affine, path, fn in nifti_attrs:
             if self._model_num != ModelNum(num=1, out_of=1):
@@ -366,7 +390,10 @@ class LesionSegLightningBase(pl.LightningModule):
         return save_dicom
 
     def _write_image(
-        self, image: np.ndarray, affine: np.ndarray, filename: str,
+        self,
+        image: np.ndarray,
+        affine: np.ndarray,
+        filename: str,
     ) -> None:
         if image.ndim != 4:
             image = image[np.newaxis]
@@ -378,7 +405,9 @@ class LesionSegLightningBase(pl.LightningModule):
 
     @staticmethod
     def _to_original_orientation(
-        original_path: str, data: Tensor, affine: Tensor,
+        original_path: str,
+        data: Tensor,
+        affine: Tensor,
     ) -> Tuple[Tensor, Tensor]:
         original = tio.ScalarImage(original_path)
         image = tio.ScalarImage(tensor=data, affine=affine)
@@ -395,13 +424,16 @@ class LesionSegLightningBase(pl.LightningModule):
         return image.data, new_affine
 
     def _predict_accumulate_patches(
-        self, pred_step_outputs: Tensor, batch: PatchesImagePredictBatch,
+        self,
+        pred_step_outputs: Tensor,
+        batch: PatchesImagePredictBatch,
     ) -> None:
         p3d = batch.pseudo3d_dim
         locations = batch.locations
         if not hasattr(self, "aggregator"):
             self.aggregator = tio.GridAggregator(
-                batch.grid_obj, overlap_mode="average",
+                batch.grid_obj,
+                overlap_mode="average",
             )
         if p3d is not None:
             locations = self._fix_pseudo3d_locations(locations, p3d)

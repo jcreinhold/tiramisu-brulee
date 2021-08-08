@@ -41,7 +41,7 @@ logger = getLogger(__name__)
 def get_best_model_path(
     checkpoint_callback: ModelCheckpoint, only_best: bool = False
 ) -> Path:
-    """ gets the best model path from a ModelCheckpoint instance """
+    """gets the best model path from a ModelCheckpoint instance"""
     best_model_path = checkpoint_callback.best_model_path
     if only_best and not best_model_path:
         raise ValueError("best_model_path empty.")
@@ -51,7 +51,7 @@ def get_best_model_path(
 
 
 def get_experiment_directory(model_path: Union[str, Path]) -> Path:
-    """ gets the experiment directory from a checkpoint model path """
+    """gets the experiment directory from a checkpoint model path"""
     if isinstance(model_path, str):
         model_path = Path(model_path).resolve()
     return model_path.parents[1]
@@ -64,7 +64,7 @@ def _generate_config_yaml(
     best_model_paths: Optional[List[Path]],
     stage: str,
 ) -> None:
-    """ generate config yaml file(s) for `stage`, store in experiment dir """
+    """generate config yaml file(s) for `stage`, store in experiment dir"""
     assert stage in ("train", "predict")
     config = vars(parser.get_defaults())
     for k, v in dict_args.items():
@@ -95,7 +95,7 @@ def generate_train_config_yaml(
     dict_args: dict,
     best_model_paths: Optional[List[Path]] = None,
 ) -> None:
-    """ generate config yaml file(s) for training, store in experiment dir """
+    """generate config yaml file(s) for training, store in experiment dir"""
     if dict_args["config"] is not None:
         return  # user used config file, so we do not need to generate one
     if isinstance(exp_dirs, Path):
@@ -109,7 +109,7 @@ def generate_predict_config_yaml(
     dict_args: dict,
     best_model_paths: Optional[List[Path]] = None,
 ) -> None:
-    """ generate config yaml file(s) for prediction, store in experiment dir """
+    """generate config yaml file(s) for prediction, store in experiment dir"""
     if isinstance(exp_dirs, Path):
         exp_dirs = [exp_dirs]
     remove_args(parser, ["config"])
@@ -117,7 +117,7 @@ def generate_predict_config_yaml(
 
 
 def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
-    """ remove a list of args (w/o leading --) from a parser """
+    """remove a list of args (w/o leading --) from a parser"""
     # https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
     for arg in args:
         for action in parser._actions:
@@ -137,27 +137,29 @@ def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
 
 # flake8: noqa: E731
 def fix_type_funcs(parser: ArgumentParser) -> None:
-    """ fixes type functions in pytorch-lightning's `add_argparse_args` """
+    """fixes type functions in pytorch-lightning's `add_argparse_args`"""
     for action in parser._actions:
         if action.type is not None:
             type_func_name = action.type.__name__
             if type_func_name.startswith("str_to_"):
                 func = deepcopy(action.type)
                 action.type = new_parse_type(
-                    lambda val: func(str(val)), type_func_name,
+                    lambda val: func(str(val)),
+                    type_func_name,
                 )
             elif "gpus" in type_func_name:
                 action.type = new_parse_type(_gpus_allowed_type, type_func_name)
             elif action.dest == "progress_bar_refresh_rate":
                 action.type = new_parse_type(
-                    lambda val: val and int(val), "none_or_int",
+                    lambda val: val and int(val),
+                    "none_or_int",
                 )
             elif action.type.__str__ is object.__str__:
                 action.type = new_parse_type(action.type, type_func_name)
 
 
 def _map_attrs(args: Namespace, cond: Callable, target: Callable) -> Namespace:
-    """ map attributes to some func of the value if it satisfied a cond """
+    """map attributes to some func of the value if it satisfied a cond"""
     attrs = [a for a in dir(args) if not a.startswith("_")]
     for attr in attrs:
         val = getattr(args, attr)
@@ -168,7 +170,7 @@ def _map_attrs(args: Namespace, cond: Callable, target: Callable) -> Namespace:
 
 # flake8: noqa: E731
 def none_string_to_none(args: Namespace) -> Namespace:
-    """ goes through an instance of parsed args and maps 'None' -> None """
+    """goes through an instance of parsed args and maps 'None' -> None"""
     cond = lambda val: val == "None"
     target = lambda val: None
     args = _map_attrs(args, cond, target)
@@ -177,7 +179,7 @@ def none_string_to_none(args: Namespace) -> Namespace:
 
 # flake8: noqa: E731
 def path_to_str(args: Namespace) -> Namespace:
-    """ goes through an instance of parsed args and maps Path -> str """
+    """goes through an instance of parsed args and maps Path -> str"""
     cond = lambda val: isinstance(val, Path)
     target = lambda val: str(val)
     args = _map_attrs(args, cond, target)
@@ -187,7 +189,7 @@ def path_to_str(args: Namespace) -> Namespace:
 def _gpus_allowed_type(
     val: Union[None, str, float, int]
 ) -> Union[None, float, int, List[int], str]:
-    """ replaces pytorch-lightning's version to work w/ parser """
+    """replaces pytorch-lightning's version to work w/ parser"""
     if val is None:
         return val
     elif isinstance(val, list):
@@ -199,7 +201,7 @@ def _gpus_allowed_type(
 
 
 def parse_unknown_to_dict(unknown: List[str]) -> dict:
-    """ parse unknown arguments (usually modalities and their path) to dict """
+    """parse unknown arguments (usually modalities and their path) to dict"""
     nargs = len(unknown)
     if nargs % 2 != 0:
         raise ValueError(

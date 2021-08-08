@@ -68,7 +68,7 @@ warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning
 
 
 def train_parser(use_python_argparse: bool = True) -> ArgParser:
-    """ argument parser for training a Tiramisu CNN """
+    """argument parser for training a Tiramisu CNN"""
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
         config_action = None
@@ -76,7 +76,10 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
         ArgumentParser = jsonargparse.ArgumentParser
         config_action = jsonargparse.ActionConfigFile
     desc = "Train a Tiramisu CNN to segment lesions"
-    parser = ArgumentParser(prog="lesion-train", description=desc,)
+    parser = ArgumentParser(
+        prog="lesion-train",
+        description=desc,
+    )
     parser.add_argument(
         "--config",
         action=config_action,  # type: ignore[arg-type]
@@ -84,7 +87,11 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     )
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
-        "-sd", "--seed", type=int, default=0, help="set seed for reproducibility",
+        "-sd",
+        "--seed",
+        type=int,
+        default=0,
+        help="set seed for reproducibility",
     )
     exp_parser.add_argument(
         "-v",
@@ -152,9 +159,10 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
 
 
 def train(
-    args: ArgType = None, return_best_model_paths: bool = False,
+    args: ArgType = None,
+    return_best_model_paths: bool = False,
 ) -> Union[List[Path], int]:
-    """ train a Tiramisu CNN for segmentation """
+    """train a Tiramisu CNN for segmentation"""
     parser = train_parser(False)
     if args is None:
         args = parser.parse_args(_skip_check=True)  # type: ignore[call-overload]
@@ -268,7 +276,8 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
 
 
 def _generate_config_yamls_in_train(
-    args: ArgType, best_model_paths: List[Path]
+    args: ArgType,
+    best_model_paths: List[Path],
 ) -> None:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     generate_config_yaml = (

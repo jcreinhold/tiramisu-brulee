@@ -35,7 +35,7 @@ T = TypeVar("T", bound="BoundingBox3D")
 
 
 def minmax_scale_batch(x: Tensor) -> Tensor:
-    """ rescale a batch of image PyTorch tensors to be between 0 and 1 """
+    """rescale a batch of image PyTorch tensors to be between 0 and 1"""
     dims = list(range(1, x.dim()))
     xmin = x.amin(dim=dims, keepdim=True)
     xmax = x.amax(dim=dims, keepdim=True)
@@ -43,7 +43,7 @@ def minmax_scale_batch(x: Tensor) -> Tensor:
 
 
 def to_np(x: Tensor) -> np.ndarray:
-    """ convert a PyTorch Tensor (potentially on GPU) to a numpy array """
+    """convert a PyTorch Tensor (potentially on GPU) to a numpy array"""
     data = x.detach().cpu().numpy()
     assert isinstance(data, np.ndarray)
     return data
@@ -70,21 +70,21 @@ class BoundingBox3D:
         k_high: int,
         original_shape: Optional[Tuple[int, int, int]] = None,
     ):
-        """ bounding box indices and crop/uncrop func for 3d vols """
+        """bounding box indices and crop/uncrop func for 3d vols"""
         self.i = slice(i_low, i_high)
         self.j = slice(j_low, j_high)
         self.k = slice(k_low, k_high)
         self.original_shape = original_shape
 
     def crop_to_bbox(self, tensor: Tensor) -> Tensor:
-        """ returns the tensor cropped around the saved bbox """
+        """returns the tensor cropped around the saved bbox"""
         return tensor[..., self.i, self.j, self.k]
 
     def __call__(self, tensor: Tensor) -> Tensor:
         return self.crop_to_bbox(tensor)
 
     def uncrop(self, tensor: Tensor) -> Tensor:
-        """ places a tensor back into the saved original shape """
+        """places a tensor back into the saved original shape"""
         assert tensor.ndim == 3, "expects tensors with shape HxWxD"
         assert self.original_shape is not None
         out = torch.zeros(self.original_shape, dtype=tensor.dtype, device=tensor.device)
@@ -92,7 +92,7 @@ class BoundingBox3D:
         return out
 
     def uncrop_batch(self, batch: Tensor) -> Tensor:
-        """ places a batch back into the saved original shape """
+        """places a batch back into the saved original shape"""
         assert batch.ndim == 5, "expects tensors with shape NxCxHxWxD"
         assert self.original_shape is not None
         batch_size, channel_size = batch.shape[:2]
@@ -121,9 +121,12 @@ class BoundingBox3D:
 
     @classmethod
     def from_image(
-        cls: Type[T], image: Tensor, pad: int = 0, foreground_min: float = 1e-4,
+        cls: Type[T],
+        image: Tensor,
+        pad: int = 0,
+        foreground_min: float = 1e-4,
     ) -> T:
-        """ find a bounding box for a 3D tensor (with optional padding) """
+        """find a bounding box for a 3D tensor (with optional padding)"""
         foreground_mask = image > foreground_min
         assert isinstance(foreground_mask, Tensor)
         bbox_idxs = cls.find_bbox(foreground_mask, pad)
@@ -138,7 +141,7 @@ class BoundingBox3D:
         channel: int = 0,
         foreground_min: float = 1e-4,
     ) -> T:
-        """ create bbox that works for a batch of 3d vols """
+        """create bbox that works for a batch of 3d vols"""
         assert batch.ndim == 5, "expects tensors with shape NxCxHxWxD"
         batch_size = batch.shape[0]
         assert batch_size > 0
@@ -155,7 +158,13 @@ class BoundingBox3D:
         # noinspection PyUnboundLocalVariable
         original_shape = cls.get_shape(image)
         return cls(
-            h_low, h_high, w_low, w_high, d_low, d_high, original_shape=original_shape,
+            h_low,
+            h_high,
+            w_low,
+            w_high,
+            d_low,
+            d_high,
+            original_shape=original_shape,
         )
 
     @staticmethod
@@ -166,14 +175,14 @@ class BoundingBox3D:
 
 
 def reshape_for_broadcasting(tensor: Tensor, ndim: int) -> Tensor:
-    """ expand dimensions of a 0- or 1-dimensional tensor to ndim for broadcast ops """
+    """expand dimensions of a 0- or 1-dimensional tensor to ndim for broadcast ops"""
     assert tensor.ndim <= 1
     dims = [1 for _ in range(ndim - 1)]
     return tensor.view(-1, *dims)
 
 
 def split_filename(filepath: Union[str, Path]) -> Tuple[Path, str, str]:
-    """ split a filepath into the directory, base, and extension """
+    """split a filepath into the directory, base, and extension"""
     filepath = Path(filepath).resolve()
     path = filepath.parent
     _base = Path(filepath.stem)
@@ -188,14 +197,14 @@ def split_filename(filepath: Union[str, Path]) -> Tuple[Path, str, str]:
 
 
 def append_num_to_filename(filepath: Union[str, Path], num: int) -> Path:
-    """ append num to the filename of filepath and return the modified path """
+    """append num to the filename of filepath and return the modified path"""
     path, base, ext = split_filename(filepath)
     base += f"_{num}"
     return path / (base + ext)
 
 
 def setup_log(verbosity: int) -> None:
-    """ set logger with verbosity logging level and message """
+    """set logger with verbosity logging level and message"""
     if verbosity == 1:
         level = logging.getLevelName("INFO")
     elif verbosity >= 2:
