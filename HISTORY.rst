@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.26 (2021-08-09)
+-------------------
+
+* Reformat with newer version of black (v21.7b0)
+* Change to ``every_n_epochs`` in ``ModelCheckpoint`` since ``every_n_val_epochs`` will be deprecated
+
 0.1.25 (2021-08-06)
 -------------------
 
