@@ -238,7 +238,7 @@ def _format_checkpoints(args: ArgType) -> dict:
         save_top_k=3,
         save_last=True,
         mode="max",
-        every_n_val_epochs=args.checkpoint_every_n_epochs,
+        every_n_epochs=args.checkpoint_every_n_epochs,
     )
     return checkpoint_kwargs
 

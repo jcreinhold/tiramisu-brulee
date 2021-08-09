@@ -466,6 +466,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         self.val_dataset = subjects_dataset
 
+    # flake8: noqa: E501
     def _collate_fn(self, batch: List[tio.Subject]) -> Tuple[Tensor, Tensor]:
         collated_batch: Batch = default_collate(batch)
         p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
@@ -870,6 +871,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         )
         self.predict_dataset = grid_sampler
 
+    # flake8: noqa: E501
     def _collate_fn(self, batch: List[tio.Subject]) -> PatchesImagePredictBatch:
         collated_batch = default_collate(batch)
         p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
