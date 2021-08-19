@@ -32,8 +32,8 @@ __all__ = [
 from typing import Callable, List, Optional, Union
 
 import torch
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 
 
 def per_channel_dice(

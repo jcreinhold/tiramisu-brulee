@@ -15,30 +15,30 @@ __all__ = [
 ]
 
 import argparse
-from copy import deepcopy
 import gc
 import logging
 import os
-from pathlib import Path
 import time
-from typing import List, Tuple, Union
 import warnings
+from copy import deepcopy
+from pathlib import Path
+from typing import List, Tuple, Union
 
 import jsonargparse
+import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger, TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
-import torch
 
-from tiramisu_brulee.experiment.type import (
-    ArgType,
-    ArgParser,
+from tiramisu_brulee.experiment.cli.common import (
+    EXPERIMENT_NAME,
+    check_patch_size,
+    handle_fast_dev_run,
+    pseudo3d_dims_setup,
 )
-from tiramisu_brulee.experiment.data import (
-    Mixup,
-    LesionSegDataModuleTrain,
-)
+from tiramisu_brulee.experiment.cli.predict import predict_parser
+from tiramisu_brulee.experiment.data import LesionSegDataModuleTrain, Mixup
 from tiramisu_brulee.experiment.parse import (
     fix_type_funcs,
     generate_predict_config_yaml,
@@ -50,14 +50,8 @@ from tiramisu_brulee.experiment.parse import (
     remove_args,
 )
 from tiramisu_brulee.experiment.seg import LesionSegLightningTiramisu
+from tiramisu_brulee.experiment.type import ArgParser, ArgType
 from tiramisu_brulee.experiment.util import setup_log
-from tiramisu_brulee.experiment.cli.common import (
-    check_patch_size,
-    handle_fast_dev_run,
-    EXPERIMENT_NAME,
-    pseudo3d_dims_setup,
-)
-from tiramisu_brulee.experiment.cli.predict import predict_parser
 
 # num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
 train_dataloader_warning = (

@@ -26,11 +26,11 @@ from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
 from pprint import pformat
-from typing import Callable, Dict, IO, Iterable, List, Optional, Union
+from typing import IO, Callable, Dict, Iterable, List, Optional, Union
 
+import yaml
 from jsonargparse import ArgumentParser, Namespace
 from pytorch_lightning.callbacks import ModelCheckpoint
-import yaml
 
 from tiramisu_brulee.experiment.type import new_parse_type
 from tiramisu_brulee.experiment.util import append_num_to_filename

@@ -22,38 +22,30 @@ __all__ = [
 from logging import getLogger
 from pathlib import Path
 from types import SimpleNamespace
-from typing import (
-    Callable,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Callable, List, Optional, Tuple, Type, TypeVar, Union
 
-from jsonargparse import ArgumentParser
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+import torch.distributions as D
+import torchio as tio
+from jsonargparse import ArgumentParser
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
-import torch.distributions as D
-import torchio as tio
 
 from tiramisu_brulee.experiment.type import (
     Batch,
+    PatchShape,
+    PatchShapeOption,
     file_path,
     nonnegative_int,
     nonnegative_int_or_none_or_all,
-    PatchShapeOption,
-    PatchShape,
     positive_float,
     positive_int,
-    positive_odd_int_or_none,
     positive_int_or_none,
+    positive_odd_int_or_none,
 )
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
 

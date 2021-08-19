@@ -16,34 +16,33 @@ __all__ = [
 ]
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor
-from collections import deque
-from functools import partial
 import gc
 import inspect
 import logging
-from pathlib import Path
 import tempfile
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import jsonargparse
 import numpy as np
 import pandas as pd
-from pytorch_lightning import Trainer, seed_everything
 import torch
 import torchio as tio
+from pytorch_lightning import Trainer, seed_everything
 
-from tiramisu_brulee.experiment.type import (
-    ArgType,
-    file_path,
-    Namespace,
-    ArgParser,
+from tiramisu_brulee.experiment.cli.common import (
+    check_patch_size,
+    handle_fast_dev_run,
+    pseudo3d_dims_setup,
 )
 from tiramisu_brulee.experiment.data import (
-    csv_to_subjectlist,
     LesionSegDataModulePredictBase,
     LesionSegDataModulePredictPatches,
     LesionSegDataModulePredictWhole,
+    csv_to_subjectlist,
 )
 from tiramisu_brulee.experiment.lesion_tools import clean_segmentation
 from tiramisu_brulee.experiment.parse import (
@@ -57,16 +56,14 @@ from tiramisu_brulee.experiment.parse import (
     remove_args,
 )
 from tiramisu_brulee.experiment.seg import LesionSegLightningTiramisu
-from tiramisu_brulee.experiment.type import ModelNum
-from tiramisu_brulee.experiment.util import (
-    append_num_to_filename,
-    setup_log,
+from tiramisu_brulee.experiment.type import (
+    ArgParser,
+    ArgType,
+    ModelNum,
+    Namespace,
+    file_path,
 )
-from tiramisu_brulee.experiment.cli.common import (
-    check_patch_size,
-    handle_fast_dev_run,
-    pseudo3d_dims_setup,
-)
+from tiramisu_brulee.experiment.util import append_num_to_filename, setup_log
 
 
 def predict_parser(use_python_argparse: bool = True) -> ArgParser:

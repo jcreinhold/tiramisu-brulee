@@ -17,17 +17,10 @@ __all__ = [
 from typing import Tuple, Union
 
 import numpy as np
-from scipy.ndimage.morphology import (
-    binary_fill_holes,
-    generate_binary_structure,
-)
+from scipy.ndimage.morphology import binary_fill_holes, generate_binary_structure
 from skimage.morphology import remove_small_objects
 from torch import Tensor
-from torchmetrics.functional import (
-    dice_score,
-    precision,
-    pearson_corrcoef,
-)
+from torchmetrics.functional import dice_score, pearson_corrcoef, precision
 
 from tiramisu_brulee.experiment.util import image_one_hot
 
