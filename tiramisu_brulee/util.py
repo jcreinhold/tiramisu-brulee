@@ -14,7 +14,7 @@ __all__ = [
 ]
 
 from torch import Tensor
-from torch.nn import init, Module
+from torch.nn import Module, init
 
 
 def _is_conv(layer: Module) -> bool:

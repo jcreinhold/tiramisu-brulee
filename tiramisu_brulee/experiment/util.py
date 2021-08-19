@@ -26,8 +26,8 @@ from typing import Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 
 from tiramisu_brulee.experiment.type import Indices
 

@@ -17,39 +17,20 @@ __all__ = [
     "LesionSegLightningTiramisu",
 ]
 
-from functools import partial
 import logging
+from functools import partial
 from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pytorch_lightning as pl
-from pytorch_lightning.utilities import AttributeDict
-import torch
-from torch import nn
-from torch import Tensor
-from torch.optim import AdamW, RMSprop, Optimizer
-from torch.optim.lr_scheduler import LambdaLR
-import torchio as tio
 import SimpleITK as sitk
+import torch
+import torchio as tio
+from pytorch_lightning.utilities import AttributeDict
+from torch import Tensor, nn
+from torch.optim import AdamW, Optimizer, RMSprop
+from torch.optim.lr_scheduler import LambdaLR
 
-from tiramisu_brulee.loss import (
-    binary_combo_loss,
-    combo_loss,
-    l1_segmentation_loss,
-    mse_segmentation_loss,
-)
-from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
-from tiramisu_brulee.util import init_weights
-from tiramisu_brulee.experiment.type import (
-    ModelNum,
-    nonnegative_float,
-    nonnegative_int,
-    ArgParser,
-    positive_float,
-    positive_float_or_none,
-    positive_int,
-    probability_float,
-)
 from tiramisu_brulee.experiment.data import (
     Mixup,
     PatchesImagePredictBatch,
@@ -59,12 +40,29 @@ from tiramisu_brulee.experiment.lesion_tools import (
     almost_isbi15_score,
     clean_segmentation,
 )
+from tiramisu_brulee.experiment.type import (
+    ArgParser,
+    ModelNum,
+    nonnegative_float,
+    nonnegative_int,
+    positive_float,
+    positive_float_or_none,
+    positive_int,
+    probability_float,
+)
 from tiramisu_brulee.experiment.util import (
-    append_num_to_filename,
     BoundingBox3D,
+    append_num_to_filename,
     minmax_scale_batch,
 )
-
+from tiramisu_brulee.loss import (
+    binary_combo_loss,
+    combo_loss,
+    l1_segmentation_loss,
+    mse_segmentation_loss,
+)
+from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
+from tiramisu_brulee.util import init_weights
 
 PredictBatch = Union[PatchesImagePredictBatch, WholeImagePredictBatch]
 

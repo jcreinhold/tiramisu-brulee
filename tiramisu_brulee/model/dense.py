@@ -25,8 +25,7 @@ from functools import partial
 from typing import List, Tuple, Type, Union
 
 import torch
-from torch import Tensor
-from torch import nn
+from torch import Tensor, nn
 
 ACTIVATION = partial(nn.ReLU, inplace=True)
 

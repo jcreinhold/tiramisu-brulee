@@ -27,10 +27,9 @@ __all__ = [
     "Tiramisu3d",
 ]
 
-from typing import Collection, List, Type, Tuple, Union
+from typing import Collection, List, Tuple, Type, Union
 
-from torch import Tensor
-from torch import nn
+from torch import Tensor, nn
 
 from tiramisu_brulee.model.dense import (
     Bottleneck2d,
