@@ -251,7 +251,11 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
     artifact_dir = _artifact_directory(args)
     exp_logger: Union[TensorBoardLogger, MLFlowLogger]
     if args.tracking_uri is not None:
-        exp_logger = MLFlowLogger(args.experiment_name, tracking_uri=args.tracking_uri)
+        exp_logger = MLFlowLogger(
+            experiment_name=args.experiment_name,
+            run_name=args.trial_name,
+            tracking_uri=args.tracking_uri,
+        )
     else:
         ignore_tensorboard_dir = bool(os.getenv("TIRAMISU_IGNORE_TB_DIR", False))
         tensorboard_dir = Path("/opt/ml/output/tensorboard").resolve()  # for SageMaker
