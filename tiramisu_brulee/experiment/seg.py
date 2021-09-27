@@ -142,6 +142,8 @@ class LesionSegLightningBase(pl.LightningModule):
         if self.hparams.loss_function != "combo" and self.hparams.num_classes != 1:
             raise ValueError("Only combo loss supported for multi-class segmentation")
         self.criterion: Callable
+        num_classes = self.hparams.num_classes
+        assert isinstance(num_classes, int)
         if self.hparams.loss_function == "combo":
             if self.hparams.num_classes == 1:
                 self.criterion = partial(
@@ -150,7 +152,7 @@ class LesionSegLightningBase(pl.LightningModule):
                     focal_gamma=self.hparams.focal_gamma,
                     combo_weight=self.hparams.combo_weight,
                 )
-            elif self.hparams.num_classes > 1:
+            elif num_classes > 1:
                 self.criterion = partial(
                     combo_loss,
                     num_classes=self.hparams.num_classes,
@@ -165,8 +167,11 @@ class LesionSegLightningBase(pl.LightningModule):
             self.criterion = l1_segmentation_loss
         else:
             raise ValueError(f"{self.hparams.loss_function} not supported.")
-        if self.hparams.mixup:
-            self._mix = Mixup(self.hparams.mixup_alpha)
+        use_mixup = bool(self.hparams.mixup)
+        if use_mixup:
+            mixup_alpha = self.hparams.mixup_alpha
+            assert isinstance(mixup_alpha, float)
+            self._mix = Mixup(mixup_alpha)
 
     def training_step(  # type: ignore[override]
         self,
@@ -191,6 +196,8 @@ class LesionSegLightningBase(pl.LightningModule):
         loss = self.criterion(pred, tgt)
         pred_seg = torch.sigmoid(pred) > self.hparams.threshold
         isbi15_score, dice, ppv = almost_isbi15_score(pred_seg, tgt, True)
+        num_input = self.hparams.num_input
+        assert isinstance(num_input, int)
         self.log(
             "val_loss",
             loss,
@@ -234,7 +241,7 @@ class LesionSegLightningBase(pl.LightningModule):
                 images[f"input_channel_{i}"] = src[:, i : i + 1, ...]
         elif batch_idx == 0 and self._is_2d_image_batch(src):
             images = dict(truth=tgt, pred=pred, dim=2)
-            step = src.shape[1] // self.hparams.num_input
+            step = src.shape[1] // num_input
             start = step // 2
             end = src.shape[1]
             for i in range(start, end, step):
@@ -278,29 +285,41 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def configure_optimizers(self) -> Tuple[List[Optimizer], List[LambdaLR]]:
         optimizer: Union[AdamW, RMSprop]
+        betas = self.hparams.betas
+        assert isinstance(betas, Collection)
+        assert len(betas) == 2
+        beta1, beta2 = betas
+        assert isinstance(beta1, float) and isinstance(beta2, float)
+        lr = self.hparams.learning_rate
+        assert isinstance(lr, float)
+        weight_decay = self.hparams.weight_decay
+        assert isinstance(weight_decay, float)
         if self.hparams.rmsprop:
-            momentum, alpha = self.hparams.betas
             optimizer = RMSprop(
                 self.parameters(),
-                lr=self.hparams.learning_rate,
-                momentum=momentum,
-                alpha=alpha,
-                weight_decay=self.hparams.weight_decay,
+                lr=lr,
+                momentum=beta1,
+                alpha=beta2,
+                weight_decay=weight_decay,
             )
         else:
             optimizer = AdamW(
                 self.parameters(),
-                lr=self.hparams.learning_rate,
-                betas=self.hparams.betas,
-                weight_decay=self.hparams.weight_decay,
+                lr=lr,
+                betas=(beta1, beta2),
+                weight_decay=weight_decay,
             )
 
         scheduler = LambdaLR(optimizer, lr_lambda=self.decay_rule)
         return [optimizer], [scheduler]
 
     def decay_rule(self, epoch: int) -> float:
-        numerator = max(0, epoch - self.hparams.decay_after)
-        denominator = float(self.hparams.n_epochs + 1)
+        n_epochs = self.hparams.n_epochs
+        assert isinstance(n_epochs, int)
+        decay_after = self.hparams.decay_after
+        assert isinstance(decay_after, int)
+        numerator = max(0, epoch - decay_after)
+        denominator = float(n_epochs + 1)
         lr: float = 1.0 - numerator / denominator
         return lr
 
@@ -495,15 +514,31 @@ class LesionSegLightningBase(pl.LightningModule):
                 image_slice = image_slice > 0.0
             else:
                 image_slice = minmax_scale_batch(image_slice)
-            self.logger.experiment.add_images(key, image_slice, n, dataformats="NCHW")
+            log_client = self.logger.experiment
+            if hasattr(log_client, "add_images"):
+                log_client.add_images(key, image_slice, n, dataformats="NCHW")
+            elif hasattr(log_client, "log_image"):
+                _image_slices = image_slice.detach().cpu().numpy().squeeze()
+                if _image_slices.ndim == 2:
+                    _image_slices = _image_slices[np.newaxis, ...]
+                for j, _image_slice in enumerate(_image_slices):
+                    log_client.log_image(
+                        self.logger.run_id,
+                        _image_slice,
+                        f"image{j}-epoch{n}.png",
+                    )
+            else:
+                raise RuntimeError("Image logging functionality not found in logger.")
 
     @staticmethod
     def _is_3d_image_batch(tensor: Tensor) -> bool:
-        return tensor.ndim == 5
+        ans: bool = tensor.ndim == 5
+        return ans
 
     @staticmethod
     def _is_2d_image_batch(tensor: Tensor) -> bool:
-        return tensor.ndim == 4
+        ans: bool = tensor.ndim == 4
+        return ans
 
     @staticmethod
     def add_io_arguments(parent_parser: ArgParser) -> ArgParser:
