@@ -158,6 +158,16 @@ def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path) -> None:
     assert retcode == 0
 
 
+def test_mlflow_train_cli(cli_train_args: List[str], train_csv: Path, temp_dir: Path) -> None:
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
+    cli_train_args += "--patch-size 8 8 8".split()
+    cli_train_args += f"--tracking-uri file:./{temp_dir}/ml-runs".split()
+    retcode = train(cli_train_args, False)
+    assert retcode == 0
+
+
 def test_multiclass_train_cli(cli_train_args: List[str], train_csv: Path) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
