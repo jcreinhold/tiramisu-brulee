@@ -21,3 +21,4 @@ scikit-image>=0.17
 torch>=1.8.1
 torchio>=0.18.39
 torchmetrics>=0.3.2
+mlflow>=1.19.0
