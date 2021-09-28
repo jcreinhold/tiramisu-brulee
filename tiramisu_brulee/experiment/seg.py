@@ -493,7 +493,7 @@ class LesionSegLightningBase(pl.LightningModule):
         n = self.current_epoch
         mid_slice = None
         dim: int = images.pop("dim")
-        for key, image in images.items():
+        for i, (key, image) in enumerate(images.items()):
             if dim == 3:
                 if mid_slice is None:
                     mid_slice = image.shape[-1] // 2
@@ -518,6 +518,7 @@ class LesionSegLightningBase(pl.LightningModule):
             if hasattr(log_client, "add_images"):
                 log_client.add_images(key, image_slice, n, dataformats="NCHW")
             elif hasattr(log_client, "log_image"):
+                _key = key.replace("channel_", "").replace("_", "-")
                 _image_slices = image_slice.detach().cpu().numpy().squeeze()
                 if _image_slices.ndim == 2:
                     _image_slices = _image_slices[np.newaxis, ...]
@@ -525,7 +526,7 @@ class LesionSegLightningBase(pl.LightningModule):
                     log_client.log_image(
                         self.logger.run_id,
                         _image_slice,
-                        f"image{j}-epoch{n}.png",
+                        f"epoch-{str(n).zfill(3)}_{_key}_batch-idx-{j}.png",
                     )
             else:
                 raise RuntimeError("Image logging functionality not found in logger.")

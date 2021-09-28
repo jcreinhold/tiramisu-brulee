@@ -22,11 +22,11 @@ import time
 import warnings
 from copy import deepcopy
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import jsonargparse
 import torch
-from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning import LightningModule, Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger, TensorBoardLogger
 from pytorch_lightning.plugins import DDPPlugin
@@ -248,7 +248,6 @@ def _artifact_directory(args: ArgType) -> str:
 
 def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLogger]:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
-    artifact_dir = _artifact_directory(args)
     exp_logger: Union[TensorBoardLogger, MLFlowLogger]
     if args.tracking_uri is not None:
         exp_logger = MLFlowLogger(
@@ -257,6 +256,7 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
             tracking_uri=args.tracking_uri,
         )
     else:
+        artifact_dir = _artifact_directory(args)
         ignore_tensorboard_dir = bool(os.getenv("TIRAMISU_IGNORE_TB_DIR", False))
         tensorboard_dir = Path("/opt/ml/output/tensorboard").resolve()  # for SageMaker
         if not tensorboard_dir.is_dir() or ignore_tensorboard_dir:
@@ -304,12 +304,44 @@ def _generate_config_yamls_in_train(
         )
 
 
+class MLFlowModelCheckpoint(ModelCheckpoint):
+    def __init__(  # type: ignore[no-untyped-def]
+        self,
+        mlflow_logger: MLFlowLogger,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.mlflow_logger = mlflow_logger
+
+    def save_checkpoint(
+        self,
+        trainer: Trainer,
+        unused: Optional[LightningModule] = None,
+    ) -> None:
+        super().save_checkpoint(trainer=trainer, unused=unused)
+        run_id = self.mlflow_logger.run_id
+        self.mlflow_logger.experiment.log_artifact(run_id, self.best_model_path)
+
+
+def _create_checkpoint_callback(
+    args: ArgType,
+    logger: Union[TensorBoardLogger, MLFlowLogger],
+) -> Union[ModelCheckpoint, MLFlowModelCheckpoint]:
+    checkpoint_kwargs = _format_checkpoints(args)
+    assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
+    if args.tracking_uri is None:
+        return ModelCheckpoint(**checkpoint_kwargs)
+    else:
+        assert isinstance(logger, MLFlowLogger)
+        return MLFlowModelCheckpoint(mlflow_logger=logger, **checkpoint_kwargs)
+
+
 def _setup_trainer_and_checkpoint(args: ArgType) -> Tuple[Trainer, ModelCheckpoint]:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     use_multigpus = not (args.gpus is None or args.gpus <= 1)
-    checkpoint_kwargs = _format_checkpoints(args)
     exp_logger = _setup_experiment_logger(args)
-    checkpoint_callback = ModelCheckpoint(**checkpoint_kwargs)
+    checkpoint_callback = _create_checkpoint_callback(args, exp_logger)
     plugins = args.plugins
     if use_multigpus and args.accelerator == "ddp":
         plugins = DDPPlugin(find_unused_parameters=False)
