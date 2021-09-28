@@ -489,7 +489,12 @@ class LesionSegLightningBase(pl.LightningModule):
             )
         return locations
 
-    def _log_images(self, images: Dict[str, Any]) -> None:
+    def _log_images(
+        self,
+        images: Dict[str, Any],
+        *,
+        mlflow_image_limit: int = 5,
+    ) -> None:
         n = self.current_epoch
         mid_slice = None
         dim: int = images.pop("dim")
@@ -519,15 +524,19 @@ class LesionSegLightningBase(pl.LightningModule):
                 log_client.add_images(key, image_slice, n, dataformats="NCHW")
             elif hasattr(log_client, "log_image"):
                 _key = key.replace("channel_", "").replace("_", "-")
+                _epoch = str(n).zfill(3)
                 _image_slices = image_slice.detach().cpu().numpy().squeeze()
                 if _image_slices.ndim == 2:
                     _image_slices = _image_slices[np.newaxis, ...]
                 for j, _image_slice in enumerate(_image_slices):
+                    _batch_idx = str(j).zfill(3)
                     log_client.log_image(
                         self.logger.run_id,
                         _image_slice,
-                        f"epoch-{str(n).zfill(3)}_{_key}_batch-idx-{j}.png",
+                        f"epoch-{_epoch}_{_key}_batch-idx-{_batch_idx}.png",
                     )
+                    if j >= mlflow_image_limit:
+                        break
             else:
                 raise RuntimeError("Image logging functionality not found in logger.")
 
