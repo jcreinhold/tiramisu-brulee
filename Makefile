@@ -41,8 +41,12 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '*~' -exec rm -f {} +
 	find . -name '__pycache__' -exec rm -fr {} +
 
-clean-test: ## remove test and coverage artifacts
+clean-test: clean-test-lite ## remove test and coverage artifacts
 	rm -fr .tox/
+
+clean-test-lite:  ## remove test artifacts minus tox
+	rm -fr file:.
+	rm -fr private
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
