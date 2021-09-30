@@ -154,6 +154,7 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
 
 def train(
     args: ArgType = None,
+    *,
     return_best_model_paths: bool = False,
 ) -> Union[List[Path], int]:
     """train a Tiramisu CNN for segmentation"""
@@ -186,7 +187,6 @@ def train(
         individual_run_args["in_channels"] = args.num_input * channels_per_image
         individual_run_args["pseudo3d_dim"] = p3d
         dm = LesionSegDataModuleTrain.from_csv(**individual_run_args)
-        dm.setup()
         model = LesionSegLightningTiramisu(**individual_run_args)
         logger.debug(model)
         if args.auto_scale_batch_size or args.auto_lr_find:

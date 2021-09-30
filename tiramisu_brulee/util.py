@@ -27,7 +27,7 @@ def _is_norm(layer: Module) -> bool:
     return hasattr(layer, "weight") and "Norm" in classname
 
 
-def init_weights(net: Module, init_type: str = "normal", gain: float = 0.02) -> None:
+def init_weights(net: Module, *, init_type: str = "normal", gain: float = 0.02) -> None:
     def init_func(layer: Module) -> None:
         is_conv = _is_conv(layer)
         is_norm = _is_norm(layer)

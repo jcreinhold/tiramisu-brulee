@@ -33,12 +33,12 @@ ACTIVATION = partial(nn.ReLU, inplace=True)
 # partial not supported by mypy so avoid to type check
 # https://github.com/python/mypy/issues/1484
 class Dropout2d(nn.Dropout2d):
-    def __init__(self, p: float = 0.5, inplace: bool = True) -> None:
+    def __init__(self, p: float = 0.5, *, inplace: bool = True) -> None:
         super().__init__(p, inplace)
 
 
 class Dropout3d(nn.Dropout3d):
-    def __init__(self, p: float = 0.5, inplace: bool = True) -> None:
+    def __init__(self, p: float = 0.5, *, inplace: bool = True) -> None:
         super().__init__(p, inplace)
 
 
@@ -50,7 +50,13 @@ class ConvLayer(nn.Sequential):
     _norm: Union[Type[nn.BatchNorm2d], Type[nn.BatchNorm3d]]
     _pad = Union[Type[nn.ReplicationPad2d], Type[nn.ReplicationPad3d]]
 
-    def __init__(self, in_channels: int, growth_rate: int, dropout_rate: float = 0.2):
+    def __init__(
+        self,
+        *,
+        in_channels: int,
+        out_channels: int,
+        dropout_rate: float = 0.2,
+    ):
         super().__init__()
         self.dropout_rate = dropout_rate
         self.add_module("norm", self._norm(in_channels))
@@ -61,7 +67,7 @@ class ConvLayer(nn.Sequential):
             self.add_module("pad", pad)
         conv = self._conv(
             in_channels=in_channels,
-            out_channels=growth_rate,
+            out_channels=out_channels,
             kernel_size=self._kernel_size,  # type: ignore[arg-type]
             bias=False,
         )
@@ -101,6 +107,7 @@ class DenseBlock(nn.Module):
 
     def __init__(
         self,
+        *,
         in_channels: int,
         growth_rate: int,
         n_layers: int,
@@ -113,13 +120,14 @@ class DenseBlock(nn.Module):
         self.n_layers = n_layers
         self.upsample = upsample
         self.dropout_rate = dropout_rate
+        # out_channels = growth_rate b/c out_channels added w/ each layer
         _layer = partial(
             self._layer,
-            growth_rate=self.growth_rate,
+            out_channels=self.growth_rate,
             dropout_rate=self.dropout_rate,
         )
         icr = self.in_channels_range
-        self.layers = nn.ModuleList([_layer(ic) for ic in icr])
+        self.layers = nn.ModuleList([_layer(in_channels=ic) for ic in icr])
 
     def forward(self, tensor: Tensor) -> Tensor:
         if self.upsample:
@@ -176,7 +184,7 @@ class TransitionUp(nn.Module):
     _kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
     _stride: Union[Tuple[int, int], Tuple[int, int, int]]
 
-    def __init__(self, in_channels: int, out_channels: int):
+    def __init__(self, *, in_channels: int, out_channels: int):
         super().__init__()
         self.conv_trans = self._conv_trans(
             in_channels=in_channels,
@@ -186,14 +194,14 @@ class TransitionUp(nn.Module):
             bias=False,
         )
 
-    def forward(self, tensor: Tensor, skip: Tensor) -> Tensor:
+    def forward(self, tensor: Tensor, *, skip: Tensor) -> Tensor:
         out: Tensor = self.conv_trans(tensor)
-        out = self._crop_to_target(out, skip)
+        out = self._crop_to_target(out, target=skip)
         out = torch.cat([out, skip], 1)
         return out
 
     @staticmethod
-    def _crop_to_target(tensor: Tensor, target: Tensor) -> Tensor:
+    def _crop_to_target(tensor: Tensor, *, target: Tensor) -> Tensor:
         raise NotImplementedError
 
 
@@ -203,7 +211,7 @@ class TransitionUp2d(TransitionUp):
     _stride = (2, 2)
 
     @staticmethod
-    def _crop_to_target(tensor: Tensor, target: Tensor) -> Tensor:
+    def _crop_to_target(tensor: Tensor, *, target: Tensor) -> Tensor:
         _, _, max_height, max_width = target.shape
         _, _, h, w = tensor.size()
         h = (h - max_height) // 2
@@ -219,7 +227,7 @@ class TransitionUp3d(TransitionUp):
     _stride = (2, 2, 2)
 
     @staticmethod
-    def _crop_to_target(tensor: Tensor, target: Tensor) -> Tensor:
+    def _crop_to_target(tensor: Tensor, *, target: Tensor) -> Tensor:
         _, _, max_height, max_width, max_depth = target.shape
         _, _, h, w, d = tensor.size()
         h = (h - max_height) // 2
@@ -236,6 +244,7 @@ class Bottleneck(nn.Sequential):
 
     def __init__(
         self,
+        *,
         in_channels: int,
         growth_rate: int,
         n_layers: int,
@@ -243,9 +252,9 @@ class Bottleneck(nn.Sequential):
     ):
         super().__init__()
         layer = self._layer(
-            in_channels,
-            growth_rate,
-            n_layers,
+            in_channels=in_channels,
+            growth_rate=growth_rate,
+            n_layers=n_layers,
             upsample=True,
             dropout_rate=dropout_rate,
         )

@@ -49,7 +49,7 @@ def to_np(x: Tensor) -> np.ndarray:
     return data
 
 
-def image_one_hot(image: Tensor, num_classes: int) -> Tensor:
+def image_one_hot(image: Tensor, *, num_classes: int) -> Tensor:
     num_channels = image.shape[1]
     if num_channels > 1:
         msg = f"Image must only have one channel. Got {num_channels} channels."
@@ -68,6 +68,7 @@ class BoundingBox3D:
         j_high: int,
         k_low: int,
         k_high: int,
+        *,
         original_shape: Optional[Tuple[int, int, int]] = None,
     ):
         """bounding box indices and crop/uncrop func for 3d vols"""
@@ -102,7 +103,7 @@ class BoundingBox3D:
         return out
 
     @staticmethod
-    def find_bbox(mask: Tensor, pad: int = 0) -> Indices:
+    def find_bbox(mask: Tensor, *, pad: int = 0) -> Indices:
         h = torch.where(torch.any(torch.any(mask, dim=1), dim=1))[0]
         w = torch.where(torch.any(torch.any(mask, dim=0), dim=1))[0]
         d = torch.where(torch.any(torch.any(mask, dim=0), dim=0))[0]
@@ -123,6 +124,7 @@ class BoundingBox3D:
     def from_image(
         cls: Type[T],
         image: Tensor,
+        *,
         pad: int = 0,
         foreground_min: float = 1e-4,
     ) -> T:
@@ -137,6 +139,7 @@ class BoundingBox3D:
     def from_batch(
         cls: Type[T],
         batch: Tensor,
+        *,
         pad: int = 0,
         channel: int = 0,
         foreground_min: float = 1e-4,
@@ -151,7 +154,7 @@ class BoundingBox3D:
         d_low, d_high = image_shape[2], -1
         for i in range(batch_size):
             image = batch[i, channel, ...]
-            hl, hh, wl, wh, dl, dh = cls.find_bbox(image > foreground_min, pad)
+            hl, hh, wl, wh, dl, dh = cls.find_bbox(image > foreground_min, pad=pad)
             h_low, h_high = min(hl, h_low), max(hh, h_high)
             w_low, w_high = min(wl, w_low), max(wh, w_high)
             d_low, d_high = min(dl, d_low), max(dh, d_high)
@@ -174,7 +177,7 @@ class BoundingBox3D:
         return (orig_x, orig_y, orig_z)
 
 
-def reshape_for_broadcasting(tensor: Tensor, ndim: int) -> Tensor:
+def reshape_for_broadcasting(tensor: Tensor, *, ndim: int) -> Tensor:
     """expand dimensions of a 0- or 1-dimensional tensor to ndim for broadcast ops"""
     assert tensor.ndim <= 1
     dims = [1 for _ in range(ndim - 1)]
@@ -196,7 +199,7 @@ def split_filename(filepath: Union[str, Path]) -> Tuple[Path, str, str]:
     return Path(path), base, ext
 
 
-def append_num_to_filename(filepath: Union[str, Path], num: int) -> Path:
+def append_num_to_filename(filepath: Union[str, Path], *, num: int) -> Path:
     """append num to the filename of filepath and return the modified path"""
     path, base, ext = split_filename(filepath)
     base += f"_{num}"

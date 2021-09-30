@@ -39,6 +39,7 @@ from torch import Tensor
 def per_channel_dice(
     tensor1: Tensor,
     tensor2: Tensor,
+    *,
     eps: float = 1e-3,
     keepdim: bool = False,
 ) -> Tensor:
@@ -51,7 +52,7 @@ def per_channel_dice(
     return pc_dice
 
 
-def weighted_channel_avg(tensor: Tensor, weight: Tensor) -> Tensor:
+def weighted_channel_avg(tensor: Tensor, *, weight: Tensor) -> Tensor:
     weight = weight[None, ...].repeat([tensor.shape[0], 1])
     weighted = torch.mean(weight * tensor)
     return weighted
@@ -60,6 +61,7 @@ def weighted_channel_avg(tensor: Tensor, weight: Tensor) -> Tensor:
 def dice_loss(
     pred: Tensor,
     target: Tensor,
+    *,
     weight: Optional[Tensor] = None,
     reduction: str = "mean",
     eps: float = 1e-3,
@@ -84,6 +86,7 @@ def dice_loss(
 def binary_focal_loss(
     pred: Tensor,
     target: Tensor,
+    *,
     pos_weight: Optional[Union[float, Tensor]] = None,
     reduction: str = "mean",
     gamma: float = 2.0,
@@ -138,6 +141,7 @@ def binary_focal_loss(
 def binary_combo_loss(
     pred: Tensor,
     target: Tensor,
+    *,
     reduction: str = "mean",
     pos_weight: Optional[float] = None,
     focal_gamma: float = 0.0,
@@ -149,9 +153,9 @@ def binary_combo_loss(
     f_loss = binary_focal_loss(
         pred,
         target,
-        pos_weight,
-        reduction,
-        focal_gamma,
+        pos_weight=pos_weight,
+        reduction=reduction,
+        gamma=focal_gamma,
     )
     p = torch.sigmoid(pred)
     d_loss = dice_loss(p, target, reduction=reduction)
@@ -162,6 +166,7 @@ def binary_combo_loss(
 def combo_loss(
     pred: Tensor,
     target: Tensor,
+    *,
     num_classes: int,
     reduction: str = "mean",
     combo_weight: float = 0.5,
@@ -188,6 +193,7 @@ def combo_loss(
 def deeply_supervised_loss(  # type: ignore[no-untyped-def]
     preds: List[Tensor],
     target: Tensor,
+    *,
     loss_func: Callable,
     level_weights: Union[float, List[float]] = 1.0,
     **loss_func_kwargs,
@@ -204,6 +210,7 @@ def deeply_supervised_loss(  # type: ignore[no-untyped-def]
 def l1_segmentation_loss(
     pred: Tensor,
     target: Tensor,
+    *,
     reduction: str = "mean",
 ) -> Tensor:
     """l1 loss for segmentation by applying sigmoid to pred -> l1"""
@@ -213,6 +220,7 @@ def l1_segmentation_loss(
 def mse_segmentation_loss(
     pred: Tensor,
     target: Tensor,
+    *,
     reduction: str = "mean",
 ) -> Tensor:
     """mse loss for segmentation by applying sigmoid to pred -> mse"""

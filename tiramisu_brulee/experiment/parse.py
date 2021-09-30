@@ -78,7 +78,7 @@ def _generate_config_yaml(
             orig_fn = config_filename
             i = 1
             while config_filename.is_file():
-                config_filename = append_num_to_filename(orig_fn, i)
+                config_filename = append_num_to_filename(orig_fn, num=i)
                 i += 1
         if best_model_paths is not None:
             config["model_path"] = [str(bmp) for bmp in best_model_paths]

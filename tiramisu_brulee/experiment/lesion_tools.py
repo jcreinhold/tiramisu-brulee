@@ -27,6 +27,7 @@ from tiramisu_brulee.experiment.util import image_one_hot
 
 def clean_segmentation(
     label: np.ndarray,
+    *,
     fill_holes: bool = True,
     minimum_lesion_size: int = 3,
 ) -> np.ndarray:
@@ -47,20 +48,23 @@ def clean_segmentation(
 def almost_isbi15_score(
     pred: Tensor,
     target: Tensor,
+    *,
     return_dice_ppv: bool = False,
 ) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
     """ISBI 15 MS challenge score excluding the LTPR & LFPR components"""
     batch_size, num_classes = pred.shape[0:2]
     multiclass = num_classes > 1
     one_hot_classes = num_classes if multiclass else 2
-    pred_one_hot = pred if multiclass else image_one_hot(pred, one_hot_classes)
+    pred_one_hot = (
+        pred if multiclass else image_one_hot(pred, num_classes=one_hot_classes)
+    )
     dice = dice_score(pred_one_hot, target.int())
     if multiclass and pred.shape != target.shape:
         is_integer_label = pred.ndim != target.ndim
         if is_integer_label:
             target.unsqueeze_(1)
             assert pred.ndim == target.ndim
-        target = image_one_hot(target.long(), num_classes)
+        target = image_one_hot(target.long(), num_classes=num_classes)
     ppv = precision(
         pred.int(),
         target.int(),
