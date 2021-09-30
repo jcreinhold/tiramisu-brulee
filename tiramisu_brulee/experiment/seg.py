@@ -104,6 +104,7 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def __init__(  # type: ignore[no-untyped-def]
         self,
+        *,
         network: nn.Module,
         n_epochs: int = 1,
         learning_rate: float = 1e-3,
@@ -195,7 +196,9 @@ class LesionSegLightningBase(pl.LightningModule):
         pred = self(src)
         loss = self.criterion(pred, tgt)
         pred_seg = torch.sigmoid(pred) > self.hparams.threshold
-        isbi15_score, dice, ppv = almost_isbi15_score(pred_seg, tgt, True)
+        isbi15_score, dice, ppv = almost_isbi15_score(
+            pred_seg, tgt, return_dice_ppv=True
+        )
         num_input = self.hparams.num_input
         assert isinstance(num_input, int)
         self.log(
@@ -370,7 +373,7 @@ class LesionSegLightningBase(pl.LightningModule):
         )
         for pred, affine, path, fn in nifti_attrs:
             if self._model_num != ModelNum(num=1, out_of=1):
-                fn = str(append_num_to_filename(fn, self._model_num.num))
+                fn = str(append_num_to_filename(fn, num=self._model_num.num))
             logging.info(f"Saving {fn}.")
             if batch.reorient:
                 pred, affine = self._to_original_orientation(path, pred, affine)
@@ -390,7 +393,7 @@ class LesionSegLightningBase(pl.LightningModule):
         pred = self._clean_prediction(pred)
         fn = batch.out[0]
         if self._model_num != ModelNum(num=1, out_of=1):
-            fn = str(append_num_to_filename(fn, self._model_num.num))
+            fn = str(append_num_to_filename(fn, num=self._model_num.num))
         logging.info(f"Saving {fn}.")
         self._write_image(pred, affine, fn)
         del self.aggregator
@@ -762,6 +765,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
 
     def __init__(  # type: ignore[no-untyped-def]
         self,
+        *,
         network_dim: int = 3,
         in_channels: int = 1,
         num_classes: int = 1,
@@ -811,7 +815,7 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
             first_conv_out_channels=first_conv_out_channels,
             dropout_rate=dropout_rate,
         )
-        init_weights(network, init_type, gain)
+        init_weights(network, init_type=init_type, gain=gain)
         super().__init__(
             network=network,
             n_epochs=n_epochs,

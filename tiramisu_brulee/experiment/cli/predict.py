@@ -191,7 +191,6 @@ def _predict_whole_image(
     pp = args.predict_probability
     trainer = Trainer.from_argparse_args(args)
     dm = LesionSegDataModulePredictWhole.from_csv(**dict_args)
-    dm.setup()
     model = LesionSegLightningTiramisu.load_from_checkpoint(
         str(model_path),
         predict_probability=pp,
@@ -223,8 +222,7 @@ def _predict_patch_image(
     logging.debug(model)
     for subject in subject_list:
         trainer = Trainer.from_argparse_args(args)
-        dm = LesionSegDataModulePredictPatches(subject, **dict_args)
-        dm.setup()
+        dm = LesionSegDataModulePredictPatches(subject=subject, **dict_args)
         trainer.predict(model, datamodule=dm)
         # kill multiprocessing workers, free memory for the next iteration
         dm.teardown()
@@ -264,10 +262,10 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool) -> N
         aggregate(
             args.predict_csv,
             n_models,
-            args.threshold,
-            args.fill_holes,
-            args.min_lesion_size,
-            num_workers,
+            threshold=args.threshold,
+            fill_holes=args.fill_holes,
+            min_lesion_size=args.min_lesion_size,
+            num_workers=num_workers,
         )
     _generate_config_yamls_in_predict(args, parser)
 
@@ -289,6 +287,7 @@ def _generate_config_yamls_in_predict(args: ArgType, parser: ArgParser) -> None:
 def aggregate(
     predict_csv: str,
     n_models: int,
+    *,
     threshold: float = 0.5,
     fill_holes: bool = False,
     min_lesion_size: int = 3,
@@ -318,6 +317,7 @@ def aggregate(
 # noinspection PyUnboundLocalVariable
 def _aggregate(
     n_fn: Tuple[int, str],
+    *,
     threshold: float,
     n_models: int,
     n_fns: int,
@@ -329,12 +329,14 @@ def _aggregate(
     n, fn = n_fn
     data = []
     for i in range(1, n_models + 1):
-        _fn = append_num_to_filename(fn, i)
+        _fn = append_num_to_filename(fn, num=i)
         image = tio.ScalarImage(_fn)
         array = image.numpy()
         data.append(array.squeeze())
     agg = np.mean(data, axis=0) > threshold
-    agg = clean_segmentation(agg, fill_holes, min_lesion_size)
+    agg = clean_segmentation(
+        agg, fill_holes=fill_holes, minimum_lesion_size=min_lesion_size
+    )
     agg = agg.astype(array.dtype)
     image.set_data(agg[np.newaxis])
     image.save(fn)

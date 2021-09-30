@@ -55,6 +55,7 @@ class Tiramisu(nn.Module):
 
     def __init__(
         self,
+        *,
         in_channels: int = 3,
         out_channels: int = 1,
         down_blocks: Collection[int] = (5, 5, 5, 5, 5),
@@ -106,9 +107,9 @@ class Tiramisu(nn.Module):
         self.trans_down = nn.ModuleList([])
         for n_layers in down_blocks:
             denseblock = self._denseblock(
-                cur_channels_count,
-                growth_rate,
-                n_layers,
+                in_channels=cur_channels_count,
+                growth_rate=growth_rate,
+                n_layers=n_layers,
                 upsample=False,
                 dropout_rate=dropout_rate,
             )
@@ -116,17 +117,17 @@ class Tiramisu(nn.Module):
             cur_channels_count += growth_rate * n_layers
             skip_connection_channel_counts.insert(0, cur_channels_count)
             trans_down_block = self._trans_down(
-                cur_channels_count,
-                cur_channels_count,
+                in_channels=cur_channels_count,
+                out_channels=cur_channels_count,
                 dropout_rate=dropout_rate,
             )
             self.trans_down.append(trans_down_block)
 
         # Bottleneck
         self.bottleneck = self._bottleneck(
-            cur_channels_count,
-            growth_rate,
-            bottleneck_layers,
+            in_channels=cur_channels_count,
+            growth_rate=growth_rate,
+            n_layers=bottleneck_layers,
             dropout_rate=dropout_rate,
         )
         prev_block_channels = growth_rate * bottleneck_layers
@@ -137,14 +138,17 @@ class Tiramisu(nn.Module):
         self.trans_up = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
-            trans_up_block = self._trans_up(prev_block_channels, prev_block_channels)
+            trans_up_block = self._trans_up(
+                in_channels=prev_block_channels,
+                out_channels=prev_block_channels,
+            )
             self.trans_up.append(trans_up_block)
             cur_channels_count = prev_block_channels + sccc
             upsample = i < len(up_blocks)  # do not upsample on last block
             denseblock = self._denseblock(
-                cur_channels_count,
-                growth_rate,
-                n_layers,
+                in_channels=cur_channels_count,
+                growth_rate=growth_rate,
+                n_layers=n_layers,
                 upsample=upsample,
                 dropout_rate=dropout_rate,
             )
@@ -153,9 +157,9 @@ class Tiramisu(nn.Module):
             cur_channels_count += prev_block_channels
 
         self.final_conv = self._conv(
-            cur_channels_count,
-            out_channels,
-            self._final_kernel_size,  # type: ignore[arg-type]
+            in_channels=cur_channels_count,
+            out_channels=out_channels,
+            kernel_size=self._final_kernel_size,  # type: ignore[arg-type]
             bias=True,
         )
 
@@ -169,7 +173,7 @@ class Tiramisu(nn.Module):
         out = self.bottleneck(out)
         for ubd, tub in zip(self.dense_up, self.trans_up):
             skip = skip_connections.pop()
-            out = tub(out, skip)
+            out = tub(out, skip=skip)
             out = ubd(out)
         out = self.final_conv(out)
         assert isinstance(out, Tensor)

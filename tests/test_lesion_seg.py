@@ -106,7 +106,7 @@ def _handle_fast_dev_run(predict_args: List[str]) -> List[str]:
 
 
 def _get_and_format_best_model_paths(args: List[str]) -> str:
-    best_model_paths = train(args, True)
+    best_model_paths = train(args, return_best_model_paths=True)
     assert isinstance(best_model_paths, list)
     best_model_paths_strlist = [str(bmp) for bmp in best_model_paths]
     best_model_paths_str = " ".join(best_model_paths_strlist)
@@ -154,17 +154,19 @@ def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path) -> None:
     cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     cli_train_args += "--mixup".split()
-    retcode = train(cli_train_args, False)
+    retcode = train(cli_train_args, return_best_model_paths=False)
     assert retcode == 0
 
 
-def test_mlflow_train_cli(cli_train_args: List[str], train_csv: Path, temp_dir: Path) -> None:
+def test_mlflow_train_cli(
+    cli_train_args: List[str], train_csv: Path, temp_dir: Path
+) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
     cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     cli_train_args += f"--tracking-uri file:./{temp_dir}/ml-runs".split()
-    retcode = train(cli_train_args, False)
+    retcode = train(cli_train_args, return_best_model_paths=False)
     assert retcode == 0
 
 
@@ -174,7 +176,7 @@ def test_multiclass_train_cli(cli_train_args: List[str], train_csv: Path) -> Non
     cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
     cli_train_args += "--num-classes 2".split()
-    retcode = train(cli_train_args, False)
+    retcode = train(cli_train_args, return_best_model_paths=False)
     assert retcode == 0
 
 
