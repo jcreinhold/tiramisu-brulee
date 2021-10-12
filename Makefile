@@ -92,3 +92,8 @@ install: clean ## install the package to the active Python's site-packages
 
 develop: clean ## install the package to the active Python's site-packages
 	python setup.py develop
+
+check:  ## run various code quality checks
+	black tiramisu_brulee
+	isort tiramisu_brulee
+	mypy tiramisu_brulee

@@ -142,7 +142,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
     @staticmethod
     def _div_image_batch(image_batch: Tensor, *, div: Tensor) -> Tensor:
         with torch.no_grad():
-            image_batch /= reshape_for_broadcasting(div, image_batch.ndim)
+            image_batch /= reshape_for_broadcasting(div, ndim=image_batch.ndim)
         return image_batch
 
     def _default_collate_fn(
@@ -168,7 +168,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         if self._use_div:
             assert isinstance(batch["div"], Tensor)
             div_factor: Tensor = batch["div"]
-            src = self._div_image_batch(src, div_factor)
+            src = self._div_image_batch(src, div=div_factor)
         return src
 
     @staticmethod

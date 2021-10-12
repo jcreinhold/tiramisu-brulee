@@ -74,7 +74,7 @@ def dice_loss(
         if weight is None:
             dice = torch.mean(pc_dice)
         else:
-            dice = weighted_channel_avg(pc_dice, weight)
+            dice = weighted_channel_avg(pc_dice, weight=weight)
     elif reduction == "none":
         dice = pc_dice
     else:
