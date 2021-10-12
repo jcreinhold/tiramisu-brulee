@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.27 (2021-10-12)
+-------------------
+
+* Add union and voting aggregation to prediction and other minor bug fixes
+
 0.1.26 (2021-08-09)
 -------------------
 
