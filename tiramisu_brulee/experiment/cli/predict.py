@@ -22,7 +22,8 @@ import logging
 import tempfile
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
-from functools import partial
+from functools import partial, reduce
+from operator import add, or_
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -133,6 +134,13 @@ def _predict_parser_shared(
         action="store_true",
         default=False,
         help="only aggregate results (useful to test different thresholds)",
+    )
+    exp_parser.add_argument(
+        "-at",
+        "--aggregation-type",
+        default="mean",
+        choices=("mean", "vote", "union"),
+        help="aggregate results with this method",
     )
     exp_parser.add_argument(
         "-v",
@@ -265,6 +273,7 @@ def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool) -> N
             threshold=args.threshold,
             fill_holes=args.fill_holes,
             min_lesion_size=args.min_lesion_size,
+            aggregation_type=args.aggregation_type,
             num_workers=num_workers,
         )
     _generate_config_yamls_in_predict(args, parser)
@@ -291,6 +300,7 @@ def aggregate(
     threshold: float = 0.5,
     fill_holes: bool = False,
     min_lesion_size: int = 3,
+    aggregation_type: str = "mean",
     num_workers: Optional[int] = None,
 ) -> None:
     """aggregate output from multiple model predictions"""
@@ -305,6 +315,7 @@ def aggregate(
         n_fns=n_fns,
         fill_holes=fill_holes,
         min_lesion_size=min_lesion_size,
+        aggregation_type=aggregation_type,
     )
     use_multiprocessing = num_workers is None or num_workers > 0
     if use_multiprocessing:
@@ -323,6 +334,7 @@ def _aggregate(
     n_fns: int,
     fill_holes: bool,
     min_lesion_size: int,
+    aggregation_type: str = "mean",
 ) -> None:
     """aggregate helper for concurrent/parallel processing"""
     assert n_models >= 1
@@ -333,7 +345,18 @@ def _aggregate(
         image = tio.ScalarImage(_fn)
         array = image.numpy()
         data.append(array.squeeze())
-    agg = np.mean(data, axis=0) > threshold
+    if aggregation_type == "mean":
+        agg = np.mean(data, axis=0) > threshold
+    elif aggregation_type == "vote":
+        _threshold = len(data) // 2
+        agg = reduce(add, [d > threshold for d in data]) > _threshold
+    elif aggregation_type == "union":
+        agg = reduce(or_, [d > threshold for d in data])
+    else:
+        raise ValueError(
+            "aggregation_type should be one of {mean, vote, union}. "
+            f"Got {aggregation_type}."
+        )
     agg = clean_segmentation(
         agg, fill_holes=fill_holes, minimum_lesion_size=min_lesion_size
     )

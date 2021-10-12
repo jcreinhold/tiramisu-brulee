@@ -248,6 +248,50 @@ def test_pseudo3d_cli(
     assert retcode == 0
 
 
+def test_union_aggregate_cli(
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
+) -> None:
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
+    cli_train_args += "--patch-size 8 8".split()
+    cli_train_args += "--pseudo3d-dim 0 1".split()
+    cli_train_args += "--pseudo3d-size 31".split()
+    best_model_paths = _get_and_format_best_model_paths(cli_train_args)
+    cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += "--patch-size None None".split()
+    cli_predict_args += "--pseudo3d-dim 0 1".split()
+    cli_predict_args += "--pseudo3d-size 31".split()
+    cli_predict_args += "--patch-overlap 0 0 0".split()
+    cli_predict_args += "--aggregation-type union".split()
+    retcode = predict(cli_predict_args)
+    assert retcode == 0
+
+
+def test_vote_aggregate_cli(
+    cli_train_args: List[str],
+    cli_predict_args: List[str],
+    train_csv: Path,
+) -> None:
+    csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
+    cli_train_args += f"--train-csv {csv_}".split()
+    cli_train_args += f"--valid-csv {csv_}".split()
+    cli_train_args += "--patch-size 8 8".split()
+    cli_train_args += "--pseudo3d-dim 0 1".split()
+    cli_train_args += "--pseudo3d-size 31".split()
+    best_model_paths = _get_and_format_best_model_paths(cli_train_args)
+    cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += "--patch-size None None".split()
+    cli_predict_args += "--pseudo3d-dim 0 1".split()
+    cli_predict_args += "--pseudo3d-size 31".split()
+    cli_predict_args += "--patch-overlap 0 0 0".split()
+    cli_predict_args += "--aggregation-type vote".split()
+    retcode = predict(cli_predict_args)
+    assert retcode == 0
+
+
 def test_pseudo3d_all_cli(
     cli_train_args: List[str],
     cli_predict_args: List[str],

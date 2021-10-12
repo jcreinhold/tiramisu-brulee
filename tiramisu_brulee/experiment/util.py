@@ -131,7 +131,7 @@ class BoundingBox3D:
         """find a bounding box for a 3D tensor (with optional padding)"""
         foreground_mask = image > foreground_min
         assert isinstance(foreground_mask, Tensor)
-        bbox_idxs = cls.find_bbox(foreground_mask, pad)
+        bbox_idxs = cls.find_bbox(foreground_mask, pad=pad)
         original_shape = cls.get_shape(image)
         return cls(*bbox_idxs, original_shape=original_shape)
 
