@@ -79,10 +79,13 @@ def tiramisu_brulee_info(*, short: bool = True) -> TiramisuBruleeInfo:
     """get the git commit hash and version for tiramisu-brulee"""
     import tiramisu_brulee
 
-    tiramisu_brulee_path = str(Path(tiramisu_brulee.__file__).parents[1])
+    tb_path = str(Path(tiramisu_brulee.__file__).parents[1])
     cmd = ["git", "rev-parse", "HEAD"]
     if short:
         cmd.insert(2, "--short")
-    hash = subprocess.check_output(cmd, cwd=tiramisu_brulee_path)
-    cleaned_hash = hash.decode("ascii").strip()
-    return TiramisuBruleeInfo(version=tiramisu_brulee.__version__, commit=cleaned_hash)
+    out = subprocess.run(cmd, cwd=tb_path, capture_output=True)  # type: ignore[call-overload]
+    if out.returncode == 0:
+        commit = out.stdout.decode("ascii").strip()
+    else:
+        commit = "unknown"
+    return TiramisuBruleeInfo(version=tiramisu_brulee.__version__, commit=commit)
