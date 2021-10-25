@@ -83,7 +83,9 @@ def tiramisu_brulee_info(*, short: bool = True) -> TiramisuBruleeInfo:
     cmd = ["git", "rev-parse", "HEAD"]
     if short:
         cmd.insert(2, "--short")
-    out = subprocess.run(cmd, cwd=tb_path, capture_output=True)  # type: ignore[call-overload]
+    out = subprocess.run(
+        cmd, cwd=tb_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     if out.returncode == 0:
         commit = out.stdout.decode("ascii").strip()
     else:
