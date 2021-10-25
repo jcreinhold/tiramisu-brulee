@@ -97,3 +97,6 @@ check:  ## run various code quality checks
 	black tiramisu_brulee
 	isort tiramisu_brulee
 	mypy tiramisu_brulee
+	black tests
+	isort tests
+	mypy tests

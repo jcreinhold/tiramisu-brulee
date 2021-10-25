@@ -36,6 +36,7 @@ from tiramisu_brulee.experiment.cli.common import (
     check_patch_size,
     handle_fast_dev_run,
     pseudo3d_dims_setup,
+    tiramisu_brulee_info,
 )
 from tiramisu_brulee.experiment.cli.predict import predict_parser
 from tiramisu_brulee.experiment.data import LesionSegDataModuleTrain, Mixup
@@ -352,4 +353,9 @@ def _setup_trainer_and_checkpoint(args: ArgType) -> Tuple[Trainer, ModelCheckpoi
         callbacks=[checkpoint_callback],
         plugins=plugins,
     )
+    if args.tracking_uri is not None:
+        tb_info = tiramisu_brulee_info()
+        run_id = trainer.logger.run_id  # type: ignore[attr-defined]
+        trainer.logger.experiment.set_tag(run_id, "Version", tb_info.version)
+        trainer.logger.experiment.set_tag(run_id, "Commit", tb_info.commit)
     return trainer, checkpoint_callback

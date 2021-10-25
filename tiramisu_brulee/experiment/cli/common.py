@@ -12,11 +12,17 @@ Created on: Jul 30, 2021
 __all__ = [
     "check_patch_size",
     "EXPERIMENT_NAME",
+    "handle_fast_dev_run",
     "pseudo3d_dims_setup",
+    "tiramisu_brulee_info",
 ]
 
+import subprocess
 import sys
+from pathlib import Path
 from typing import List, Optional, Set, Union
+
+from tiramisu_brulee.experiment.type import TiramisuBruleeInfo
 
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 
@@ -67,3 +73,16 @@ def pseudo3d_dims_setup(
             f"of the N models to be {stage}ed. Got {n_p3d} != {n_models}."
         )
     return pseudo3d_dims
+
+
+def tiramisu_brulee_info(*, short: bool = True) -> TiramisuBruleeInfo:
+    """get the git commit hash and version for tiramisu-brulee"""
+    import tiramisu_brulee
+
+    tiramisu_brulee_path = str(Path(tiramisu_brulee.__file__).parents[1])
+    cmd = ["git", "rev-parse", "HEAD"]
+    if short:
+        cmd.insert(2, "--short")
+    hash = subprocess.check_output(cmd, cwd=tiramisu_brulee_path)
+    cleaned_hash = hash.decode("ascii").strip()
+    return TiramisuBruleeInfo(version=tiramisu_brulee.__version__, commit=cleaned_hash)
