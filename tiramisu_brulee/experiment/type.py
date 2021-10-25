@@ -31,6 +31,7 @@ __all__ = [
     "positive_odd_int_or_none",
     "probability_float",
     "probability_float_or_none",
+    "TiramisuBruleeInfo",
 ]
 
 import argparse
@@ -54,6 +55,7 @@ PatchShape3DOption = Tuple[Optional[int], Optional[int], Optional[int]]
 PatchShapeOption = Union[PatchShape2DOption, PatchShape3DOption]
 ArgType = Optional[Union[Namespace, Iterable[str]]]
 ArgParser = Union[argparse.ArgumentParser, jsonargparse.ArgumentParser]
+TiramisuBruleeInfo = namedtuple("TiramisuBruleeInfo", ["version", "commit"])
 
 
 def return_none(func: Callable) -> Callable:
