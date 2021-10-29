@@ -21,6 +21,7 @@ import os
 import time
 import warnings
 from copy import deepcopy
+from itertools import chain
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -124,6 +125,13 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
         default=None,
         help="name of the trial/output version directory",
     )
+    exp_parser.add_argument(
+        "-stk",
+        "--save-top-k",
+        type=int,
+        default=3,
+        help="save the top k models in checkpoints",
+    )
     parser = LesionSegLightningTiramisu.add_io_arguments(parser)
     parser = LesionSegLightningTiramisu.add_model_arguments(parser)
     parser = LesionSegLightningTiramisu.add_other_arguments(parser)
@@ -179,6 +187,7 @@ def train(
     individual_run_args = deepcopy(vars(args))
     individual_run_args["network_dim"] = 2 if use_pseudo3d else 3
     train_iter_data = zip(args.train_csv, args.valid_csv, pseudo3d_dims)
+    trainer: Optional[Trainer] = None
     for i, (train_csv, valid_csv, p3d) in enumerate(train_iter_data, 1):
         trainer, checkpoint_callback = _setup_trainer_and_checkpoint(args)
         nth_model = f" ({i}/{n_models_to_train})"
@@ -203,12 +212,17 @@ def train(
         # kill multiprocessing workers, free memory for the next iteration
         dm.teardown()
         trainer.teardown()
-        del dm, model, trainer, checkpoint_callback
+        del dm, model, checkpoint_callback
+        if i != n_models_to_train:
+            del trainer
+            trainer = None
         gc.collect()
         torch.cuda.empty_cache()
         if n_models_to_train > 1 and args.num_workers > 0:
             time.sleep(5.0)
-    _generate_config_yamls_in_train(args, best_model_paths)
+    if trainer is not None:
+        assert isinstance(trainer.logger, (TensorBoardLogger, MLFlowLogger))
+        _generate_config_yamls_in_train(args, best_model_paths, trainer.logger)
     return best_model_paths if return_best_model_paths else 0
 
 
@@ -225,14 +239,16 @@ def _compute_num_models_to_train(args: ArgType) -> int:
 
 def _format_checkpoints(args: ArgType) -> dict:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
-    checkpoint_format = f"{{epoch}}-{{val_loss:.3f}}-{{val_{args.track_metric}:.3f}}"
+    checkpoint_format = "{epoch}-{val_loss:.3f}"
+    if args.track_metric != "loss":
+        checkpoint_format += f"-{{val_{args.track_metric}:.3f}}"
     checkpoint_kwargs = dict(
         dirpath=args.model_dir,
         filename=checkpoint_format,
         monitor=f"val_{args.track_metric}",
-        save_top_k=3,
+        save_top_k=args.save_top_k,
         save_last=True,
-        mode="max",
+        mode="max" if args.track_metric != "loss" else "min",
         every_n_epochs=args.checkpoint_every_n_epochs,
     )
     return checkpoint_kwargs
@@ -277,11 +293,11 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
 def _generate_config_yamls_in_train(
     args: ArgType,
     best_model_paths: List[Path],
+    logger: Union[TensorBoardLogger, MLFlowLogger],
 ) -> None:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
-    generate_config_yaml = (
-        (not args.fast_dev_run) if hasattr(args, "fast_dev_run") else True
-    )
+    has_fdr = hasattr(args, "fast_dev_run")
+    generate_config_yaml = (not args.fast_dev_run) if has_fdr else True
     if generate_config_yaml:
         n_models_to_train = _compute_num_models_to_train(args)
         dict_args = vars(args)
@@ -291,18 +307,23 @@ def _generate_config_yamls_in_train(
             best_model_paths = [bmp for bmp in best_model_paths for _ in range(3)]
         else:
             dict_args["pseudo3d_dim"] = args.pseudo3d_dim
-        generate_train_config_yaml(
+        train_cfgs = generate_train_config_yaml(
             exp_dirs=exp_dirs,
             dict_args=dict_args,
             best_model_paths=best_model_paths,
             parser=train_parser(False),
         )
-        generate_predict_config_yaml(
+        predict_cfgs = generate_predict_config_yaml(
             exp_dirs=exp_dirs,
             dict_args=dict_args,
             best_model_paths=best_model_paths,
             parser=predict_parser(False),
         )
+        if args.tracking_uri is not None:
+            assert isinstance(logger, MLFlowLogger)
+            run_id = logger.run_id
+            for cfg in chain(train_cfgs, predict_cfgs):
+                logger.experiment.log_artifact(run_id, cfg)
 
 
 class MLFlowModelCheckpoint(ModelCheckpoint):
