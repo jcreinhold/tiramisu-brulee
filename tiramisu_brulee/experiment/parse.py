@@ -64,7 +64,7 @@ def _generate_config_yaml(
     dict_args: dict,
     best_model_paths: Optional[List[Path]],
     stage: str,
-) -> None:
+) -> List[str]:
     """generate config yaml file(s) for `stage`, store in experiment dir"""
     assert stage in ("train", "predict")
     config = vars(parser.get_defaults())
@@ -73,6 +73,7 @@ def _generate_config_yaml(
             if isinstance(v, Path):
                 v = str(v)
             config[k] = v
+    config_filenames = []
     for exp_dir in exp_dirs:
         config_filename = exp_dir / f"{stage}_config.yaml"
         if config_filename.is_file():
@@ -88,6 +89,8 @@ def _generate_config_yaml(
         with open(config_filename, "w") as f:
             yaml.dump(config, f)
         logger.info(f"{stage} configuration file generated: {config_filename}")
+        config_filenames.append(config_filename)
+    return [str(fn.resolve()) for fn in config_filenames]
 
 
 def generate_train_config_yaml(
@@ -95,13 +98,14 @@ def generate_train_config_yaml(
     parser: ArgumentParser,
     dict_args: dict,
     best_model_paths: Optional[List[Path]] = None,
-) -> None:
+) -> List[str]:
     """generate config yaml file(s) for training, store in experiment dir"""
     if dict_args["config"] is not None:
-        return  # user used config file, so we do not need to generate one
+        return []  # user used config file, so we do not need to generate one
     if isinstance(exp_dirs, Path):
         exp_dirs = [exp_dirs]
-    _generate_config_yaml(exp_dirs, parser, dict_args, None, "train")
+    fns = _generate_config_yaml(exp_dirs, parser, dict_args, None, "train")
+    return fns
 
 
 def generate_predict_config_yaml(
@@ -109,12 +113,14 @@ def generate_predict_config_yaml(
     parser: ArgumentParser,
     dict_args: dict,
     best_model_paths: Optional[List[Path]] = None,
-) -> None:
+) -> List[str]:
     """generate config yaml file(s) for prediction, store in experiment dir"""
     if isinstance(exp_dirs, Path):
         exp_dirs = [exp_dirs]
     remove_args(parser, ["config"])
-    _generate_config_yaml(exp_dirs, parser, dict_args, best_model_paths, "predict")
+    bmps = best_model_paths
+    fns = _generate_config_yaml(exp_dirs, parser, dict_args, bmps, "predict")
+    return fns
 
 
 def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
@@ -128,7 +134,8 @@ def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
         for action in parser._actions:
             opt_str = action.option_strings[-1]
             dest = action.dest
-            if (dest_in_args := dest in _action_args) or opt_str in _action_args:
+            dest_in_args = dest in _action_args
+            if dest_in_args or opt_str in _action_args:
                 parser._remove_action(action)
                 _action_args.remove(dest if dest_in_args else opt_str)
             if not _action_args:
