@@ -47,6 +47,7 @@ clean-test: clean-test-lite ## remove test and coverage artifacts
 clean-test-lite:  ## remove test artifacts minus tox
 	rm -fr file:.
 	rm -fr private
+	rm -fr tests/private
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache

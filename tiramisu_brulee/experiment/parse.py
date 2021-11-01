@@ -126,34 +126,33 @@ def generate_predict_config_yaml(
 def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
     """remove a set of args from a parser"""
     # https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
+    # for some reason, going through the actions once and checking if each action is in
+    # the set of args doesn't work & the action/groups need to be removed at same time
 
     _action_args = set(args)
     _action_group_args = set(args)
 
-    for _ in range(2):  # for some reason, two passes are required.
+    for arg in args:
         for action in parser._actions:
             opt_str = action.option_strings[-1]
             dest = action.dest
-            dest_in_args = dest in _action_args
-            if dest_in_args or opt_str in _action_args:
+            if opt_str == arg or dest == arg:
                 parser._remove_action(action)
-                _action_args.remove(dest if dest_in_args else opt_str)
-            if not _action_args:
+                _action_args.remove(arg)
                 break
 
         for action in parser._action_groups:
             group_actions = action._group_actions
             for group_action in group_actions:
-                if group_action.dest in _action_group_args:
+                if group_action.dest == arg:
                     group_actions.remove(group_action)
                     _action_group_args.remove(group_action.dest)
-                if not _action_group_args:
                     break
-            if not _action_group_args:
-                break
 
-    if _action_args or _action_group_args:
-        warnings.warn(f"unable to remove {_action_args.union(_action_group_args)}")
+    # ignore the inability to remove the "callbacks" argument b/c irrelevant
+    intersection = _action_args.intersection(_action_group_args) - {"callbacks"}
+    if intersection:
+        warnings.warn(f"unable to remove {intersection}")
 
 
 # flake8: noqa: E731
