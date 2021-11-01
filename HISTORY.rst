@@ -2,6 +2,13 @@
 History
 =======
 
+0.1.28 (2021-11-01)
+-------------------
+
+* Add commit hash logger function to tag MLFlow runs
+* Save configuration files to MLFlow
+* Add option to save top K checkpoints
+
 0.1.27 (2021-10-12)
 -------------------
 
