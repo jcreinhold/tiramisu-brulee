@@ -469,15 +469,15 @@ class LesionSegLightningBase(pl.LightningModule):
         for n, location in enumerate(locations):
             i_ini, j_ini, k_ini, i_fin, j_fin, k_fin = location
             if pseudo3d_dim == 0:
-                i = (i_fin - i_ini) // 2 + i_ini
+                i = torch.div(i_fin - i_ini, 2, rounding_mode="floor") + i_ini
                 i_ini = i
                 i_fin = i + 1
             elif pseudo3d_dim == 1:
-                j = (j_fin - j_ini) // 2 + j_ini
+                j = torch.div(j_fin - j_ini, 2, rounding_mode="floor") + j_ini
                 j_ini = j
                 j_fin = j + 1
             elif pseudo3d_dim == 2:
-                k = (k_fin - k_ini) // 2 + k_ini
+                k = torch.div(k_fin - k_ini, 2, rounding_mode="floor") + k_ini
                 k_ini = k
                 k_fin = k + 1
             else:
