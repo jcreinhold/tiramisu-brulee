@@ -18,6 +18,7 @@ __all__ = [
 ]
 
 import logging
+import warnings
 from functools import partial
 from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Type, Union
 
@@ -400,13 +401,11 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def _save_as_dicom(self, filename: str) -> bool:
         save_dicom = str(filename).endswith(".dcm")
-        self.__dicom_warned = hasattr(self, "__dicom_warned")
-        if not self.__dicom_warned and save_dicom:
-            logging.warning(
+        if save_dicom:
+            warnings.warn(
                 "DICOM Segmentation Objects only support uint8. "
                 "Cannot save a probability image."
             )
-            self.__dicom_warned = True
         return save_dicom
 
     def _write_image(
