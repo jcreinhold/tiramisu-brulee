@@ -562,10 +562,11 @@ class WholeImagePredictBatch:
         self.validate()
 
     def validate(self) -> None:
+        paths = (Path(path) for path in self.path)
         assert len(self.src) == len(self.affine)
         assert len(self.affine) == len(self.path)
         assert len(self.path) == len(self.out)
-        assert all([Path(path).is_file() for path in self.path])
+        assert all(path.is_file() or path.is_dir() for path in paths)
         assert isinstance(self.reorient, bool)
 
 
@@ -595,8 +596,9 @@ class PatchesImagePredictBatch:
         self.validate()
 
     def validate(self) -> None:
+        path = Path(self.path)
         assert len(self.src) == len(self.affine)
-        assert Path(self.path).is_file()
+        assert path.is_file() or path.is_dir()
         assert self.pseudo3d_dim is None or (0 <= self.pseudo3d_dim <= 2)
         assert self.total_batches >= 1
         assert hasattr(self.grid_obj, "subject")
