@@ -19,6 +19,7 @@ __all__ = [
     "Mixup",
 ]
 
+import warnings
 from logging import getLogger
 from pathlib import Path
 from types import SimpleNamespace
@@ -1029,7 +1030,7 @@ def _get_type(name: str) -> str:
     elif name_lower in RECOGNIZED_NAMES:
         _type = tio.INTENSITY
     else:
-        logger.warning(
+        warnings.warn(
             f"{name} not in known {RECOGNIZED_NAMES}. "
             f"Assuming {name} is a non-label image."
         )
@@ -1103,7 +1104,7 @@ def _check_consistent_space_and_resample(
         try:
             subject.check_consistent_affine()
         except RuntimeError as e:
-            logger.warning(f"{subject['name']} has inconsistent affine matrices.")
+            warnings.warn(f"{subject['name']} has inconsistent affine matrices.")
             logger.info(e)
             logger.info("Attempting to resample the images to be consistent.")
             affine = None
@@ -1126,7 +1127,7 @@ def _check_consistent_space_and_resample(
                             "Distance between affine matrices is large. "
                             "Consider aborting and registering the images manually."
                         )
-                        logger.warning(msg)
+                        warnings.warn(msg)
                     if image.type == tio.LABEL:
                         resampler = tio.Resample(first_image, "nearest")
                     else:
@@ -1144,7 +1145,7 @@ def _check_spacing_between_dicom_slices(
     try:
         import pydicom  # type: ignore[import]
     except (ImportError, ModuleNotFoundError):
-        logger.warning("pydicom not found. Cannot validate DICOM image.")
+        warnings.warn("pydicom not found. Cannot validate DICOM image.")
         return
     images = [pydicom.dcmread(path) for path in Path(dicom_dir).glob("*.dcm")]
     slice_thickness = float(images[0].SliceThickness)
@@ -1182,4 +1183,4 @@ def _check_spacing_between_dicom_slices(
         if strict:
             raise RuntimeError(msg)
         else:
-            logger.warning(msg)
+            warnings.warn(msg)
