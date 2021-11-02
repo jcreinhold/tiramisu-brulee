@@ -2,6 +2,13 @@
 History
 =======
 
+0.1.29 (2021-11-02)
+-------------------
+
+* Support dicom images in lesion-predict
+* Change logger.warnings to warnings.warn
+* Remove deprecation warning for floor divide in torch in patch-based prediction
+
 0.1.28 (2021-11-01)
 -------------------
 
