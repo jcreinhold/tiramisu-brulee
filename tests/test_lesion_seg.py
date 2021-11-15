@@ -189,6 +189,8 @@ def test_patch_prediction_cli(
     cli_train_args += f"--train-csv {csv_}".split()
     cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
+    cli_train_args += "--pos-sampling-weight 0.8".split()
+    cli_train_args += ["--label-sampler"]
     best_model_paths = _get_and_format_best_model_paths(cli_train_args)
     cli_predict_args += f"--model-path {best_model_paths}".split()
     cli_predict_args += "--patch-size 32 32 32".split()
