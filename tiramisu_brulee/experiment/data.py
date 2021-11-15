@@ -47,6 +47,7 @@ from tiramisu_brulee.experiment.type import (
     positive_int,
     positive_int_or_none,
     positive_odd_int_or_none,
+    probability_float,
 )
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
 
@@ -273,6 +274,17 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         )
         return parser
 
+    def __repr__(self) -> str:
+        desc = (
+            f"batch size: {self.batch_size}; "
+            f"patch size: {self.patch_size}; "
+            f"num workers: {self.num_workers}; "
+            f"pseudo3d dim: {self.pseudo3d_dim}; "
+            f"pseudo3d size: {self.pseudo3d_size}; "
+            f"reorient to canonical: {self.reorient_to_canonical}"
+        )
+        return desc
+
 
 class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     """Data module for training and validation for lesion segmentation
@@ -316,6 +328,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         pseudo3d_size: Optional[int] = None,
         reorient_to_canonical: bool = True,
         num_classes: int = 1,
+        pos_sampling_weight: float = 1.0,
         **kwargs,
     ):
         super().__init__(
@@ -333,6 +346,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.label_sampler = label_sampler
         self.spatial_augmentation = spatial_augmentation
         self.num_classes = num_classes
+        self.pos_sampling_weight = pos_sampling_weight
 
     @classmethod
     def from_csv(  # type: ignore[no-untyped-def]
@@ -435,7 +449,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _get_train_sampler(self) -> Union[tio.LabelSampler, tio.UniformSampler]:
         if self.label_sampler:
-            return tio.LabelSampler(self.patch_size)
+            p = self.pos_sampling_weight
+            lps = {0: 1.0 - p, 1: p}
+            return tio.LabelSampler(self.patch_size, label_probabilities=lps)
         else:
             return tio.UniformSampler(self.patch_size)
 
@@ -464,7 +480,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return transform
 
     def _get_val_sampler(self) -> tio.LabelSampler:
-        return tio.LabelSampler(self.patch_size)
+        p = self.pos_sampling_weight
+        lps = {0: 1.0 - p, 1: p}
+        return tio.LabelSampler(self.patch_size, label_probabilities=lps)
 
     def _setup_val_dataset(self) -> None:
         transform = self._get_val_augmentation()
@@ -541,8 +559,27 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             default=False,
             help="use spatial (affine and elastic) data augmentation",
         )
+        parser.add_argument(
+            "-psw",
+            "--pos-sampling-weight",
+            type=probability_float(),
+            default=1.0,
+            help="sample positive voxels with this weight/negative voxels with 1.0-this",
+        )
         LesionSegDataModuleBase._add_common_arguments(parser)
         return parent_parser
+
+    def __repr__(self) -> str:
+        desc = super().__repr__()
+        desc += (
+            f"; queue length: {self.queue_length}; "
+            f"samples per volume: {self.samples_per_volume}; "
+            f"label sampler: {self.label_sampler}; "
+            f"spatial aug: {self.spatial_augmentation}; "
+            f"num classes: {self.num_classes}; "
+            f"pos sampling weight: {self.pos_sampling_weight}"
+        )
+        return desc
 
 
 class WholeImagePredictBatch:
