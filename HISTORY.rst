@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.30 (2021-11-15)
+-------------------
+
+* Add option to change label sampling probabilities
+* Bump pip version in requirements_dev.txt for security
+
 0.1.29 (2021-11-02)
 -------------------
 
