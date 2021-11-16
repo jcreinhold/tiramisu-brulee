@@ -19,6 +19,7 @@ import argparse
 import gc
 import inspect
 import logging
+import os
 import tempfile
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
@@ -184,10 +185,11 @@ def predict_image(args: ArgType = None) -> int:
     else:
         raise ValueError("input args must be None or a list of strings to parse")
     modality_paths = parse_unknown_to_dict(unknown)
-    with tempfile.NamedTemporaryFile("w") as f:
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
         dict_to_csv(modality_paths, f)
         args.predict_csv = f.name
-        _predict(args, parser, False)
+    _predict(args, parser, False)
+    os.remove(args.predict_csv)
     return 0
 
 
