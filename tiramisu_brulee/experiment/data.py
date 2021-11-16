@@ -52,9 +52,11 @@ from tiramisu_brulee.experiment.type import (
 from tiramisu_brulee.experiment.util import reshape_for_broadcasting
 
 RECOGNIZED_NAMES = (
+    "cect",
     "ct",
     "flair",
     "pd",
+    "pet",
     "t1",
     "t1c",
     "t2",
@@ -371,6 +373,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         return cls(train_subject_list=tsl, val_subject_list=vsl, **kwargs)
 
     def setup(self, stage: Optional[str] = None) -> None:
+        super().setup(stage)
         self._determine_input(
             self.train_subject_list,
             other_subjects=self.val_subject_list,
@@ -670,6 +673,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         self.subjects = subjects
 
     def setup(self, stage: Optional[str] = None) -> None:
+        super().setup(stage)
         self._determine_input(self.subjects)
         self._setup_predict_dataset()
 
@@ -773,8 +777,7 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         return cls(subjects=subject_list, **kwargs)
 
     def setup(self, stage: Optional[str] = None) -> None:
-        self._determine_input(self.subjects)
-        self._setup_predict_dataset()
+        super().setup(stage)
 
     def _setup_predict_dataset(self) -> None:
         transforms = []
