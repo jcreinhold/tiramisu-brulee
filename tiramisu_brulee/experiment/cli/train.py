@@ -140,7 +140,6 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     parser = Mixup.add_arguments(parser)
     parser = Trainer.add_argparse_args(parser)
     unnecessary_args = {
-        "checkpoint_callback",
         "enable_checkpointing",
         "in_channels",
         "logger",
@@ -372,7 +371,6 @@ def _setup_trainer_and_checkpoint(args: ArgType) -> Tuple[Trainer, ModelCheckpoi
     trainer = Trainer.from_argparse_args(
         args,
         logger=exp_logger,
-        checkpoint_callback=True,
         callbacks=[checkpoint_callback],
         plugins=plugins,
     )
