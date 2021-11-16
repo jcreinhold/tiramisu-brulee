@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.32 (2021-11-16)
+-------------------
+
+* Fix bug in prediction where data not transferred to GPU
+
 0.1.31 (2021-11-16)
 -------------------
 
