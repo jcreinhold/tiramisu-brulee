@@ -265,7 +265,7 @@ def dict_to_csv(modality_path: Dict[str, str], open_file: IO) -> None:
         headers.append(modality)
         paths.append(path)
     headers_str = ",".join(headers) + "\n"
-    paths_str = ",".join(paths)
+    paths_str = ",".join('"{}"'.format(p.strip('"')) for p in paths) + "\n"
     logger.debug(f"{headers_str}{paths_str}")
     open_file.write(headers_str)
     open_file.write(paths_str)

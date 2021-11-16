@@ -84,11 +84,14 @@ def predict_parser(use_python_argparse: bool = True) -> ArgParser:
         help="path to a configuration file in json or yaml format",
     )
     necessary_trainer_args = {
+        "accelerator",
         "benchmark",
+        "devices",
         "enable_progress_bar",
         "gpus",
         "precision",
         "progress_bar_refresh_rate",
+        "strategy",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, True)
     return parser
@@ -99,11 +102,14 @@ def predict_image_parser() -> argparse.ArgumentParser:
     desc = "Use a Tiramisu CNN to segment lesions for a single time-point prediction"
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
+        "accelerator",
         "benchmark",
+        "devices",
         "enable_progress_bar",
         "gpus",
         "precision",
         "progress_bar_refresh_rate",
+        "strategy",
     }
     parser = _predict_parser_shared(parser, necessary_trainer_args, False)
     return parser
