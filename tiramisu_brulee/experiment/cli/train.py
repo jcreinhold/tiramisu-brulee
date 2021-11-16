@@ -141,13 +141,12 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
     parser = Trainer.add_argparse_args(parser)
     unnecessary_args = {
         "checkpoint_callback",
-        "distributed_backend",
+        "enable_checkpointing",
         "in_channels",
         "logger",
         "max_steps",
         "min_steps",
         "out_channels",
-        "truncated_bptt_steps",
         "weights_save_path",
     }
     if use_python_argparse:
@@ -341,7 +340,10 @@ class MLFlowModelCheckpoint(ModelCheckpoint):
         trainer: Trainer,
         unused: Optional[LightningModule] = None,
     ) -> None:
-        super().save_checkpoint(trainer=trainer, unused=unused)
+        try:
+            super().save_checkpoint(trainer=trainer, unused=unused)
+        except TypeError:
+            super().save_checkpoint(trainer=trainer)
         run_id = self.mlflow_logger.run_id
         self.mlflow_logger.experiment.log_artifact(run_id, self.best_model_path)
 
