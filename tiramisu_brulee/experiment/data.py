@@ -610,6 +610,9 @@ class WholeImagePredictBatch:
         assert all(path.is_file() or path.is_dir() for path in paths)
         assert isinstance(self.reorient, bool)
 
+    def to(self, device: Union[str, torch.device], **kwargs) -> None:  # type: ignore[no-untyped-def]
+        self.src = self.src.to(device=device, **kwargs)
+
 
 class PatchesImagePredictBatch:
     def __init__(
@@ -647,6 +650,9 @@ class PatchesImagePredictBatch:
         assert hasattr(self.grid_obj, "patch_overlap")
         assert hasattr(self.grid_obj.subject, "spatial_shape")
         assert isinstance(self.reorient, bool)
+
+    def to(self, device: Union[str, torch.device], **kwargs) -> None:  # type: ignore[no-untyped-def]
+        self.src = self.src.to(device=device, **kwargs)
 
 
 class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
