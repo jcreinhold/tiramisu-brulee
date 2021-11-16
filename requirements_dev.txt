@@ -11,12 +11,12 @@ twine==1.14.0
 pytest==4.6.5
 pytest-runner==5.1
 
-jsonargparse>=3.12.0
+jsonargparse~=3.19.4
 pandas>=1.1
-pytorch-lightning~=1.4.1
+pytorch-lightning~=1.5.1
 PyYAML>=5.4.1
 ruyaml>=0.20.0
-SimpleITK>=2.1.0
+SimpleITK~=2.1.0
 scikit-image>=0.17
 torch>=1.8.1
 torchio>=0.18.39

@@ -84,6 +84,7 @@ def predict_parser(use_python_argparse: bool = True) -> ArgParser:
     )
     necessary_trainer_args = {
         "benchmark",
+        "enable_progress_bar",
         "gpus",
         "precision",
         "progress_bar_refresh_rate",
@@ -98,6 +99,7 @@ def predict_image_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lesion-predict-image", description=desc)
     necessary_trainer_args = {
         "benchmark",
+        "enable_progress_bar",
         "gpus",
         "precision",
         "progress_bar_refresh_rate",
