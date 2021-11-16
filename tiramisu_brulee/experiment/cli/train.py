@@ -341,7 +341,7 @@ class MLFlowModelCheckpoint(ModelCheckpoint):
         unused: Optional[LightningModule] = None,
     ) -> None:
         try:
-            super().save_checkpoint(trainer=trainer, unused=unused)
+            super().save_checkpoint(trainer=trainer, unused=unused)  # type: ignore[call-arg]
         except TypeError:
             super().save_checkpoint(trainer=trainer)
         run_id = self.mlflow_logger.run_id
@@ -378,7 +378,7 @@ def _setup_trainer_and_checkpoint(args: ArgType) -> Tuple[Trainer, ModelCheckpoi
     )
     if args.tracking_uri is not None:
         tb_info = tiramisu_brulee_info()
-        run_id = trainer.logger.run_id  # type: ignore[attr-defined]
+        run_id = trainer.logger.run_id
         trainer.logger.experiment.set_tag(run_id, "Version", tb_info.version)
         trainer.logger.experiment.set_tag(run_id, "Commit", tb_info.commit)
     return trainer, checkpoint_callback
