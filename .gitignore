@@ -49,6 +49,7 @@ coverage.xml
 private/
 file:./
 Users/
+lightning_logs/
 
 # Translations
 *.mo
