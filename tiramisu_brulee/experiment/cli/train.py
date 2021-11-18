@@ -56,11 +56,10 @@ from tiramisu_brulee.experiment.type import ArgParser, ArgType
 from tiramisu_brulee.experiment.util import setup_log
 
 # num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
-train_dataloader_warning = (
-    "The dataloader, train dataloader, does not have many workers"
+warnings.filterwarnings(
+    "ignore",
+    ".*does not have many workers. Consider increasing the value of the `num_workers` argument*",
 )
-val_dataloader_warning = "The dataloader, val dataloader 0, does not have many workers"
-warnings.filterwarnings("ignore", train_dataloader_warning, category=UserWarning)
 
 
 def train_parser(use_python_argparse: bool = True) -> ArgParser:
@@ -178,8 +177,6 @@ def train(
     n_models_to_train = _compute_num_models_to_train(args)
     best_model_paths: List[Path] = []
     use_pseudo3d = args.pseudo3d_dim is not None
-    if use_pseudo3d:
-        warnings.filterwarnings("ignore", val_dataloader_warning, category=UserWarning)
     check_patch_size(args.patch_size, use_pseudo3d)
     pseudo3d_dims = pseudo3d_dims_setup(args.pseudo3d_dim, n_models_to_train, "train")
     individual_run_args = deepcopy(vars(args))

@@ -21,6 +21,7 @@ __all__ = [
 
 import warnings
 from logging import getLogger
+from multiprocessing import Manager
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, List, Optional, Tuple, Type, TypeVar, Union
@@ -72,6 +73,13 @@ TrainDataModule = TypeVar("TrainDataModule", bound="LesionSegDataModuleTrain")
 PredictDataModule = TypeVar("PredictDataModule", bound="LesionSegDataModulePredictBase")
 
 
+class SubjectsDataset(tio.SubjectsDataset):
+    def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        super().__init__(*args, **kwargs)
+        manager = Manager()
+        self._subjects = manager.list(self._subjects)
+
+
 class LesionSegDataModuleBase(pl.LightningDataModule):
     def __init__(
         self,
@@ -82,6 +90,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
         reorient_to_canonical: bool = True,
+        use_memory_saving_dataset: bool = False,
     ):
         super().__init__()
         self.batch_size = batch_size
@@ -97,6 +106,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             )
         self.patch_size = self._determine_patch_size(patch_size)
         self.reorient_to_canonical = reorient_to_canonical
+        self.use_memory_saving_dataset = use_memory_saving_dataset
 
     def _determine_input(
         self,
@@ -274,6 +284,13 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
             help="check DICOM images to see if they have uniform "
             "spacing between slices; warn the user if not.",
         )
+        parser.add_argument(
+            "--use-memory-saving-dataset",
+            action="store_true",
+            default=False,
+            help="default dataset can leak memory when num_workers > 1, "
+            "use this if you encounter non-GPU OOM errors",
+        )
         return parser
 
     def __repr__(self) -> str:
@@ -331,6 +348,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         reorient_to_canonical: bool = True,
         num_classes: int = 1,
         pos_sampling_weight: float = 1.0,
+        use_memory_saving_dataset: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -340,6 +358,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             pseudo3d_dim=pseudo3d_dim,
             pseudo3d_size=pseudo3d_size,
             reorient_to_canonical=reorient_to_canonical,
+            use_memory_saving_dataset=use_memory_saving_dataset,
         )
         self.train_subject_list = train_subject_list
         self.val_subject_list = val_subject_list
@@ -460,7 +479,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _setup_train_dataset(self) -> None:
         transform = self._get_train_augmentation()
-        subjects_dataset = tio.SubjectsDataset(
+        ds = SubjectsDataset if self.use_memory_saving_dataset else tio.SubjectsDataset
+        subjects_dataset = ds(
             self.train_subject_list,
             transform=transform,
         )
@@ -489,7 +509,8 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     def _setup_val_dataset(self) -> None:
         transform = self._get_val_augmentation()
-        subjects_dataset = tio.SubjectsDataset(
+        ds = SubjectsDataset if self.use_memory_saving_dataset else tio.SubjectsDataset
+        subjects_dataset = ds(
             self.val_subject_list,
             transform=transform,
         )
@@ -665,6 +686,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
         reorient_to_canonical: bool = True,
+        use_memory_saving_dataset: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -674,6 +696,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
             pseudo3d_dim=pseudo3d_dim,
             pseudo3d_size=pseudo3d_size,
             reorient_to_canonical=reorient_to_canonical,
+            use_memory_saving_dataset=use_memory_saving_dataset,
         )
         self.predict_dataset: tio.SubjectsDataset
         self.subjects = subjects
@@ -791,7 +814,8 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
             transforms.append(tio.ToCanonical())
         transforms.append(image_to_float())
         transform = tio.Compose(transforms)
-        subjects_dataset = tio.SubjectsDataset(self.subjects, transform=transform)
+        ds = SubjectsDataset if self.use_memory_saving_dataset else tio.SubjectsDataset
+        subjects_dataset = ds(self.subjects, transform=transform)
         self.predict_dataset = subjects_dataset
 
     def _collate_fn(self, batch: List[tio.Subject]) -> WholeImagePredictBatch:
@@ -847,6 +871,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         pseudo3d_dim: Optional[int] = None,
         pseudo3d_size: Optional[int] = None,
         reorient_to_canonical: bool = True,
+        use_memory_saving_dataset: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -857,6 +882,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
             pseudo3d_dim=pseudo3d_dim,
             pseudo3d_size=pseudo3d_size,
             reorient_to_canonical=reorient_to_canonical,
+            use_memory_saving_dataset=use_memory_saving_dataset,
         )
         assert self.patch_size is not None
         # self.patch_size is the result from _determine_patch_size
