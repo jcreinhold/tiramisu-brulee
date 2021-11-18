@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.33 (2021-11-18)
+-------------------
+
+* Add support for a dataset that can prevent a known PyTorch/Python memory leak issue
+
 0.1.32 (2021-11-16)
 -------------------
 
