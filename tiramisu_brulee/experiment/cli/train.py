@@ -56,10 +56,7 @@ from tiramisu_brulee.experiment.type import ArgParser, ArgType
 from tiramisu_brulee.experiment.util import setup_log
 
 # num of dataloader workers is set to 0 for compatibility w/ torchio, so ignore warning
-warnings.filterwarnings(
-    "ignore",
-    ".*does not have many workers. Consider increasing the value of the `num_workers` argument*",
-)
+warnings.filterwarnings("ignore", ".*does not have many workers*", category=UserWarning)
 
 
 def train_parser(use_python_argparse: bool = True) -> ArgParser:
