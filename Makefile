@@ -98,6 +98,8 @@ check:  ## run various code quality checks
 	black tiramisu_brulee
 	isort tiramisu_brulee
 	mypy tiramisu_brulee
+	bandit -r tiramisu_brulee -c pyproject.toml
 	black tests
 	isort tests
 	mypy tests
+	bandit -r tests -c pyproject.toml

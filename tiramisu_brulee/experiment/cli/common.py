@@ -17,7 +17,7 @@ __all__ = [
     "tiramisu_brulee_info",
 ]
 
-import subprocess
+import subprocess  # nosec
 import sys
 from pathlib import Path
 from typing import List, Optional, Set, Union
@@ -83,7 +83,7 @@ def tiramisu_brulee_info(*, short: bool = True) -> TiramisuBruleeInfo:
     cmd = ["git", "rev-parse", "HEAD"]
     if short:
         cmd.insert(2, "--short")
-    out = subprocess.run(
+    out = subprocess.run(  # nosec
         cmd, cwd=tb_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     if out.returncode == 0:
