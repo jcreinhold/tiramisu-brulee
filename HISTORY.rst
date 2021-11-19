@@ -2,6 +2,12 @@
 History
 =======
 
+0.1.34 (2021-11-19)
+-------------------
+
+* Add support for bandit
+* Fix warning filter for dataloader
+
 0.1.33 (2021-11-18)
 -------------------
 
