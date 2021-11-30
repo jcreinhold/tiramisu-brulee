@@ -19,12 +19,13 @@ __all__ = [
     "Mixup",
 ]
 
+import hashlib
 import warnings
 from logging import getLogger
 from multiprocessing import Manager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Callable, Generator, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -78,6 +79,37 @@ class SubjectsDataset(tio.SubjectsDataset):
         super().__init__(*args, **kwargs)
         manager = Manager()
         self._subjects = manager.list(self._subjects)
+
+
+class NonRandomLabelSampler(tio.LabelSampler):
+    def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        super().__init__(*args, **kwargs)
+        self._cache = dict()
+
+    def _generate_patches(
+        self,
+        subject: tio.Subject,
+        num_patches: Optional[int] = None,
+    ) -> Generator[tio.Subject, None, None]:
+        patches_left = num_patches if num_patches is not None else True
+        count = 0
+        name = subject["name"]
+        if name not in self._cache:
+            self._cache[name] = dict()
+            probability_map = self.get_probability_map(subject)
+            probability_map = self.process_probability_map(probability_map, subject)
+            cdf = self.get_cumulative_distribution_function(probability_map)
+        while patches_left:
+            if count in self._cache[name]:
+                idx = self._cache[name][count]
+            else:
+                idx = self.get_random_index_ini(probability_map, cdf)
+                self._cache[name][count] = idx
+            count += 1
+            cropped_subject = self.crop(subject, idx, self.patch_size)
+            yield cropped_subject
+            if num_patches is not None:
+                patches_left -= 1
 
 
 class LesionSegDataModuleBase(pl.LightningDataModule):
@@ -349,6 +381,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         num_classes: int = 1,
         pos_sampling_weight: float = 1.0,
         use_memory_saving_dataset: bool = False,
+        random_validation_patches: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -368,6 +401,11 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.spatial_augmentation = spatial_augmentation
         self.num_classes = num_classes
         self.pos_sampling_weight = pos_sampling_weight
+        if not random_validation_patches and pseudo3d_dim == "all":
+            msg = "Deterministic val patches not implemented w/ pseudo3d_dim = all"
+            warnings.warn(msg)
+            random_validation_patches = True
+        self.random_validation_patches = random_validation_patches
 
     @classmethod
     def from_csv(  # type: ignore[no-untyped-def]
@@ -505,7 +543,11 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     def _get_val_sampler(self) -> tio.LabelSampler:
         p = self.pos_sampling_weight
         lps = {0: 1.0 - p, 1: p}
-        return tio.LabelSampler(self.patch_size, label_probabilities=lps)
+        if self.random_validation_patches:
+            sampler = tio.LabelSampler(self.patch_size, label_probabilities=lps)
+        else:
+            sampler = NonRandomLabelSampler(self.patch_size, label_probabilities=lps)
+        return sampler
 
     def _setup_val_dataset(self) -> None:
         transform = self._get_val_augmentation()
@@ -589,6 +631,12 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             type=probability_float(),
             default=1.0,
             help="sample positive voxels with this weight/negative voxels with 1.0-this",
+        )
+        parser.add_argument(
+            "--random-validation-patches",
+            action="store_true",
+            default=False,
+            help="randomly sample patches in the validation set",
         )
         LesionSegDataModuleBase._add_common_arguments(parser)
         return parent_parser
@@ -967,8 +1015,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # offset by batch/channel dims if pseudo3d used
         p3d_with_offset = (p3d + 2) if self._use_pseudo3d else None  # type: ignore[operator]
         src: Tensor = self._default_collate_fn(collated_batch, cat_dim=p3d_with_offset)
-        # assume input images are co-registered
-        # so arbitrarily choose first
+        # assume input images are co-registered so arbitrarily choose first
         field: str = self._input_fields[0]
         affine: Tensor = collated_batch[field][tio.AFFINE]
         out_path: str = collated_batch["out"]  # path to save the prediction

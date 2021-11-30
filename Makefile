@@ -26,7 +26,7 @@ BROWSER := python -c "$$BROWSER_PYSCRIPT"
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
-clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
+clean: clean-build clean-pyc clean-test-lite ## remove all build, test, coverage and Python artifacts
 
 clean-build: ## remove build artifacts
 	rm -fr build/
@@ -43,6 +43,7 @@ clean-pyc: ## remove Python file artifacts
 
 clean-test: clean-test-lite ## remove test and coverage artifacts
 	rm -fr .tox/
+	rm -fr .mypy_cache
 
 clean-test-lite:  ## remove test artifacts minus tox
 	rm -fr file:.
@@ -51,7 +52,8 @@ clean-test-lite:  ## remove test artifacts minus tox
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
-	rm -fr .mypy_cache
+	rm -fr Users/
+	rm -fr lightning_logs/
 
 lint: ## check style with flake8
 	flake8 tiramisu_brulee tests
