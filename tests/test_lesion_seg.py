@@ -304,6 +304,7 @@ def test_pseudo3d_all_cli(
     cli_train_args += "--patch-size 8 8".split()
     cli_train_args += "--pseudo3d-dim all".split()
     cli_train_args += "--pseudo3d-size 31".split()
+    cli_train_args += ["--random-validation-patches"]
     best_model_paths = _get_and_format_best_model_paths(cli_train_args)
     cli_predict_args += f"--model-path {best_model_paths}".split()
     cli_predict_args += "--patch-size None None".split()
