@@ -2,6 +2,11 @@
 History
 =======
 
+0.1.35 (2021-11-30)
+-------------------
+
+* Add support for deterministic validation patches
+
 0.1.34 (2021-11-19)
 -------------------
 
