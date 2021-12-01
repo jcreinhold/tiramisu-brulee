@@ -202,36 +202,6 @@ class LesionSegLightningBase(pl.LightningModule):
         )
         num_input = self.hparams.num_input
         assert isinstance(num_input, int)
-        self.log(
-            "val_loss",
-            loss,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-        )
-        self.log(
-            "val_isbi15_score",
-            isbi15_score,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-        )
-        self.log(
-            "val_dice",
-            dice,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-        )
-        self.log(
-            "val_ppv",
-            ppv,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-        )
-        # note that the metrics above will be accumulated and averaged over the epoch
-        # whereas metrics printed in the debug will be on a per iteration/batch basis
         logging.debug(
             f"ISBI15: {isbi15_score.item():0.3f}; "
             f"Dice: {dice.item():0.3f}; "
@@ -252,10 +222,26 @@ class LesionSegLightningBase(pl.LightningModule):
                 images[f"input_channel_{i}"] = src[:, i : i + 1, ...]
         else:
             images = None
-        return dict(val_loss=loss, images=images)
+        return dict(
+            loss=loss, isbi15_score=isbi15_score, dice=dice, ppv=ppv, images=images
+        )
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
-        self._log_images(outputs[0]["images"])
+        images = outputs[0].pop("images")
+        self._log_images(images)
+        log_client = self.logger.experiment
+        for k in outputs[0].keys():
+            metric = torch.stack([output[k] for output in outputs]).mean()
+            if hasattr(log_client, "log_metric"):
+                log_client.log_metric(
+                    run_id=self.logger.run_id,
+                    key=f"val_{k}",
+                    value=metric.item(),
+                    step=self.current_epoch,
+                )
+                self.log(f"val_{k}", metric, logger=False)
+            else:
+                self.log(f"val_{k}", metric)
 
     def predict_step(
         self,

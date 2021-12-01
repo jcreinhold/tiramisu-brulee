@@ -50,6 +50,7 @@ private/
 file:./
 Users/
 lightning_logs/
+mlruns/
 
 # Translations
 *.mo
