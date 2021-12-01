@@ -54,6 +54,7 @@ clean-test-lite:  ## remove test artifacts minus tox
 	rm -fr .pytest_cache
 	rm -fr Users/
 	rm -fr lightning_logs/
+	rm -fr mlruns/
 
 lint: ## check style with flake8
 	flake8 tiramisu_brulee tests

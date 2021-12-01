@@ -165,6 +165,10 @@ def test_mlflow_train_cli(
     cli_train_args += f"--train-csv {csv_}".split()
     cli_train_args += f"--valid-csv {csv_}".split()
     cli_train_args += "--patch-size 8 8 8".split()
+    for i in range(len(cli_train_args)):
+        if cli_train_args[i] == "--n-epochs":
+            cli_train_args[i + 1] = "4"
+            break
     cli_train_args += f"--tracking-uri file:./{temp_dir}/ml-runs".split()
     retcode = train(cli_train_args, return_best_model_paths=False)
     assert retcode == 0
