@@ -7,9 +7,10 @@ Author: Jacob Reinhold (jcreinhold@gmail.com)
 Created on: May 18, 2021
 """
 
+import builtins
+import pathlib
 import sys
-from pathlib import Path
-from typing import List
+import typing
 
 import pytest
 
@@ -18,26 +19,28 @@ from tiramisu_brulee.experiment.cli.train import train
 
 
 @pytest.fixture
-def file() -> Path:
-    return Path(__file__).resolve()
+def file() -> pathlib.Path:
+    return pathlib.Path(__file__).resolve()
 
 
 @pytest.fixture
-def cwd(file: Path) -> Path:
+def cwd(file: pathlib.Path) -> pathlib.Path:
     return file.parent
 
 
 @pytest.fixture
-def data_dir(cwd: Path) -> Path:
+def data_dir(cwd: pathlib.Path) -> pathlib.Path:
     return cwd / "test_data"
 
 
 @pytest.fixture(scope="session")
-def temp_dir(tmpdir_factory) -> Path:  # type: ignore[no-untyped-def]
-    return Path(tmpdir_factory.mktemp("out"))
+def temp_dir(tmpdir_factory) -> pathlib.Path:  # type: ignore[no-untyped-def]
+    return pathlib.Path(tmpdir_factory.mktemp("out"))
 
 
-def _create_csv(temp_dir: Path, data_dir: Path, stage: str) -> Path:
+def _create_csv(
+    temp_dir: pathlib.Path, data_dir: pathlib.Path, stage: builtins.str
+) -> pathlib.Path:
     csv_path = temp_dir / f"{stage}.csv"
     image_path = data_dir / "img.nii.gz"
     label_path = data_dir / "mask.nii.gz"
@@ -58,17 +61,17 @@ def _create_csv(temp_dir: Path, data_dir: Path, stage: str) -> Path:
 
 
 @pytest.fixture
-def train_csv(temp_dir: Path, data_dir: Path) -> Path:
+def train_csv(temp_dir: pathlib.Path, data_dir: pathlib.Path) -> pathlib.Path:
     return _create_csv(temp_dir, data_dir, "train")
 
 
 @pytest.fixture
-def predict_csv(temp_dir: Path, data_dir: Path) -> Path:
+def predict_csv(temp_dir: pathlib.Path, data_dir: pathlib.Path) -> pathlib.Path:
     return _create_csv(temp_dir, data_dir, "predict")
 
 
 @pytest.fixture
-def cli_train_args(temp_dir: Path) -> List[str]:
+def cli_train_args(temp_dir: pathlib.Path) -> typing.List[builtins.str]:
     args = []
     args += f"--default_root_dir {temp_dir}".split()
     args += "--enable_progress_bar false".split()
@@ -87,7 +90,9 @@ def cli_train_args(temp_dir: Path) -> List[str]:
 
 
 @pytest.fixture
-def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
+def cli_predict_args(
+    temp_dir: pathlib.Path, predict_csv: pathlib.Path
+) -> typing.List[builtins.str]:
     args = []
     args += f"--default_root_dir {temp_dir}".split()
     args += f"--predict-csv {predict_csv}".split()
@@ -96,7 +101,9 @@ def cli_predict_args(temp_dir: Path, predict_csv: Path) -> List[str]:
     return args
 
 
-def _handle_fast_dev_run(predict_args: List[str]) -> List[str]:
+def _handle_fast_dev_run(
+    predict_args: typing.List[builtins.str],
+) -> typing.List[builtins.str]:
     """py36-compatible pytorch-lightning has problem parsing fast_dev_run"""
     py_version = sys.version_info
     assert py_version.major == 3
@@ -105,7 +112,7 @@ def _handle_fast_dev_run(predict_args: List[str]) -> List[str]:
     return predict_args
 
 
-def _get_and_format_best_model_paths(args: List[str]) -> str:
+def _get_and_format_best_model_paths(args: typing.List[builtins.str]) -> builtins.str:
     best_model_paths = train(args, return_best_model_paths=True)
     assert isinstance(best_model_paths, list)
     best_model_paths_strlist = [str(bmp) for bmp in best_model_paths]
@@ -114,9 +121,9 @@ def _get_and_format_best_model_paths(args: List[str]) -> str:
 
 
 def test_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -131,9 +138,9 @@ def test_cli(
 
 
 def test_reorient_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -148,7 +155,9 @@ def test_reorient_cli(
     assert retcode == 0
 
 
-def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path) -> None:
+def test_mixup_train_cli(
+    cli_train_args: typing.List[builtins.str], train_csv: pathlib.Path
+) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
     cli_train_args += f"--valid-csv {csv_}".split()
@@ -159,7 +168,9 @@ def test_mixup_train_cli(cli_train_args: List[str], train_csv: Path) -> None:
 
 
 def test_mlflow_train_cli(
-    cli_train_args: List[str], train_csv: Path, temp_dir: Path
+    cli_train_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
+    temp_dir: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -174,7 +185,9 @@ def test_mlflow_train_cli(
     assert retcode == 0
 
 
-def test_multiclass_train_cli(cli_train_args: List[str], train_csv: Path) -> None:
+def test_multiclass_train_cli(
+    cli_train_args: typing.List[builtins.str], train_csv: pathlib.Path
+) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
     cli_train_args += f"--valid-csv {csv_}".split()
@@ -185,9 +198,9 @@ def test_multiclass_train_cli(cli_train_args: List[str], train_csv: Path) -> Non
 
 
 def test_patch_prediction_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -204,7 +217,9 @@ def test_patch_prediction_cli(
 
 
 @pytest.fixture
-def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
+def cli_predict_image_args(
+    temp_dir: pathlib.Path, data_dir: pathlib.Path
+) -> typing.List[builtins.str]:
     image_path = data_dir / "img.nii.gz"
     out_path = temp_dir / "out.nii.gz"
     args = []
@@ -218,9 +233,9 @@ def cli_predict_image_args(temp_dir: Path, data_dir: Path) -> List[str]:
 
 
 def test_predict_image_cli(
-    cli_train_args: List[str],
-    cli_predict_image_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_image_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -234,9 +249,9 @@ def test_predict_image_cli(
 
 
 def test_pseudo3d_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 3])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -255,9 +270,9 @@ def test_pseudo3d_cli(
 
 
 def test_union_aggregate_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -277,9 +292,9 @@ def test_union_aggregate_cli(
 
 
 def test_vote_aggregate_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     csv_ = " ".join([str(csv) for csv in [train_csv] * 2])
     cli_train_args += f"--train-csv {csv_}".split()
@@ -299,9 +314,9 @@ def test_vote_aggregate_cli(
 
 
 def test_pseudo3d_all_cli(
-    cli_train_args: List[str],
-    cli_predict_args: List[str],
-    train_csv: Path,
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
 ) -> None:
     cli_train_args += f"--train-csv {train_csv}".split()
     cli_train_args += f"--valid-csv {train_csv}".split()

@@ -1,14 +1,11 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.experiment.seg
+"""Training and prediction lightning modules
 
 Training and prediction logic for segmentation
 (usually lesion segmentation). Also, an
 implementation of the Tiramisu network with
 the training and prediction logic built-in.
 
-Author: Jacob Reinhold (jcreinhold@gmail.com)
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 Created on: May 14, 2021
 """
 
@@ -17,18 +14,19 @@ __all__ = [
     "LesionSegLightningTiramisu",
 ]
 
+import builtins
+import functools
 import logging
+import typing
 import warnings
-from functools import partial
-from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pytorch_lightning as pl
 import SimpleITK as sitk
 import torch
+import torch.nn as nn
 import torchio as tio
 from pytorch_lightning.utilities import AttributeDict
-from torch import Tensor, nn
 from torch.optim import AdamW, Optimizer, RMSprop
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -65,7 +63,7 @@ from tiramisu_brulee.loss import (
 from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
 from tiramisu_brulee.util import init_weights
 
-PredictBatch = Union[PatchesImagePredictBatch, WholeImagePredictBatch]
+PredictBatch = typing.Union[PatchesImagePredictBatch, WholeImagePredictBatch]
 
 
 class LesionSegLightningBase(pl.LightningModule):
@@ -78,10 +76,10 @@ class LesionSegLightningBase(pl.LightningModule):
         network (nn.Module): PyTorch neural network
         n_epochs (int): number of epochs to train the network
         learning_rate (float): learning rate for the optimizer
-        betas (Tuple[float, float]): momentum parameters for adam
+        betas (typing.Tuple[float, float]): momentum parameters for adam
         weight_decay (float): weight decay for optimizer
         loss_function (str): loss function to use in training
-        pos_weight (Optional[float]): weight for positive class
+        pos_weight (typing.Optional[float]): weight for positive class
             in focal/bce loss if using combo loss function
         focal_gamma (float): gamma param for focal loss
             if using combo loss function (0. -> BCE)
@@ -107,25 +105,25 @@ class LesionSegLightningBase(pl.LightningModule):
         self,
         *,
         network: nn.Module,
-        n_epochs: int = 1,
-        learning_rate: float = 1e-3,
-        betas: Tuple[float, float] = (0.9, 0.99),
-        weight_decay: float = 1e-7,
-        loss_function: str = "combo",
-        pos_weight: Optional[float] = None,
-        focal_gamma: float = 0.0,
-        combo_weight: float = 0.6,
-        decay_after: int = 8,
+        n_epochs: builtins.int = 1,
+        learning_rate: builtins.float = 1e-3,
+        betas: typing.Tuple[builtins.float, builtins.float] = (0.9, 0.99),
+        weight_decay: builtins.float = 1e-7,
+        loss_function: builtins.str = "combo",
+        pos_weight: typing.Optional[builtins.float] = None,
+        focal_gamma: builtins.float = 0.0,
+        combo_weight: builtins.float = 0.6,
+        decay_after: builtins.int = 8,
         rmsprop: bool = False,
-        soft_labels: bool = False,
-        threshold: float = 0.5,
-        min_lesion_size: int = 3,
-        fill_holes: bool = True,
-        predict_probability: bool = False,
-        mixup: bool = False,
-        mixup_alpha: float = 0.4,
-        num_input: int = 1,
-        num_classes: int = 1,
+        soft_labels: builtins.bool = False,
+        threshold: builtins.float = 0.5,
+        min_lesion_size: builtins.int = 3,
+        fill_holes: builtins.bool = True,
+        predict_probability: builtins.bool = False,
+        mixup: builtins.bool = False,
+        mixup_alpha: builtins.float = 0.4,
+        num_input: builtins.int = 1,
+        num_classes: builtins.int = 1,
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
@@ -136,26 +134,26 @@ class LesionSegLightningBase(pl.LightningModule):
         # noinspection PyPropertyAccess
         self.hparams: AttributeDict
 
-    def forward(self, tensor: Tensor) -> Tensor:  # type: ignore[override]
-        out: Tensor = self.network(tensor)
+    def forward(self, tensor: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        out: torch.Tensor = self.network(tensor)
         return out
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: typing.Optional[builtins.str] = None) -> None:
         if self.hparams.loss_function != "combo" and self.hparams.num_classes != 1:
             raise ValueError("Only combo loss supported for multi-class segmentation")
-        self.criterion: Callable
+        self.criterion: typing.Callable
         num_classes = self.hparams.num_classes
-        assert isinstance(num_classes, int)
+        assert isinstance(num_classes, builtins.int)
         if self.hparams.loss_function == "combo":
             if self.hparams.num_classes == 1:
-                self.criterion = partial(
+                self.criterion = functools.partial(
                     binary_combo_loss,
                     pos_weight=self.hparams.pos_weight,
                     focal_gamma=self.hparams.focal_gamma,
                     combo_weight=self.hparams.combo_weight,
                 )
             elif num_classes > 1:
-                self.criterion = partial(
+                self.criterion = functools.partial(
                     combo_loss,
                     num_classes=self.hparams.num_classes,
                     combo_weight=self.hparams.combo_weight,
@@ -172,27 +170,27 @@ class LesionSegLightningBase(pl.LightningModule):
         use_mixup = bool(self.hparams.mixup)
         if use_mixup:
             mixup_alpha = self.hparams.mixup_alpha
-            assert isinstance(mixup_alpha, float)
+            assert isinstance(mixup_alpha, builtins.float)
             self._mix = Mixup(mixup_alpha)
 
     def training_step(  # type: ignore[override]
         self,
-        batch: Tuple[Tensor, Tensor],
-        batch_idx: int,
-    ) -> Tensor:
+        batch: typing.Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: builtins.int,
+    ) -> torch.Tensor:
         src, tgt = batch
         if self.hparams.mixup:
             src, tgt = self._mix(src, tgt)
         pred = self(src)
-        loss: Tensor = self.criterion(pred, tgt)
+        loss: torch.Tensor = self.criterion(pred, tgt)
         self.log("loss", loss)
         return loss
 
     def validation_step(  # type: ignore[override]
         self,
-        batch: Tuple[Tensor, Tensor],
-        batch_idx: int,
-    ) -> Dict[str, Any]:
+        batch: typing.Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: builtins.int,
+    ) -> typing.Dict[builtins.str, typing.Any]:
         src, tgt = batch
         pred = self(src)
         loss = self.criterion(pred, tgt)
@@ -201,14 +199,16 @@ class LesionSegLightningBase(pl.LightningModule):
             pred_seg, tgt, return_dice_ppv=True
         )
         num_input = self.hparams.num_input
-        assert isinstance(num_input, int)
+        assert isinstance(num_input, builtins.int)
         logging.debug(
             f"ISBI15: {isbi15_score.item():0.3f}; "
             f"Dice: {dice.item():0.3f}; "
             f"PPV: {ppv.item():0.3f}; "
             f"Loss: {loss.item():0.3f}."
         )
-        images: Optional[Dict[str, Union[int, Tensor]]]
+        images: typing.Optional[
+            typing.Dict[builtins.str, typing.Union[builtins.int, torch.Tensor]]
+        ]
         if batch_idx == 0 and self._is_3d_image_batch(src):
             images = dict(truth=tgt, pred=pred, dim=3)
             for i in range(src.shape[1]):
@@ -226,7 +226,7 @@ class LesionSegLightningBase(pl.LightningModule):
             loss=loss, isbi15_score=isbi15_score, dice=dice, ppv=ppv, images=images
         )
 
-    def validation_epoch_end(self, outputs: List[Any]) -> None:
+    def validation_epoch_end(self, outputs: typing.List[typing.Any]) -> None:
         images = outputs[0].pop("images")
         self._log_images(images)
         log_client = self.logger.experiment
@@ -246,9 +246,9 @@ class LesionSegLightningBase(pl.LightningModule):
     def predict_step(
         self,
         batch: PredictBatch,
-        batch_idx: int,
-        dataloader_idx: Optional[int] = None,
-    ) -> Tensor:
+        batch_idx: builtins.int,
+        dataloader_idx: typing.Optional[builtins.int] = None,
+    ) -> torch.Tensor:
         if self._predict_with_patches(batch):
             assert isinstance(batch, PatchesImagePredictBatch)
             return self._predict_patch_image(batch)
@@ -258,10 +258,10 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def on_predict_batch_end(  # type: ignore[override]
         self,
-        pred_step_outputs: Tensor,
+        pred_step_outputs: torch.Tensor,
         batch: PredictBatch,
-        batch_idx: int,
-        dataloader_idx: int,
+        batch_idx: builtins.int,
+        dataloader_idx: builtins.int,
     ) -> PredictBatch:
         if self._predict_with_patches(batch):
             assert isinstance(batch, PatchesImagePredictBatch)
@@ -273,17 +273,19 @@ class LesionSegLightningBase(pl.LightningModule):
             self._predict_save_whole_image(pred_step_outputs, batch)
         return batch
 
-    def configure_optimizers(self) -> Tuple[List[Optimizer], List[LambdaLR]]:
-        optimizer: Union[AdamW, RMSprop]
+    def configure_optimizers(
+        self,
+    ) -> typing.Tuple[typing.List[Optimizer], typing.List[LambdaLR]]:
+        optimizer: typing.Union[AdamW, RMSprop]
         betas = self.hparams.betas
-        assert isinstance(betas, Collection)
+        assert isinstance(betas, typing.Collection)
         assert len(betas) == 2
         beta1, beta2 = betas
-        assert isinstance(beta1, float) and isinstance(beta2, float)
+        assert isinstance(beta1, builtins.float) and isinstance(beta2, builtins.float)
         lr = self.hparams.learning_rate
-        assert isinstance(lr, float)
+        assert isinstance(lr, builtins.float)
         weight_decay = self.hparams.weight_decay
-        assert isinstance(weight_decay, float)
+        assert isinstance(weight_decay, builtins.float)
         if self.hparams.rmsprop:
             optimizer = RMSprop(
                 self.parameters(),
@@ -303,21 +305,21 @@ class LesionSegLightningBase(pl.LightningModule):
         scheduler = LambdaLR(optimizer, lr_lambda=self.decay_rule)
         return [optimizer], [scheduler]
 
-    def decay_rule(self, epoch: int) -> float:
+    def decay_rule(self, epoch: builtins.int) -> builtins.float:
         n_epochs = self.hparams.n_epochs
-        assert isinstance(n_epochs, int)
+        assert isinstance(n_epochs, builtins.int)
         decay_after = self.hparams.decay_after
-        assert isinstance(decay_after, int)
+        assert isinstance(decay_after, builtins.int)
         numerator = max(0, epoch - decay_after)
         denominator = float(n_epochs + 1)
         lr: float = 1.0 - numerator / denominator
         return lr
 
     @staticmethod
-    def _predict_with_patches(batch: PredictBatch) -> bool:
+    def _predict_with_patches(batch: PredictBatch) -> builtins.bool:
         return hasattr(batch, "grid_obj")
 
-    def _predict_whole_image(self, batch: WholeImagePredictBatch) -> Tensor:
+    def _predict_whole_image(self, batch: WholeImagePredictBatch) -> torch.Tensor:
         """for 3D networks, predict the whole image foreground at once"""
         src = batch.src
         bbox = BoundingBox3D.from_batch(src, pad=0)
@@ -326,7 +328,7 @@ class LesionSegLightningBase(pl.LightningModule):
         pred_seg = bbox.uncrop_batch(pred_seg)
         return pred_seg
 
-    def _predict_patch_image(self, batch: PredictBatch) -> Tensor:
+    def _predict_patch_image(self, batch: PredictBatch) -> torch.Tensor:
         """for all 2D networks and 3D networks with a specified patch size"""
         src = batch.src
         pred = self(src)
@@ -348,7 +350,7 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def _predict_save_whole_image(
         self,
-        pred_step_outputs: Tensor,
+        pred_step_outputs: torch.Tensor,
         batch: WholeImagePredictBatch,
     ) -> None:
         assert len(pred_step_outputs) == len(batch.affine)
@@ -385,7 +387,8 @@ class LesionSegLightningBase(pl.LightningModule):
         self._write_image(pred, affine, fn)
         del self.aggregator
 
-    def _save_as_dicom(self, filename: str) -> bool:
+    @staticmethod
+    def _save_as_dicom(filename: builtins.str) -> builtins.bool:
         save_dicom = str(filename).endswith(".dcm")
         if save_dicom:
             warnings.warn(
@@ -398,7 +401,7 @@ class LesionSegLightningBase(pl.LightningModule):
         self,
         image: np.ndarray,
         affine: np.ndarray,
-        filename: str,
+        filename: builtins.str,
     ) -> None:
         if image.ndim != 4:
             image = image[np.newaxis]
@@ -410,10 +413,10 @@ class LesionSegLightningBase(pl.LightningModule):
 
     @staticmethod
     def _to_original_orientation(
-        original_path: str,
-        data: Tensor,
-        affine: Tensor,
-    ) -> Tuple[Tensor, Tensor]:
+        original_path: builtins.str,
+        data: torch.Tensor,
+        affine: torch.Tensor,
+    ) -> typing.Tuple[torch.Tensor, torch.Tensor]:
         original = tio.ScalarImage(original_path)
         image = tio.ScalarImage(tensor=data, affine=affine)
         if original.orientation != image.orientation:
@@ -430,7 +433,7 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def _predict_accumulate_patches(
         self,
-        pred_step_outputs: Tensor,
+        pred_step_outputs: torch.Tensor,
         batch: PatchesImagePredictBatch,
     ) -> None:
         p3d = batch.pseudo3d_dim
@@ -446,7 +449,9 @@ class LesionSegLightningBase(pl.LightningModule):
         self.aggregator.add_batch(pred_step_outputs, locations)
 
     @staticmethod
-    def _fix_pseudo3d_locations(locations: Tensor, pseudo3d_dim: int) -> Tensor:
+    def _fix_pseudo3d_locations(
+        locations: torch.Tensor, pseudo3d_dim: builtins.int
+    ) -> torch.Tensor:
         """Fix locations for aggregator when using pseudo3d
 
         locations were determined by the pseudo3d input, not the 1 channel target.
@@ -479,13 +484,13 @@ class LesionSegLightningBase(pl.LightningModule):
 
     def _log_images(
         self,
-        images: Dict[str, Any],
+        images: typing.Dict[builtins.str, typing.Any],
         *,
-        mlflow_image_limit: int = 5,
+        mlflow_image_limit: builtins.int = 5,
     ) -> None:
         n = self.current_epoch
         mid_slice = None
-        dim: int = images.pop("dim")
+        dim: builtins.int = images.pop("dim")
         for i, (key, image) in enumerate(images.items()):
             if dim == 3:
                 if mid_slice is None:
@@ -529,13 +534,13 @@ class LesionSegLightningBase(pl.LightningModule):
                 raise RuntimeError("Image logging functionality not found in logger.")
 
     @staticmethod
-    def _is_3d_image_batch(tensor: Tensor) -> bool:
-        ans: bool = tensor.ndim == 5
+    def _is_3d_image_batch(tensor: torch.Tensor) -> builtins.bool:
+        ans: builtins.bool = tensor.ndim == 5
         return ans
 
     @staticmethod
-    def _is_2d_image_batch(tensor: Tensor) -> bool:
-        ans: bool = tensor.ndim == 4
+    def _is_2d_image_batch(tensor: torch.Tensor) -> builtins.bool:
+        ans: builtins.bool = tensor.ndim == 4
         return ans
 
     @staticmethod
@@ -715,8 +720,8 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         network_dim (int): use a 2D or 3D convolutions
         in_channels (int): number of input channels
         num_classes (int): number of classes to segment with the network
-        down_blocks (Collection[int]): number of layers in each block in down path
-        up_blocks (Collection[int]): number of layers in each block in up path
+        down_blocks (typing.Collection[int]): number of layers in each block in down path
+        up_blocks (typing.Collection[int]): number of layers in each block in up path
         bottleneck_layers (int): number of layers in the bottleneck
         growth_rate (int): number of channels to grow by in each layer
         first_conv_out_channels (int): number of output channels in first conv
@@ -725,10 +730,10 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         gain (float): gain parameter for initialization
         n_epochs (int): number of epochs to train the network
         learning_rate (float): learning rate for the optimizer
-        betas (Tuple[float, float]): momentum parameters for adam
+        betas (typing.Tuple[float, float]): momentum parameters for adam
         weight_decay (float): weight decay for optimizer
         loss_function (str): loss function to use in training
-        pos_weight (Optional[float]): weight for positive class
+        pos_weight (typing.Optional[float]): weight for positive class
             in focal/bce loss if using combo loss function
         focal_gamma (float): gamma param for focal loss
             if using combo loss function (0. -> BCE)
@@ -751,39 +756,39 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
     def __init__(  # type: ignore[no-untyped-def]
         self,
         *,
-        network_dim: int = 3,
-        in_channels: int = 1,
-        num_classes: int = 1,
-        down_blocks: Collection[int] = (4, 4, 4, 4, 4),
-        up_blocks: Collection[int] = (4, 4, 4, 4, 4),
-        bottleneck_layers: int = 4,
-        growth_rate: int = 16,
-        first_conv_out_channels: int = 48,
-        dropout_rate: float = 0.2,
-        init_type: str = "normal",
-        gain: float = 0.02,
-        n_epochs: int = 1,
-        learning_rate: float = 1e-3,
-        betas: Tuple[float, float] = (0.9, 0.99),
-        weight_decay: float = 1e-7,
-        loss_function: str = "combo",
-        pos_weight: Optional[float] = None,
-        focal_gamma: float = 0.0,
-        combo_weight: float = 0.6,
-        decay_after: int = 8,
-        rmsprop: bool = False,
-        soft_labels: bool = False,
-        threshold: float = 0.5,
-        min_lesion_size: int = 3,
-        fill_holes: bool = True,
-        predict_probability: bool = False,
-        mixup: bool = False,
-        mixup_alpha: float = 0.4,
-        num_input: int = 1,
+        network_dim: builtins.int = 3,
+        in_channels: builtins.int = 1,
+        num_classes: builtins.int = 1,
+        down_blocks: typing.Collection[builtins.int] = (4, 4, 4, 4, 4),
+        up_blocks: typing.Collection[builtins.int] = (4, 4, 4, 4, 4),
+        bottleneck_layers: builtins.int = 4,
+        growth_rate: builtins.int = 16,
+        first_conv_out_channels: builtins.int = 48,
+        dropout_rate: builtins.float = 0.2,
+        init_type: builtins.str = "normal",
+        gain: builtins.float = 0.02,
+        n_epochs: builtins.int = 1,
+        learning_rate: builtins.float = 1e-3,
+        betas: typing.Tuple[builtins.float, builtins.float] = (0.9, 0.99),
+        weight_decay: builtins.float = 1e-7,
+        loss_function: builtins.str = "combo",
+        pos_weight: typing.Optional[builtins.float] = None,
+        focal_gamma: builtins.float = 0.0,
+        combo_weight: builtins.float = 0.6,
+        decay_after: builtins.int = 8,
+        rmsprop: builtins.bool = False,
+        soft_labels: builtins.bool = False,
+        threshold: builtins.float = 0.5,
+        min_lesion_size: builtins.int = 3,
+        fill_holes: builtins.bool = True,
+        predict_probability: builtins.bool = False,
+        mixup: builtins.bool = False,
+        mixup_alpha: builtins.float = 0.4,
+        num_input: builtins.int = 1,
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
-        network_class: Union[Type[Tiramisu2d], Type[Tiramisu3d]]
+        network_class: typing.Union[typing.Type[Tiramisu2d], typing.Type[Tiramisu3d]]
         if network_dim == 2:
             network_class = Tiramisu2d
         elif network_dim == 3:

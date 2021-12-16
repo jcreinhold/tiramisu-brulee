@@ -16,17 +16,18 @@ __all__ = [
 ]
 
 import argparse
+import builtins
+import collections
+import functools
 import gc
 import inspect
 import logging
 import os
+import pathlib
 import tempfile
-from collections import deque
+import typing
 from concurrent.futures import ProcessPoolExecutor
-from functools import partial, reduce
 from operator import add, or_
-from pathlib import Path
-from typing import Optional, Tuple, Union
 
 import jsonargparse
 import numpy as np
@@ -68,7 +69,7 @@ from tiramisu_brulee.experiment.type import (
 from tiramisu_brulee.experiment.util import append_num_to_filename, setup_log
 
 
-def predict_parser(use_python_argparse: bool = True) -> ArgParser:
+def predict_parser(use_python_argparse: builtins.bool = True) -> ArgParser:
     """argument parser for using a Tiramisu CNN for prediction"""
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
@@ -117,8 +118,8 @@ def predict_image_parser() -> argparse.ArgumentParser:
 
 def _predict_parser_shared(
     parser: ArgParser,
-    necessary_trainer_args: set,
-    add_csv: bool,
+    necessary_trainer_args: builtins.set,
+    add_csv: builtins.bool,
 ) -> ArgParser:
     exp_parser = parser.add_argument_group("Experiment")
     exp_parser.add_argument(
@@ -170,7 +171,7 @@ def _predict_parser_shared(
     return parser
 
 
-def predict(args: ArgType = None) -> int:
+def predict(args: ArgType = None) -> builtins.int:
     """use a Tiramisu CNN for prediction"""
     parser = predict_parser(False)
     if args is None:
@@ -181,7 +182,7 @@ def predict(args: ArgType = None) -> int:
     return 0
 
 
-def predict_image(args: ArgType = None) -> int:
+def predict_image(args: ArgType = None) -> builtins.int:
     """use a Tiramisu CNN for prediction for a single time-point"""
     parser = predict_image_parser()
     if args is None:
@@ -201,7 +202,7 @@ def predict_image(args: ArgType = None) -> int:
 
 def _predict_whole_image(
     args: Namespace,
-    model_path: Path,
+    model_path: pathlib.Path,
     model_num: ModelNum,
 ) -> None:
     """predict a whole image volume as opposed to patches"""
@@ -223,9 +224,9 @@ def _predict_whole_image(
 
 def _predict_patch_image(
     args: Namespace,
-    model_path: Path,
+    model_path: pathlib.Path,
     model_num: ModelNum,
-    pseudo3d_dim: Union[None, int],
+    pseudo3d_dim: typing.Union[None, builtins.int],
 ) -> None:
     """predict a volume with patches as opposed to a whole volume"""
     dict_args = vars(args)
@@ -249,11 +250,14 @@ def _predict_patch_image(
         gc.collect()
 
 
-def _predict(args: Namespace, parser: ArgParser, use_multiprocessing: bool) -> None:
+def _predict(
+    args: Namespace, parser: ArgParser, use_multiprocessing: builtins.bool
+) -> None:
     args = none_string_to_none(args)
     args = path_to_str(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
+    logger.propagate = True
     seed_everything(args.seed, workers=True)
     n_models = len(args.model_path)
     if not args.only_aggregate:
@@ -304,21 +308,21 @@ def _generate_config_yamls_in_predict(args: ArgType, parser: ArgParser) -> None:
 
 
 def aggregate(
-    predict_csv: str,
-    n_models: int,
+    predict_csv: builtins.str,
+    n_models: builtins.int,
     *,
-    threshold: float = 0.5,
-    fill_holes: bool = False,
-    min_lesion_size: int = 3,
-    aggregation_type: str = "mean",
-    num_workers: Optional[int] = None,
+    threshold: builtins.float = 0.5,
+    fill_holes: builtins.bool = False,
+    min_lesion_size: builtins.int = 3,
+    aggregation_type: builtins.str = "mean",
+    num_workers: typing.Optional[builtins.int] = None,
 ) -> None:
     """aggregate output from multiple model predictions"""
     df = pd.read_csv(predict_csv)
     out_fns = df["out"]
     n_fns = len(out_fns)
     out_fn_iter = enumerate(out_fns, 1)
-    _aggregator = partial(
+    _aggregator = functools.partial(
         _aggregate,
         threshold=threshold,
         n_models=n_models,
@@ -332,19 +336,19 @@ def aggregate(
         with ProcessPoolExecutor(num_workers) as executor:
             executor.map(_aggregator, out_fn_iter)
     else:
-        deque(map(_aggregator, out_fn_iter), maxlen=0)
+        collections.deque(map(_aggregator, out_fn_iter), maxlen=0)
 
 
 # noinspection PyUnboundLocalVariable
 def _aggregate(
-    n_fn: Tuple[int, str],
+    n_fn: typing.Tuple[builtins.int, builtins.str],
     *,
-    threshold: float,
-    n_models: int,
-    n_fns: int,
-    fill_holes: bool,
-    min_lesion_size: int,
-    aggregation_type: str = "mean",
+    threshold: builtins.float,
+    n_models: builtins.int,
+    n_fns: builtins.int,
+    fill_holes: builtins.bool,
+    min_lesion_size: builtins.int,
+    aggregation_type: builtins.str = "mean",
 ) -> None:
     """aggregate helper for concurrent/parallel processing"""
     assert n_models >= 1
@@ -359,9 +363,9 @@ def _aggregate(
         agg = np.mean(data, axis=0) > threshold
     elif aggregation_type == "vote":
         _threshold = len(data) // 2
-        agg = reduce(add, [d > threshold for d in data]) > _threshold
+        agg = functools.reduce(add, [d > threshold for d in data]) > _threshold
     elif aggregation_type == "union":
-        agg = reduce(or_, [d > threshold for d in data])
+        agg = functools.reduce(or_, [d > threshold for d in data])
     else:
         raise ValueError(
             "aggregation_type should be one of {mean, vote, union}. "

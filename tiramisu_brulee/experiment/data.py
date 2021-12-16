@@ -1,7 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.experiment.data
+"""Data handling classes for training/prediction
 
 load and process data for training/prediction
 for segmentation tasks
@@ -19,13 +16,13 @@ __all__ = [
     "Mixup",
 ]
 
-import hashlib
+import builtins
+import logging
+import pathlib
+import types
+import typing
 import warnings
-from logging import getLogger
 from multiprocessing import Manager
-from pathlib import Path
-from types import SimpleNamespace
-from typing import Callable, Generator, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -34,7 +31,6 @@ import torch
 import torch.distributions as D
 import torchio as tio
 from jsonargparse import ArgumentParser
-from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
@@ -42,6 +38,7 @@ from tiramisu_brulee.experiment.type import (
     Batch,
     PatchShape,
     PatchShapeOption,
+    PathLike,
     file_path,
     nonnegative_int,
     nonnegative_int_or_none_or_all,
@@ -68,10 +65,12 @@ RECOGNIZED_NAMES = (
     "out",
 )
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-TrainDataModule = TypeVar("TrainDataModule", bound="LesionSegDataModuleTrain")
-PredictDataModule = TypeVar("PredictDataModule", bound="LesionSegDataModulePredictBase")
+TrainDataModule = typing.TypeVar("TrainDataModule", bound="LesionSegDataModuleTrain")
+PredictDataModule = typing.TypeVar(
+    "PredictDataModule", bound="LesionSegDataModulePredictBase"
+)
 
 
 class SubjectsDataset(tio.SubjectsDataset):
@@ -89,8 +88,8 @@ class NonRandomLabelSampler(tio.LabelSampler):
     def _generate_patches(
         self,
         subject: tio.Subject,
-        num_patches: Optional[int] = None,
-    ) -> Generator[tio.Subject, None, None]:
+        num_patches: typing.Optional[builtins.int] = None,
+    ) -> typing.Generator[tio.Subject, None, None]:
         patches_left = num_patches if num_patches is not None else True
         count = 0
         name = subject["name"]
@@ -103,7 +102,7 @@ class NonRandomLabelSampler(tio.LabelSampler):
             if count in self._cache[name]:
                 idx = self._cache[name][count]
             else:
-                idx = self.get_random_index_ini(probability_map, cdf)
+                idx = self.get_random_index_ini(probability_map, cdf)  # noqa
                 self._cache[name][count] = idx
             count += 1
             cropped_subject = self.crop(subject, idx, self.patch_size)
@@ -116,20 +115,20 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
     def __init__(
         self,
         *,
-        batch_size: int,
-        patch_size: Optional[PatchShapeOption] = None,
-        num_workers: int = 16,
-        pseudo3d_dim: Optional[int] = None,
-        pseudo3d_size: Optional[int] = None,
-        reorient_to_canonical: bool = True,
-        use_memory_saving_dataset: bool = False,
+        batch_size: builtins.int,
+        patch_size: typing.Optional[PatchShapeOption] = None,
+        num_workers: builtins.int = 16,
+        pseudo3d_dim: typing.Optional[builtins.int] = None,
+        pseudo3d_size: typing.Optional[builtins.int] = None,
+        reorient_to_canonical: builtins.bool = True,
+        use_memory_saving_dataset: builtins.bool = False,
     ):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pseudo3d_dim = pseudo3d_dim
         self._pseudo3d_dim_internal = (
-            pseudo3d_dim if isinstance(pseudo3d_dim, int) else 0
+            pseudo3d_dim if isinstance(pseudo3d_dim, builtins.int) else 0
         )
         self.pseudo3d_size = pseudo3d_size
         if self._use_pseudo3d and self.pseudo3d_size is None:
@@ -142,9 +141,9 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
 
     def _determine_input(
         self,
-        subjects: Union[tio.Subject, List[tio.Subject]],
+        subjects: typing.Union[tio.Subject, typing.List[tio.Subject]],
         *,
-        other_subjects: Optional[List[tio.Subject]] = None,
+        other_subjects: typing.Optional[typing.List[tio.Subject]] = None,
     ) -> None:
         """
         assume all columns except:
@@ -186,7 +185,9 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         self._input_fields = tuple(sorted(inputs))
 
     @staticmethod
-    def _div_image_batch(image_batch: Tensor, *, div: Tensor) -> Tensor:
+    def _div_image_batch(
+        image_batch: torch.Tensor, *, div: torch.Tensor
+    ) -> torch.Tensor:
         with torch.no_grad():
             image_batch /= reshape_for_broadcasting(div, ndim=image_batch.ndim)
         return image_batch
@@ -195,15 +196,15 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         self,
         batch: Batch,
         *,
-        cat_dim: Optional[int] = None,
-    ) -> Tensor:
+        cat_dim: typing.Optional[builtins.int] = None,
+    ) -> torch.Tensor:
         if isinstance(batch, list):
             batch = default_collate(batch)
-        inputs: List[Tensor] = []
+        inputs: typing.List[torch.Tensor] = []
         for field in self._input_fields:
             inputs.append(batch[field][tio.DATA])
         cat_dim_ = cat_dim or 1
-        src: Tensor = torch.cat(inputs, dim=cat_dim_)
+        src: torch.Tensor = torch.cat(inputs, dim=cat_dim_)
         if cat_dim is not None:
             # if axis is not None, use pseudo3d images
             src.swapaxes_(1, cat_dim_)
@@ -212,13 +213,15 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
                 src.unsqueeze_(0)
             assert src.ndim == 4
         if self._use_div:
-            assert isinstance(batch["div"], Tensor)
-            div_factor: Tensor = batch["div"]
+            assert isinstance(batch["div"], torch.Tensor)
+            div_factor: torch.Tensor = batch["div"]
             src = self._div_image_batch(src, div=div_factor)
         return src
 
     @staticmethod
-    def _pseudo3d_label(label: Tensor, pseudo3d_dim: int) -> Tensor:
+    def _pseudo3d_label(
+        label: torch.Tensor, pseudo3d_dim: builtins.int
+    ) -> torch.Tensor:
         assert label.ndim == 5, "expects label with shape NxCxHxWxD"
         if pseudo3d_dim == 0:
             mid_channel = label.shape[2] // 2
@@ -234,8 +237,8 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         return label
 
     def _determine_patch_size(
-        self, patch_size: Optional[PatchShapeOption]
-    ) -> Optional[PatchShapeOption]:
+        self, patch_size: typing.Optional[PatchShapeOption]
+    ) -> typing.Optional[PatchShapeOption]:
         if patch_size is None:
             return None
         patch_size_list = list(patch_size)
@@ -248,7 +251,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         return tuple(patch_size_list)  # type: ignore[return-value]
 
     @property
-    def _use_pseudo3d(self) -> bool:
+    def _use_pseudo3d(self) -> builtins.bool:
         return self.pseudo3d_dim is not None
 
     @staticmethod
@@ -325,7 +328,7 @@ class LesionSegDataModuleBase(pl.LightningDataModule):
         )
         return parser
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> builtins.str:
         desc = (
             f"batch size: {self.batch_size}; "
             f"patch size: {self.patch_size}; "
@@ -341,9 +344,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     """Data module for training and validation for lesion segmentation
 
     Args:
-        train_subject_list (List[tio.Subject]):
+        train_subject_list (typing.List[tio.Subject]):
             list of torchio.Subject for training
-        val_subject_list (List[tio.Subject]):
+        val_subject_list (typing.List[tio.Subject]):
             list of torchio.Subject for validation
         batch_size (int): batch size for training/validation
         patch_size (PatchShape): patch size for training/validation
@@ -358,7 +361,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         label_sampler (bool): sample patches centered on positive labels
         spatial_augmentation (bool): use random affine and elastic
             data augmentation for training
-        pseudo3d_dim (Optional[int]): concatenate images along this
+        pseudo3d_dim (typing.Optional[int]): concatenate images along this
             axis and swap it for channel dimension
     """
 
@@ -366,22 +369,22 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
     def __init__(  # type: ignore[no-untyped-def]
         self,
         *,
-        train_subject_list: List[tio.Subject],
-        val_subject_list: List[tio.Subject],
-        batch_size: int = 2,
+        train_subject_list: typing.List[tio.Subject],
+        val_subject_list: typing.List[tio.Subject],
+        batch_size: builtins.int = 2,
         patch_size: PatchShape = (96, 96, 96),
-        queue_length: int = 200,
-        samples_per_volume: int = 10,
-        num_workers: int = 16,
-        label_sampler: bool = False,
-        spatial_augmentation: bool = False,
-        pseudo3d_dim: Optional[int] = None,
-        pseudo3d_size: Optional[int] = None,
-        reorient_to_canonical: bool = True,
-        num_classes: int = 1,
+        queue_length: builtins.int = 200,
+        samples_per_volume: builtins.int = 10,
+        num_workers: builtins.int = 16,
+        label_sampler: builtins.bool = False,
+        spatial_augmentation: builtins.bool = False,
+        pseudo3d_dim: typing.Optional[builtins.int] = None,
+        pseudo3d_size: typing.Optional[builtins.int] = None,
+        reorient_to_canonical: builtins.bool = True,
+        num_classes: builtins.int = 1,
         pos_sampling_weight: float = 1.0,
-        use_memory_saving_dataset: bool = False,
-        random_validation_patches: bool = False,
+        use_memory_saving_dataset: builtins.bool = False,
+        random_validation_patches: builtins.bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -409,10 +412,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
 
     @classmethod
     def from_csv(  # type: ignore[no-untyped-def]
-        cls: Type[TrainDataModule],
+        cls: typing.Type[TrainDataModule],
         *,
-        train_csv: str,
-        valid_csv: str,
+        train_csv: builtins.str,
+        valid_csv: builtins.str,
         **kwargs,
     ) -> TrainDataModule:
         strict_affine = kwargs.get("strict_affine", True)
@@ -429,7 +432,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         return cls(train_subject_list=tsl, val_subject_list=vsl, **kwargs)
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: typing.Optional[builtins.str] = None) -> None:
         super().setup(stage)
         self._determine_input(
             self.train_subject_list,
@@ -483,7 +486,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             )
         return val_dataloader
 
-    def _get_train_augmentation(self) -> Callable:
+    def _get_train_augmentation(self) -> typing.Callable:
         transforms = []
         if self.reorient_to_canonical:
             transforms.append(tio.ToCanonical())
@@ -504,10 +507,10 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         if self.pseudo3d_dim == "all":
             transforms.insert(1, RandomTranspose())
             transforms.append(RandomRot90())
-        transform: Callable = tio.Compose(transforms)
+        transform: typing.Callable = tio.Compose(transforms)
         return transform
 
-    def _get_train_sampler(self) -> Union[tio.LabelSampler, tio.UniformSampler]:
+    def _get_train_sampler(self) -> typing.Union[tio.LabelSampler, tio.UniformSampler]:
         if self.label_sampler:
             p = self.pos_sampling_weight
             lps = {0: 1.0 - p, 1: p}
@@ -524,7 +527,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         )
         self.train_dataset = subjects_dataset
 
-    def _get_val_augmentation(self) -> Callable:
+    def _get_val_augmentation(self) -> typing.Callable:
         transforms = []
         if self.reorient_to_canonical:
             transforms.append(tio.ToCanonical())
@@ -537,7 +540,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
             transforms.insert(1, tio.CropOrPad(self.patch_size))
         if self.pseudo3d_dim == "all":
             transforms.insert(1, RandomTranspose())
-        transform: Callable = tio.Compose(transforms)
+        transform: typing.Callable = tio.Compose(transforms)
         return transform
 
     def _get_val_sampler(self) -> tio.LabelSampler:
@@ -559,7 +562,9 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         self.val_dataset = subjects_dataset
 
     # flake8: noqa: E501
-    def _collate_fn(self, batch: List[tio.Subject]) -> Tuple[Tensor, Tensor]:
+    def _collate_fn(
+        self, batch: typing.List[tio.Subject]
+    ) -> typing.Tuple[torch.Tensor, torch.Tensor]:
         collated_batch: Batch = default_collate(batch)
         p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
         # offset by batch/channel dims if pseudo3d used
@@ -641,7 +646,7 @@ class LesionSegDataModuleTrain(LesionSegDataModuleBase):
         LesionSegDataModuleBase._add_common_arguments(parser)
         return parent_parser
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> builtins.str:
         desc = super().__repr__()
         desc += (
             f"; queue length: {self.queue_length}; "
@@ -658,11 +663,11 @@ class WholeImagePredictBatch:
     def __init__(
         self,
         *,
-        src: Tensor,
-        affine: Tensor,
-        path: List[str],
-        out: List[str],
-        reorient: bool,
+        src: torch.Tensor,
+        affine: torch.Tensor,
+        path: typing.List[builtins.str],
+        out: typing.List[builtins.str],
+        reorient: builtins.bool,
     ):
         self.src = src
         self.affine = affine
@@ -672,14 +677,14 @@ class WholeImagePredictBatch:
         self.validate()
 
     def validate(self) -> None:
-        paths = (Path(path) for path in self.path)
+        paths = (pathlib.Path(path) for path in self.path)
         assert len(self.src) == len(self.affine)
         assert len(self.affine) == len(self.path)
         assert len(self.path) == len(self.out)
         assert all(path.is_file() or path.is_dir() for path in paths)
-        assert isinstance(self.reorient, bool)
+        assert isinstance(self.reorient, builtins.bool)
 
-    def to(self, device: Union[str, torch.device], **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def to(self, device: typing.Union[builtins.str, torch.device], **kwargs) -> None:  # type: ignore[no-untyped-def]
         self.src = self.src.to(device=device, **kwargs)
 
 
@@ -687,15 +692,15 @@ class PatchesImagePredictBatch:
     def __init__(
         self,
         *,
-        src: Tensor,
-        affine: Tensor,
-        path: str,
-        out: str,
-        locations: Tensor,
-        grid_obj: SimpleNamespace,
-        pseudo3d_dim: Optional[int],
-        total_batches: int,
-        reorient: bool,
+        src: torch.Tensor,
+        affine: torch.Tensor,
+        path: builtins.str,
+        out: builtins.str,
+        locations: torch.Tensor,
+        grid_obj: types.SimpleNamespace,
+        pseudo3d_dim: typing.Optional[builtins.int],
+        total_batches: builtins.int,
+        reorient: builtins.bool,
     ):
         self.src = src
         self.affine = affine
@@ -709,7 +714,7 @@ class PatchesImagePredictBatch:
         self.validate()
 
     def validate(self) -> None:
-        path = Path(self.path)
+        path = pathlib.Path(self.path)
         assert len(self.src) == len(self.affine)
         assert path.is_file() or path.is_dir()
         assert self.pseudo3d_dim is None or (0 <= self.pseudo3d_dim <= 2)
@@ -718,23 +723,23 @@ class PatchesImagePredictBatch:
         assert hasattr(self.grid_obj, "padding_mode")
         assert hasattr(self.grid_obj, "patch_overlap")
         assert hasattr(self.grid_obj.subject, "spatial_shape")
-        assert isinstance(self.reorient, bool)
+        assert isinstance(self.reorient, builtins.bool)
 
-    def to(self, device: Union[str, torch.device], **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def to(self, device: typing.Union[builtins.str, torch.device], **kwargs) -> None:  # type: ignore[no-untyped-def]
         self.src = self.src.to(device=device, **kwargs)
 
 
 class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
     def __init__(  # type: ignore[no-untyped-def]
         self,
-        subjects: Union[tio.Subject, List[tio.Subject]],
-        batch_size: int,
-        patch_size: Optional[PatchShapeOption] = None,
-        num_workers: int = 16,
-        pseudo3d_dim: Optional[int] = None,
-        pseudo3d_size: Optional[int] = None,
-        reorient_to_canonical: bool = True,
-        use_memory_saving_dataset: bool = False,
+        subjects: typing.Union[tio.Subject, typing.List[tio.Subject]],
+        batch_size: builtins.int,
+        patch_size: typing.Optional[PatchShapeOption] = None,
+        num_workers: builtins.int = 16,
+        pseudo3d_dim: typing.Optional[builtins.int] = None,
+        pseudo3d_size: typing.Optional[builtins.int] = None,
+        reorient_to_canonical: builtins.bool = True,
+        use_memory_saving_dataset: builtins.bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -749,7 +754,7 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         self.predict_dataset: tio.SubjectsDataset
         self.subjects = subjects
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: typing.Optional[builtins.str] = None) -> None:
         super().setup(stage)
         self._determine_input(self.subjects)
         self._setup_predict_dataset()
@@ -769,14 +774,14 @@ class LesionSegDataModulePredictBase(LesionSegDataModuleBase):
         raise NotImplementedError
 
     def _collate_fn(
-        self, batch: List[tio.Subject]
-    ) -> Union[WholeImagePredictBatch, PatchesImagePredictBatch]:
+        self, batch: typing.List[tio.Subject]
+    ) -> typing.Union[WholeImagePredictBatch, PatchesImagePredictBatch]:
         raise NotImplementedError
 
     @staticmethod
     def add_arguments(
         parent_parser: ArgumentParser,
-        add_csv: bool = True,
+        add_csv: builtins.bool = True,
     ) -> ArgumentParser:
         parser = parent_parser.add_argument_group("Data")
         if add_csv:
@@ -811,7 +816,7 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
     """Data module for whole-image prediction for lesion segmentation
 
     Args:
-        subjects (List[tio.Subject]):
+        subjects (typing.List[tio.Subject]):
             list of torchio.Subject for prediction
         batch_size (int): number of images to predict at a time
         num_workers (int):
@@ -822,10 +827,10 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
     def __init__(  # type: ignore[no-untyped-def]
         self,
         *,
-        subjects: Union[tio.Subject, List[tio.Subject]],
-        batch_size: int,
-        num_workers: int = 16,
-        reorient_to_canonical: bool = True,
+        subjects: typing.Union[tio.Subject, typing.List[tio.Subject]],
+        batch_size: builtins.int,
+        num_workers: builtins.int = 16,
+        reorient_to_canonical: builtins.bool = True,
         **kwargs,
     ):
         super().__init__(
@@ -840,8 +845,8 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
 
     @classmethod
     def from_csv(  # type: ignore[no-untyped-def]
-        cls: Type[PredictDataModule],
-        predict_csv: str,
+        cls: typing.Type[PredictDataModule],
+        predict_csv: builtins.str,
         **kwargs,
     ) -> PredictDataModule:
         strict_affine = kwargs.get("strict_affine", True)
@@ -853,7 +858,7 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         )
         return cls(subjects=subject_list, **kwargs)
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: typing.Optional[builtins.str] = None) -> None:
         super().setup(stage)
 
     def _setup_predict_dataset(self) -> None:
@@ -866,16 +871,18 @@ class LesionSegDataModulePredictWhole(LesionSegDataModulePredictBase):
         subjects_dataset = ds(self.subjects, transform=transform)
         self.predict_dataset = subjects_dataset
 
-    def _collate_fn(self, batch: List[tio.Subject]) -> WholeImagePredictBatch:
+    def _collate_fn(self, batch: typing.List[tio.Subject]) -> WholeImagePredictBatch:
         collated_batch: Batch = default_collate(batch)
-        src: Tensor = self._default_collate_fn(collated_batch)
+        src: torch.Tensor = self._default_collate_fn(collated_batch)
         # assume all input images are co-registered
         # so arbitrarily choose first
-        field: str = self._input_fields[0]
+        field: builtins.str = self._input_fields[0]
         first_field = collated_batch[field]
         assert isinstance(first_field, dict)
-        affine: Tensor = first_field[tio.AFFINE]
-        path: List[str] = [str(filepath) for filepath in first_field["path"]]
+        affine: torch.Tensor = first_field[tio.AFFINE]
+        path: typing.List[builtins.str] = [
+            str(filepath) for filepath in first_field["path"]
+        ]
         out_path = collated_batch["out"]  # path to save the prediction
         assert isinstance(out_path, list)
         out = WholeImagePredictBatch(
@@ -897,13 +904,13 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         batch_size (int): number of patches to predict at a time
         patch_size (PatchShapeOption): patch size for training/validation
             if any element is None, use the corresponding image dim
-        patch_overlap (Optional[PatchShape]):
+        patch_overlap (typing.Optional[PatchShape]):
             overlap of each patch, if None then patch_size // 2
         num_workers (int):
             number of subprocesses to use for data loading
-        pseudo3d_dim (Optional[int]): concatenate images along this
+        pseudo3d_dim (typing.Optional[int]): concatenate images along this
             axis and swap it for channel dimension
-        pseudo3d_size (Optional[int]): number of slices to concatenate
+        pseudo3d_size (typing.Optional[int]): number of slices to concatenate
             if pseudo3d_dim provided, must be an odd (usually small) integer
     """
 
@@ -912,14 +919,14 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         self,
         *,
         subject: tio.Subject,
-        batch_size: int = 1,
+        batch_size: builtins.int = 1,
         patch_size: PatchShapeOption = (96, 96, 96),
-        patch_overlap: Optional[PatchShape] = None,
-        num_workers: int = 16,
-        pseudo3d_dim: Optional[int] = None,
-        pseudo3d_size: Optional[int] = None,
-        reorient_to_canonical: bool = True,
-        use_memory_saving_dataset: bool = False,
+        patch_overlap: typing.Optional[PatchShape] = None,
+        num_workers: builtins.int = 16,
+        pseudo3d_dim: typing.Optional[builtins.int] = None,
+        pseudo3d_size: typing.Optional[builtins.int] = None,
+        reorient_to_canonical: builtins.bool = True,
+        use_memory_saving_dataset: builtins.bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -987,7 +994,7 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
 
     def _setup_predict_dataset(self) -> None:
         field = self._input_fields[0]
-        self.path: str = self.subjects[field]["path"]
+        self.path: builtins.str = self.subjects[field]["path"]
         # `subjects` is only one subject in this class
         if self.reorient_to_canonical:
             self.subjects = tio.ToCanonical()(self.subjects)
@@ -1001,25 +1008,29 @@ class LesionSegDataModulePredictPatches(LesionSegDataModulePredictBase):
         # need to create aggregator in LesionSegLightning* module, which expects
         # the grid sampler we don't want to send the whole sampler over though,
         # so create a makeshift object with the relevant attributes that duck types
-        self.grid_obj = SimpleNamespace(
-            subject=SimpleNamespace(spatial_shape=grid_sampler.subject.spatial_shape),
+        self.grid_obj = types.SimpleNamespace(
+            subject=types.SimpleNamespace(
+                spatial_shape=grid_sampler.subject.spatial_shape
+            ),
             padding_mode=grid_sampler.padding_mode,
             patch_overlap=grid_sampler.patch_overlap,
         )
         self.predict_dataset = grid_sampler
 
     # flake8: noqa: E501
-    def _collate_fn(self, batch: List[tio.Subject]) -> PatchesImagePredictBatch:
+    def _collate_fn(self, batch: typing.List[tio.Subject]) -> PatchesImagePredictBatch:
         collated_batch = default_collate(batch)
         p3d = self._pseudo3d_dim_internal if self._use_pseudo3d else None
         # offset by batch/channel dims if pseudo3d used
         p3d_with_offset = (p3d + 2) if self._use_pseudo3d else None  # type: ignore[operator]
-        src: Tensor = self._default_collate_fn(collated_batch, cat_dim=p3d_with_offset)
+        src: torch.Tensor = self._default_collate_fn(
+            collated_batch, cat_dim=p3d_with_offset
+        )
         # assume input images are co-registered so arbitrarily choose first
-        field: str = self._input_fields[0]
-        affine: Tensor = collated_batch[field][tio.AFFINE]
-        out_path: str = collated_batch["out"]  # path to save the prediction
-        locations: Tensor = collated_batch[tio.LOCATION]
+        field: builtins.str = self._input_fields[0]
+        affine: torch.Tensor = collated_batch[field][tio.AFFINE]
+        out_path: builtins.str = collated_batch["out"]  # path to save the prediction
+        locations: torch.Tensor = collated_batch[tio.LOCATION]
         out = PatchesImagePredictBatch(
             src=src,
             affine=affine,
@@ -1053,12 +1064,16 @@ class Mixup:
         dist = D.Beta(alpha, alpha)
         return dist
 
-    def _mixup_coef(self, batch_size: int, device: torch.device) -> Tensor:
+    def _mixup_coef(
+        self, batch_size: builtins.int, device: torch.device
+    ) -> torch.Tensor:
         dist = self._mixup_dist(device)
-        lam: Tensor = dist.sample((batch_size,))  # convex combination coef
+        lam: torch.Tensor = dist.sample((batch_size,))  # convex combination coef
         return lam
 
-    def __call__(self, src: Tensor, tgt: Tensor) -> Tuple[Tensor, Tensor]:
+    def __call__(
+        self, src: torch.Tensor, tgt: torch.Tensor
+    ) -> typing.Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             batch_size = src.shape[0]
             perm = torch.randperm(batch_size)
@@ -1089,7 +1104,7 @@ class Mixup:
         return parent_parser
 
 
-def _to_float(tensor: Tensor) -> Tensor:
+def _to_float(tensor: torch.Tensor) -> torch.Tensor:
     """create separate func b/c lambda not pickle-able"""
     return tensor.float()
 
@@ -1114,7 +1129,7 @@ class RandomTranspose(
         return subject
 
     @staticmethod
-    def get_params() -> int:
+    def get_params() -> builtins.int:
         dim = int(torch.randint(0, 3, (1,)).item())
         return dim
 
@@ -1132,14 +1147,14 @@ class RandomRot90(
         return subject
 
     @staticmethod
-    def get_params() -> int:
+    def get_params() -> builtins.int:
         n_rot = int(torch.randint(0, 4, size=(1,)).item())
         return n_rot
 
 
-def _get_type(name: str) -> str:
+def _get_type(name: builtins.str) -> builtins.str:
     name_lower = name.lower()
-    _type: str
+    _type: builtins.str
     if name_lower == "label":
         _type = tio.LABEL
     elif name_lower in ("weight", "div"):
@@ -1158,15 +1173,15 @@ def _get_type(name: str) -> str:
 
 
 def csv_to_subjectlist(
-    filename: str,
+    filename: builtins.str,
     *,
-    strict: bool = True,
-    check_dicom: bool = False,
-) -> List[tio.Subject]:
+    strict: builtins.bool = True,
+    check_dicom: builtins.bool = False,
+) -> typing.List[tio.Subject]:
     """Convert a csv file to a list of torchio subjects
 
     Args:
-        filename: Path to csv file formatted with
+        filename: pathlib.Path to csv file formatted with
             `subject` in a column, describing the
             id/name of the subject (must be unique).
             Row will fill in the filenames per type.
@@ -1182,7 +1197,7 @@ def csv_to_subjectlist(
             spacing and warn the user about image if there
             is serious non-uniformity in slice distances
     Returns:
-        subject_list (List[torchio.Subject]): list of torchio Subjects
+        subject_list (typing.List[torchio.Subject]): list of torchio Subjects
     """
     df = pd.read_csv(filename, index_col="subject")
     names = df.columns.to_list()
@@ -1198,7 +1213,7 @@ def csv_to_subjectlist(
             elif val_type == "path":
                 data[name] = val
             else:
-                image_path = Path(val)
+                image_path = pathlib.Path(val)
                 if image_path.is_dir() and check_dicom:
                     _check_spacing_between_dicom_slices(image_path, strict)
                 data[name] = tio.Image(image_path, type=val_type)
@@ -1210,7 +1225,7 @@ def csv_to_subjectlist(
 
 def _check_consistent_space_and_resample(
     subject: tio.Subject,
-    strict: bool = True,
+    strict: builtins.bool = True,
 ) -> tio.Subject:
     """Check space of images in subject consistent; if not strict, resample."""
     # spatial shape always needs to be the same
@@ -1258,19 +1273,19 @@ def _check_consistent_space_and_resample(
 
 
 def _check_spacing_between_dicom_slices(
-    dicom_dir: Union[Path, str],
-    strict: bool = True,
+    dicom_dir: PathLike,
+    strict: builtins.bool = True,
 ) -> None:
     try:
         import pydicom  # type: ignore[import]
     except (ImportError, ModuleNotFoundError):
         warnings.warn("pydicom not found. Cannot validate DICOM image.")
         return
-    images = [pydicom.dcmread(path) for path in Path(dicom_dir).glob("*.dcm")]
+    images = [pydicom.dcmread(path) for path in pathlib.Path(dicom_dir).glob("*.dcm")]
     slice_thickness = float(images[0].SliceThickness)
 
-    def get_stack_position(image: pydicom.dataset.Dataset) -> int:
-        stack_position: int = image.InStackPositionNumber
+    def get_stack_position(image: pydicom.dataset.Dataset) -> builtins.int:
+        stack_position: builtins.int = image.InStackPositionNumber
         return stack_position
 
     sorted_images = sorted(images, key=get_stack_position)

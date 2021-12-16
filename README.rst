@@ -2,7 +2,6 @@
 tiramisù-brûlée
 ===============
 
-
 .. image:: https://img.shields.io/pypi/v/tiramisu_brulee.svg
         :target: https://pypi.python.org/pypi/tiramisu-brulee
 

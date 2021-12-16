@@ -1,11 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.experiment.parse
-
-parsing functions for argparse and config files
-
-Author: Jacob Reinhold (jcreinhold@gmail.com)
+"""Parsing functions for argparse and config files
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 Created on: May 17, 2021
 """
 
@@ -22,55 +16,56 @@ __all__ = [
     "remove_args",
 ]
 
+import builtins
+import copy
+import logging
+import pathlib
+import pprint
+import typing
 import warnings
-from copy import deepcopy
-from logging import getLogger
-from pathlib import Path
-from pprint import pformat
-from typing import IO, Callable, Dict, Iterable, List, Optional, Union
 
 import yaml
 from jsonargparse import ArgumentParser, Namespace
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from tiramisu_brulee.experiment.type import new_parse_type
+from tiramisu_brulee.experiment.type import PathLike, new_parse_type
 from tiramisu_brulee.experiment.util import append_num_to_filename
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def get_best_model_path(
-    checkpoint_callback: ModelCheckpoint, only_best: bool = False
-) -> Path:
+    checkpoint_callback: ModelCheckpoint, only_best: builtins.bool = False
+) -> pathlib.Path:
     """gets the best model path from a ModelCheckpoint instance"""
     best_model_path = checkpoint_callback.best_model_path
     if only_best and not best_model_path:
         raise ValueError("best_model_path empty.")
     last_model_path = checkpoint_callback.last_model_path
     model_path = best_model_path or last_model_path
-    return Path(model_path).resolve()
+    return pathlib.Path(model_path).resolve()
 
 
-def get_experiment_directory(model_path: Union[str, Path]) -> Path:
+def get_experiment_directory(model_path: PathLike) -> pathlib.Path:
     """gets the experiment directory from a checkpoint model path"""
-    if isinstance(model_path, str):
-        model_path = Path(model_path).resolve()
+    if not isinstance(model_path, pathlib.Path):
+        model_path = pathlib.Path(model_path).resolve()
     return model_path.parents[1]
 
 
 def _generate_config_yaml(
-    exp_dirs: List[Path],
+    exp_dirs: typing.List[pathlib.Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_paths: Optional[List[Path]],
-    stage: str,
-) -> List[str]:
+    best_model_paths: typing.Optional[typing.List[pathlib.Path]],
+    stage: builtins.str,
+) -> typing.List[builtins.str]:
     """generate config yaml file(s) for `stage`, store in experiment dir"""
     assert stage in ("train", "predict")
     config = vars(parser.get_defaults())
     for k, v in dict_args.items():
         if k in config:
-            if isinstance(v, Path):
+            if isinstance(v, pathlib.Path):
                 v = str(v)
             config[k] = v
     config_filenames = []
@@ -94,28 +89,28 @@ def _generate_config_yaml(
 
 
 def generate_train_config_yaml(
-    exp_dirs: List[Path],
+    exp_dirs: typing.List[pathlib.Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_paths: Optional[List[Path]] = None,
-) -> List[str]:
+    best_model_paths: typing.Optional[typing.List[pathlib.Path]] = None,
+) -> typing.List[builtins.str]:
     """generate config yaml file(s) for training, store in experiment dir"""
     if dict_args["config"] is not None:
         return []  # user used config file, so we do not need to generate one
-    if isinstance(exp_dirs, Path):
+    if isinstance(exp_dirs, pathlib.Path):
         exp_dirs = [exp_dirs]
     fns = _generate_config_yaml(exp_dirs, parser, dict_args, None, "train")
     return fns
 
 
 def generate_predict_config_yaml(
-    exp_dirs: List[Path],
+    exp_dirs: typing.List[pathlib.Path],
     parser: ArgumentParser,
     dict_args: dict,
-    best_model_paths: Optional[List[Path]] = None,
-) -> List[str]:
+    best_model_paths: typing.Optional[typing.List[pathlib.Path]] = None,
+) -> typing.List[builtins.str]:
     """generate config yaml file(s) for prediction, store in experiment dir"""
-    if isinstance(exp_dirs, Path):
+    if isinstance(exp_dirs, pathlib.Path):
         exp_dirs = [exp_dirs]
     remove_args(parser, ["config"])
     bmps = best_model_paths
@@ -123,7 +118,7 @@ def generate_predict_config_yaml(
     return fns
 
 
-def remove_args(parser: ArgumentParser, args: Iterable[str]) -> None:
+def remove_args(parser: ArgumentParser, args: typing.Iterable[builtins.str]) -> None:
     """remove a set of args from a parser"""
     # https://stackoverflow.com/questions/32807319/disable-remove-argument-in-argparse
     # for some reason, going through the actions once and checking if each action is in
@@ -162,7 +157,7 @@ def fix_type_funcs(parser: ArgumentParser) -> None:
         if action.type is not None:
             type_func_name = action.type.__name__
             if type_func_name.startswith("str_to_"):
-                func = deepcopy(action.type)
+                func = copy.deepcopy(action.type)
                 action.type = new_parse_type(
                     lambda val: func(str(val)),
                     type_func_name,
@@ -178,7 +173,9 @@ def fix_type_funcs(parser: ArgumentParser) -> None:
                 action.type = new_parse_type(action.type, type_func_name)
 
 
-def _map_attrs(args: Namespace, cond: Callable, target: Callable) -> Namespace:
+def _map_attrs(
+    args: Namespace, cond: typing.Callable, target: typing.Callable
+) -> Namespace:
     """map attributes to some func of the value if it satisfied a cond"""
     attrs = [a for a in dir(args) if not a.startswith("_")]
     for attr in attrs:
@@ -200,15 +197,17 @@ def none_string_to_none(args: Namespace) -> Namespace:
 # flake8: noqa: E731
 def path_to_str(args: Namespace) -> Namespace:
     """goes through an instance of parsed args and maps Path -> str"""
-    cond = lambda val: isinstance(val, Path)
+    cond = lambda val: isinstance(val, pathlib.Path)
     target = lambda val: str(val)
     args = _map_attrs(args, cond, target)
     return args
 
 
 def _gpus_allowed_type(
-    val: Union[None, str, float, int]
-) -> Union[None, float, int, List[int], str]:
+    val: typing.Union[None, builtins.str, builtins.float, builtins.int]
+) -> typing.Union[
+    None, builtins.float, builtins.int, typing.List[builtins.int], builtins.str
+]:
     """replaces pytorch-lightning's version to work w/ parser"""
     if val is None:
         return val
@@ -220,7 +219,7 @@ def _gpus_allowed_type(
         return int(val)
 
 
-def parse_unknown_to_dict(unknown: List[str]) -> dict:
+def parse_unknown_to_dict(unknown: typing.List[builtins.str]) -> dict:
     """parse unknown arguments (usually modalities and their path) to dict"""
     nargs = len(unknown)
     if nargs % 2 != 0:
@@ -243,12 +242,14 @@ def parse_unknown_to_dict(unknown: List[str]) -> dict:
         modality_path[modality] = path
     if "out" not in modality_path:
         msg = "Output path required but not supplied.\n"
-        msg += f"Parsed modalities:\n{pformat(modality_path)}"
+        msg += f"Parsed modalities:\n{pprint.pformat(modality_path)}"
         raise ValueError(msg)
     return modality_path
 
 
-def dict_to_csv(modality_path: Dict[str, str], open_file: IO) -> None:
+def dict_to_csv(
+    modality_path: typing.Dict[builtins.str, builtins.str], open_file: typing.IO
+) -> None:
     """
     takes a dictionary of modalities and paths
     (one for each modality) and an open file

@@ -13,6 +13,7 @@ pytest-runner==5.1
 
 jsonargparse~=3.19.4
 pandas>=1.1
+pandas-stubs
 pytorch-lightning~=1.5.1
 PyYAML>=5.4.1
 ruyaml>=0.20.0
