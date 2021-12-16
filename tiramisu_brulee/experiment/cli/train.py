@@ -15,15 +15,16 @@ __all__ = [
 ]
 
 import argparse
+import builtins
+import copy
 import gc
+import itertools
 import logging
 import os
+import pathlib
 import time
+import typing
 import warnings
-from copy import deepcopy
-from itertools import chain
-from pathlib import Path
-from typing import List, Optional, Tuple, Union
 
 import jsonargparse
 import torch
@@ -59,7 +60,7 @@ from tiramisu_brulee.experiment.util import setup_log
 warnings.filterwarnings("ignore", ".*does not have many workers*", category=UserWarning)
 
 
-def train_parser(use_python_argparse: bool = True) -> ArgParser:
+def train_parser(use_python_argparse: builtins.bool = True) -> ArgParser:
     """argument parser for training a Tiramisu CNN"""
     if use_python_argparse:
         ArgumentParser = argparse.ArgumentParser
@@ -158,8 +159,8 @@ def train_parser(use_python_argparse: bool = True) -> ArgParser:
 def train(
     args: ArgType = None,
     *,
-    return_best_model_paths: bool = False,
-) -> Union[List[Path], int]:
+    return_best_model_paths: builtins.bool = False,
+) -> typing.Union[typing.List[pathlib.Path], builtins.int]:
     """train a Tiramisu CNN for segmentation"""
     parser = train_parser(False)
     if args is None:
@@ -169,17 +170,18 @@ def train(
     args = none_string_to_none(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
+    logger.propagate = True
     seed_everything(args.seed, workers=True)
     args = path_to_str(args)
     n_models_to_train = _compute_num_models_to_train(args)
-    best_model_paths: List[Path] = []
+    best_model_paths: typing.List[pathlib.Path] = []
     use_pseudo3d = args.pseudo3d_dim is not None
     check_patch_size(args.patch_size, use_pseudo3d)
     pseudo3d_dims = pseudo3d_dims_setup(args.pseudo3d_dim, n_models_to_train, "train")
-    individual_run_args = deepcopy(vars(args))
+    individual_run_args = copy.deepcopy(vars(args))
     individual_run_args["network_dim"] = 2 if use_pseudo3d else 3
     train_iter_data = zip(args.train_csv, args.valid_csv, pseudo3d_dims)
-    trainer: Optional[Trainer] = None
+    trainer: typing.Optional[Trainer] = None
     for i, (train_csv, valid_csv, p3d) in enumerate(train_iter_data, 1):
         trainer, checkpoint_callback = _setup_trainer_and_checkpoint(args)
         nth_model = f" ({i}/{n_models_to_train})"
@@ -218,7 +220,7 @@ def train(
     return best_model_paths if return_best_model_paths else 0
 
 
-def _compute_num_models_to_train(args: ArgType) -> int:
+def _compute_num_models_to_train(args: ArgType) -> builtins.int:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     n_models_to_train = len(args.train_csv)
     if n_models_to_train != len(args.valid_csv):
@@ -229,7 +231,7 @@ def _compute_num_models_to_train(args: ArgType) -> int:
     return n_models_to_train
 
 
-def _format_checkpoints(args: ArgType) -> dict:
+def _format_checkpoints(args: ArgType) -> typing.Dict[builtins.str, typing.Any]:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     checkpoint_format = "{epoch}-{val_loss:.3f}"
     if args.track_metric != "loss":
@@ -246,18 +248,20 @@ def _format_checkpoints(args: ArgType) -> dict:
     return checkpoint_kwargs
 
 
-def _artifact_directory(args: ArgType) -> str:
+def _artifact_directory(args: ArgType) -> builtins.str:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     if args.default_root_dir is not None:
-        artifact_dir = Path(args.default_root_dir).resolve()
+        artifact_dir = pathlib.Path(args.default_root_dir).resolve()
     else:
-        artifact_dir = Path.cwd()
+        artifact_dir = pathlib.Path.cwd()
     return str(artifact_dir)
 
 
-def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLogger]:
+def _setup_experiment_logger(
+    args: ArgType,
+) -> typing.Union[TensorBoardLogger, MLFlowLogger]:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
-    exp_logger: Union[TensorBoardLogger, MLFlowLogger]
+    exp_logger: typing.Union[TensorBoardLogger, MLFlowLogger]
     if args.tracking_uri is not None:
         exp_logger = MLFlowLogger(
             experiment_name=args.experiment_name,
@@ -267,7 +271,9 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
     else:
         artifact_dir = _artifact_directory(args)
         ignore_tensorboard_dir = bool(os.getenv("TIRAMISU_IGNORE_TB_DIR", False))
-        tensorboard_dir = Path("/opt/ml/output/tensorboard").resolve()  # for SageMaker
+        tensorboard_dir = pathlib.Path(
+            "/opt/ml/output/tensorboard"
+        ).resolve()  # for SageMaker
         if not tensorboard_dir.is_dir() or ignore_tensorboard_dir:
             exp_logger = TensorBoardLogger(
                 artifact_dir,
@@ -284,8 +290,8 @@ def _setup_experiment_logger(args: ArgType) -> Union[TensorBoardLogger, MLFlowLo
 
 def _generate_config_yamls_in_train(
     args: ArgType,
-    best_model_paths: List[Path],
-    logger: Union[TensorBoardLogger, MLFlowLogger],
+    best_model_paths: typing.List[pathlib.Path],
+    logger: typing.Union[TensorBoardLogger, MLFlowLogger],
 ) -> None:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     has_fdr = hasattr(args, "fast_dev_run")
@@ -314,7 +320,7 @@ def _generate_config_yamls_in_train(
         if args.tracking_uri is not None:
             assert isinstance(logger, MLFlowLogger)
             run_id = logger.run_id
-            for cfg in chain(train_cfgs, predict_cfgs):
+            for cfg in itertools.chain(train_cfgs, predict_cfgs):
                 logger.experiment.log_artifact(run_id, cfg)
 
 
@@ -324,14 +330,14 @@ class MLFlowModelCheckpoint(ModelCheckpoint):
         mlflow_logger: MLFlowLogger,
         *args,
         **kwargs,
-    ) -> None:
+    ):
         super().__init__(*args, **kwargs)
         self.mlflow_logger = mlflow_logger
 
     def save_checkpoint(
         self,
         trainer: Trainer,
-        unused: Optional[LightningModule] = None,
+        unused: typing.Optional[LightningModule] = None,
     ) -> None:
         try:
             super().save_checkpoint(trainer=trainer, unused=unused)  # type: ignore[call-arg]
@@ -343,8 +349,8 @@ class MLFlowModelCheckpoint(ModelCheckpoint):
 
 def _create_checkpoint_callback(
     args: ArgType,
-    logger: Union[TensorBoardLogger, MLFlowLogger],
-) -> Union[ModelCheckpoint, MLFlowModelCheckpoint]:
+    logger: typing.Union[TensorBoardLogger, MLFlowLogger],
+) -> typing.Union[ModelCheckpoint, MLFlowModelCheckpoint]:
     checkpoint_kwargs = _format_checkpoints(args)
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     if args.tracking_uri is None:
@@ -354,7 +360,9 @@ def _create_checkpoint_callback(
         return MLFlowModelCheckpoint(mlflow_logger=logger, **checkpoint_kwargs)
 
 
-def _setup_trainer_and_checkpoint(args: ArgType) -> Tuple[Trainer, ModelCheckpoint]:
+def _setup_trainer_and_checkpoint(
+    args: ArgType,
+) -> typing.Tuple[Trainer, ModelCheckpoint]:
     assert isinstance(args, (argparse.Namespace, jsonargparse.Namespace))
     use_multigpus = not (args.gpus is None or args.gpus <= 1)
     exp_logger = _setup_experiment_logger(args)

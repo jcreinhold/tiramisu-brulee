@@ -1,11 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.model.dense
-
-blocks/layers for densely-connected networks
-
-Author: Jacob Reinhold (jcreinhold@gmail.com)
+"""Blocks/layers for densely-connected networks
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 Created on: Jul 02, 2020
 """
 
@@ -21,41 +15,51 @@ __all__ = [
     "TransitionUp3d",
 ]
 
-from functools import partial
-from typing import List, Tuple, Type, Union
+import builtins
+import functools
+import typing
 
 import torch
-from torch import Tensor, nn
+import torch.nn as nn
 
-ACTIVATION = partial(nn.ReLU, inplace=True)
+ACTIVATION = functools.partial(nn.ReLU, inplace=True)
 
 
 # partial not supported by mypy so avoid to type check
 # https://github.com/python/mypy/issues/1484
 class Dropout2d(nn.Dropout2d):
-    def __init__(self, p: float = 0.5, *, inplace: bool = True) -> None:
+    def __init__(
+        self, p: builtins.float = 0.5, *, inplace: builtins.bool = True
+    ) -> None:
         super().__init__(p, inplace)
 
 
 class Dropout3d(nn.Dropout3d):
-    def __init__(self, p: float = 0.5, *, inplace: bool = True) -> None:
+    def __init__(
+        self, p: builtins.float = 0.5, *, inplace: builtins.bool = True
+    ) -> None:
         super().__init__(p, inplace)
 
 
 class ConvLayer(nn.Sequential):
-    _conv: Union[Type[nn.Conv2d], Type[nn.Conv3d]]
-    _dropout: Union[Type[nn.Dropout2d], Type[nn.Dropout3d]]
-    _kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
-    _maxpool: Union[None, Type[nn.MaxPool2d], Type[nn.MaxPool3d]]
-    _norm: Union[Type[nn.BatchNorm2d], Type[nn.BatchNorm3d]]
-    _pad = Union[Type[nn.ReplicationPad2d], Type[nn.ReplicationPad3d]]
+    _conv: typing.Union[typing.Type[nn.Conv2d], typing.Type[nn.Conv3d]]
+    _dropout: typing.Union[typing.Type[nn.Dropout2d], typing.Type[nn.Dropout3d]]
+    _kernel_size: typing.Union[
+        typing.Tuple[builtins.int, builtins.int],
+        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    ]
+    _maxpool: typing.Union[None, typing.Type[nn.MaxPool2d], typing.Type[nn.MaxPool3d]]
+    _norm: typing.Union[typing.Type[nn.BatchNorm2d], typing.Type[nn.BatchNorm3d]]
+    _pad = typing.Union[
+        typing.Type[nn.ReplicationPad2d], typing.Type[nn.ReplicationPad3d]
+    ]
 
     def __init__(
         self,
         *,
-        in_channels: int,
-        out_channels: int,
-        dropout_rate: float = 0.2,
+        in_channels: builtins.int,
+        out_channels: builtins.int,
+        dropout_rate: builtins.float = 0.2,
     ):
         super().__init__()
         self.dropout_rate = dropout_rate
@@ -77,10 +81,10 @@ class ConvLayer(nn.Sequential):
         if self._maxpool is not None:  # use maxpool if not None
             self.add_module("maxpool", self._maxpool(2))
 
-    def _use_dropout(self) -> bool:
+    def _use_dropout(self) -> builtins.bool:
         return self.dropout_rate > 0.0
 
-    def _use_padding(self) -> bool:
+    def _use_padding(self) -> builtins.bool:
         return any([ks > 2 for ks in self._kernel_size])
 
 
@@ -103,16 +107,16 @@ class ConvLayer3d(ConvLayer):
 
 
 class DenseBlock(nn.Module):
-    _layer: Union[Type[ConvLayer2d], Type[ConvLayer3d]]
+    _layer: typing.Union[typing.Type[ConvLayer2d], typing.Type[ConvLayer3d]]
 
     def __init__(
         self,
         *,
-        in_channels: int,
-        growth_rate: int,
-        n_layers: int,
-        upsample: bool = False,
-        dropout_rate: float = 0.2,
+        in_channels: builtins.int,
+        growth_rate: builtins.int,
+        n_layers: builtins.int,
+        upsample: builtins.bool = False,
+        dropout_rate: builtins.float = 0.2,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -121,7 +125,7 @@ class DenseBlock(nn.Module):
         self.upsample = upsample
         self.dropout_rate = dropout_rate
         # out_channels = growth_rate b/c out_channels added w/ each layer
-        _layer = partial(
+        _layer = functools.partial(
             self._layer,
             out_channels=self.growth_rate,
             dropout_rate=self.dropout_rate,
@@ -129,10 +133,10 @@ class DenseBlock(nn.Module):
         icr = self.in_channels_range
         self.layers = nn.ModuleList([_layer(in_channels=ic) for ic in icr])
 
-    def forward(self, tensor: Tensor) -> Tensor:
+    def forward(self, tensor: torch.Tensor) -> torch.Tensor:
         if self.upsample:
             new_features = []
-            # We pass all previous activations into each dense
+            # We pass all previous activations builtins.into each dense
             # layer normally but we only store each dense layer's
             # output in the new_features array. Note that all
             # concatenation is done on the channel axis (i.e., 1)
@@ -148,7 +152,7 @@ class DenseBlock(nn.Module):
             return tensor
 
     @property
-    def in_channels_range(self) -> List[int]:
+    def in_channels_range(self) -> typing.List[builtins.int]:
         ic, gr = self.in_channels, self.growth_rate
         return [ic + i * gr for i in range(self.n_layers)]
 
@@ -180,11 +184,19 @@ class TransitionDown3d(ConvLayer):
 
 
 class TransitionUp(nn.Module):
-    _conv_trans: Union[Type[nn.ConvTranspose2d], Type[nn.ConvTranspose3d]]
-    _kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
-    _stride: Union[Tuple[int, int], Tuple[int, int, int]]
+    _conv_trans: typing.Union[
+        typing.Type[nn.ConvTranspose2d], typing.Type[nn.ConvTranspose3d]
+    ]
+    _kernel_size: typing.Union[
+        typing.Tuple[builtins.int, builtins.int],
+        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    ]
+    _stride: typing.Union[
+        typing.Tuple[builtins.int, builtins.int],
+        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    ]
 
-    def __init__(self, *, in_channels: int, out_channels: int):
+    def __init__(self, *, in_channels: builtins.int, out_channels: builtins.int):
         super().__init__()
         self.conv_trans = self._conv_trans(
             in_channels=in_channels,
@@ -194,14 +206,14 @@ class TransitionUp(nn.Module):
             bias=False,
         )
 
-    def forward(self, tensor: Tensor, *, skip: Tensor) -> Tensor:
-        out: Tensor = self.conv_trans(tensor)
+    def forward(self, tensor: torch.Tensor, *, skip: torch.Tensor) -> torch.Tensor:
+        out: torch.Tensor = self.conv_trans(tensor)
         out = self._crop_to_target(out, target=skip)
         out = torch.cat([out, skip], 1)
         return out
 
     @staticmethod
-    def _crop_to_target(tensor: Tensor, *, target: Tensor) -> Tensor:
+    def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
 
@@ -211,7 +223,7 @@ class TransitionUp2d(TransitionUp):
     _stride = (2, 2)
 
     @staticmethod
-    def _crop_to_target(tensor: Tensor, *, target: Tensor) -> Tensor:
+    def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
         _, _, max_height, max_width = target.shape
         _, _, h, w = tensor.size()
         h = (h - max_height) // 2
@@ -227,7 +239,7 @@ class TransitionUp3d(TransitionUp):
     _stride = (2, 2, 2)
 
     @staticmethod
-    def _crop_to_target(tensor: Tensor, *, target: Tensor) -> Tensor:
+    def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
         _, _, max_height, max_width, max_depth = target.shape
         _, _, h, w, d = tensor.size()
         h = (h - max_height) // 2
@@ -240,15 +252,15 @@ class TransitionUp3d(TransitionUp):
 
 
 class Bottleneck(nn.Sequential):
-    _layer: Union[Type[DenseBlock2d], Type[DenseBlock3d]]
+    _layer: typing.Union[typing.Type[DenseBlock2d], typing.Type[DenseBlock3d]]
 
     def __init__(
         self,
         *,
-        in_channels: int,
-        growth_rate: int,
-        n_layers: int,
-        dropout_rate: float = 0.2,
+        in_channels: builtins.int,
+        growth_rate: builtins.int,
+        n_layers: builtins.int,
+        dropout_rate: builtins.float = 0.2,
     ):
         super().__init__()
         layer = self._layer(

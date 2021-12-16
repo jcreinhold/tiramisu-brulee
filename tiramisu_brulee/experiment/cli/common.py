@@ -1,11 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.experiment.cli.common
-
-common functions for predict and train CLIs
-
-Author: Jacob Reinhold (jcreinhold@gmail.com)
+"""Common functions for predict and train CLIs
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 Created on: Jul 30, 2021
 """
 
@@ -17,17 +11,20 @@ __all__ = [
     "tiramisu_brulee_info",
 ]
 
+import builtins
+import pathlib
 import subprocess  # nosec
 import sys
-from pathlib import Path
-from typing import List, Optional, Set, Union
+import typing
 
 from tiramisu_brulee.experiment.type import TiramisuBruleeInfo
 
 EXPERIMENT_NAME = "lesion_tiramisu_experiment"
 
 
-def check_patch_size(patch_size: List[int], use_pseudo3d: bool) -> None:
+def check_patch_size(
+    patch_size: typing.List[builtins.int], use_pseudo3d: builtins.bool
+) -> None:
     n_patch_elems = len(patch_size)
     if n_patch_elems != 2 and use_pseudo3d:
         raise ValueError(
@@ -41,7 +38,9 @@ def check_patch_size(patch_size: List[int], use_pseudo3d: bool) -> None:
         )
 
 
-def handle_fast_dev_run(unnecessary_args: Set[str]) -> Set[str]:
+def handle_fast_dev_run(
+    unnecessary_args: typing.Set[builtins.str],
+) -> typing.Set[builtins.str]:
     """fast_dev_run is problematic with py36 so remove it"""
     py_version = sys.version_info
     assert py_version.major == 3
@@ -51,15 +50,15 @@ def handle_fast_dev_run(unnecessary_args: Set[str]) -> Set[str]:
 
 
 def pseudo3d_dims_setup(
-    pseudo3d_dim: Optional[List[int]],
-    n_models: int,
-    stage: str,
-) -> Union[List[None], List[int]]:
+    pseudo3d_dim: typing.Optional[typing.List[builtins.int]],
+    n_models: builtins.int,
+    stage: builtins.str,
+) -> typing.Union[typing.List[None], typing.List[builtins.int]]:
     assert stage in ("train", "predict")
     if stage == "predict":
         stage = "us"
     n_p3d = 0 if pseudo3d_dim is None else len(pseudo3d_dim)
-    pseudo3d_dims: Union[List[None], List[int]]
+    pseudo3d_dims: typing.Union[typing.List[None], typing.List[builtins.int]]
     if n_p3d == 1 and pseudo3d_dim is not None:
         pseudo3d_dims = pseudo3d_dim * n_models
     elif n_p3d == n_models and pseudo3d_dim is not None:
@@ -75,11 +74,11 @@ def pseudo3d_dims_setup(
     return pseudo3d_dims
 
 
-def tiramisu_brulee_info(*, short: bool = True) -> TiramisuBruleeInfo:
+def tiramisu_brulee_info(*, short: builtins.bool = True) -> TiramisuBruleeInfo:
     """get the git commit hash and version for tiramisu-brulee"""
     import tiramisu_brulee
 
-    tb_path = str(Path(tiramisu_brulee.__file__).parents[1])
+    tb_path = str(pathlib.Path(tiramisu_brulee.__file__).parents[1])
     cmd = ["git", "rev-parse", "HEAD"]
     if short:
         cmd.insert(2, "--short")

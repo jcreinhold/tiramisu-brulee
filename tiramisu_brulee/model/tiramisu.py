@@ -1,7 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.model.tiramisu
+"""PyTorch Tiramisu network
 
 PyTorch implementation of the Tiramisu network architecture.
 Implementation based on `pytorch_tiramisu`.
@@ -18,7 +15,7 @@ References:
 
   https://github.com/bfortuner/pytorch_tiramisu
 
-Author: Jacob Reinhold (jcreinhold@gmail.com)
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 Created on: Jul 01, 2020
 """
 
@@ -27,9 +24,11 @@ __all__ = [
     "Tiramisu3d",
 ]
 
-from typing import Collection, List, Tuple, Type, Union
+import builtins
+import typing
 
-from torch import Tensor, nn
+import torch
+import torch.nn as nn
 
 from tiramisu_brulee.model.dense import (
     Bottleneck2d,
@@ -44,26 +43,36 @@ from tiramisu_brulee.model.dense import (
 
 
 class Tiramisu(nn.Module):
-    _bottleneck: Union[Type[Bottleneck2d], Type[Bottleneck3d]]
-    _conv: Union[Type[nn.Conv2d], Type[nn.Conv3d]]
-    _denseblock: Union[Type[DenseBlock2d], Type[DenseBlock3d]]
-    _pad: Union[Type[nn.ReplicationPad2d], Type[nn.ReplicationPad3d]]
-    _trans_down: Union[Type[TransitionDown2d], Type[TransitionDown3d]]
-    _trans_up: Union[Type[TransitionUp2d], Type[TransitionUp3d]]
-    _first_kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
-    _final_kernel_size: Union[Tuple[int, int], Tuple[int, int, int]]
+    _bottleneck: typing.Union[typing.Type[Bottleneck2d], typing.Type[Bottleneck3d]]
+    _conv: typing.Union[typing.Type[nn.Conv2d], typing.Type[nn.Conv3d]]
+    _denseblock: typing.Union[typing.Type[DenseBlock2d], typing.Type[DenseBlock3d]]
+    _pad: typing.Union[
+        typing.Type[nn.ReplicationPad2d], typing.Type[nn.ReplicationPad3d]
+    ]
+    _trans_down: typing.Union[
+        typing.Type[TransitionDown2d], typing.Type[TransitionDown3d]
+    ]
+    _trans_up: typing.Union[typing.Type[TransitionUp2d], typing.Type[TransitionUp3d]]
+    _first_kernel_size: typing.Union[
+        typing.Tuple[builtins.int, builtins.int],
+        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    ]
+    _final_kernel_size: typing.Union[
+        typing.Tuple[builtins.int, builtins.int],
+        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    ]
 
     def __init__(
         self,
         *,
-        in_channels: int = 3,
-        out_channels: int = 1,
-        down_blocks: Collection[int] = (5, 5, 5, 5, 5),
-        up_blocks: Collection[int] = (5, 5, 5, 5, 5),
-        bottleneck_layers: int = 5,
-        growth_rate: int = 16,
-        first_conv_out_channels: int = 48,
-        dropout_rate: float = 0.2,
+        in_channels: builtins.int = 3,
+        out_channels: builtins.int = 1,
+        down_blocks: typing.Collection[builtins.int] = (5, 5, 5, 5, 5),
+        up_blocks: typing.Collection[builtins.int] = (5, 5, 5, 5, 5),
+        bottleneck_layers: builtins.int = 5,
+        growth_rate: builtins.int = 16,
+        first_conv_out_channels: builtins.int = 48,
+        dropout_rate: builtins.float = 0.2,
     ):
         """
         Base class for Tiramisu convolutional neural network
@@ -75,20 +84,20 @@ class Tiramisu(nn.Module):
             Based on: https://github.com/bfortuner/pytorch_tiramisu
 
         Args:
-            in_channels (int): number of input channels
-            out_channels (int): number of output channels
-            down_blocks (Collection[int]): number of layers in each block in down path
-            up_blocks (Collection[int]): number of layers in each block in up path
-            bottleneck_layers (int): number of layers in the bottleneck
-            growth_rate (int): number of channels to grow by in each layer
-            first_conv_out_channels (int): number of output channels in first conv
-            dropout_rate (float): dropout rate/probability
+            in_channels (builtins.int): number of input channels
+            out_channels (builtins.int): number of output channels
+            down_blocks (typing.Collection[builtins.int]): number of layers in each block in down path
+            up_blocks (typing.Collection[builtins.int]): number of layers in each block in up path
+            bottleneck_layers (builtins.int): number of layers in the bottleneck
+            growth_rate (builtins.int): number of channels to grow by in each layer
+            first_conv_out_channels (builtins.int): number of output channels in first conv
+            dropout_rate (builtins.float): dropout rate/probability
         """
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
         self.down_blocks = down_blocks
         self.up_blocks = up_blocks
-        skip_connection_channel_counts: List[int] = []
+        skip_connection_channel_counts: typing.List[builtins.int] = []
 
         first_padding = 2 * [fks // 2 for fks in self._first_kernel_size]
         self.first_conv = nn.Sequential(
@@ -100,7 +109,7 @@ class Tiramisu(nn.Module):
                 bias=False,
             ),
         )
-        cur_channels_count: int = first_conv_out_channels
+        cur_channels_count: builtins.int = first_conv_out_channels
 
         # Downsampling path
         self.dense_down = nn.ModuleList([])
@@ -163,7 +172,7 @@ class Tiramisu(nn.Module):
             bias=True,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.first_conv(x)
         skip_connections = []
         for dbd, tdb in zip(self.dense_down, self.trans_down):
@@ -176,7 +185,7 @@ class Tiramisu(nn.Module):
             out = tub(out, skip=skip)
             out = ubd(out)
         out = self.final_conv(out)
-        assert isinstance(out, Tensor)
+        assert isinstance(out, torch.Tensor)
         return out
 
 

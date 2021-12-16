@@ -1,11 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-tiramisu_brulee.experiment.lesion_tools
-
-functions specific to handling/processing lesion segmentations
-
-Author: Jacob Reinhold (jcreinhold)
+"""Functions specific to handling/processing lesion segmentations
+Author: Jacob Reinhold <jcreinhold@gmail.com>
 Created on: May 16, 2021
 """
 
@@ -14,12 +8,13 @@ __all__ = [
     "clean_segmentation",
 ]
 
-from typing import Tuple, Union
+import builtins
+import typing
 
 import numpy as np
+import torch
 from scipy.ndimage.morphology import binary_fill_holes, generate_binary_structure
 from skimage.morphology import remove_small_objects
-from torch import Tensor
 from torchmetrics.functional import dice_score, pearson_corrcoef, precision
 
 from tiramisu_brulee.experiment.util import image_one_hot
@@ -28,8 +23,8 @@ from tiramisu_brulee.experiment.util import image_one_hot
 def clean_segmentation(
     label: np.ndarray,
     *,
-    fill_holes: bool = True,
-    minimum_lesion_size: int = 3,
+    fill_holes: builtins.bool = True,
+    minimum_lesion_size: builtins.int = 3,
 ) -> np.ndarray:
     """clean binary array by removing small objs & filling holes"""
     d = label.ndim
@@ -46,11 +41,11 @@ def clean_segmentation(
 
 
 def almost_isbi15_score(
-    pred: Tensor,
-    target: Tensor,
+    pred: torch.Tensor,
+    target: torch.Tensor,
     *,
-    return_dice_ppv: bool = False,
-) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
+    return_dice_ppv: builtins.bool = False,
+) -> typing.Union[torch.Tensor, typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """ISBI 15 MS challenge score excluding the LTPR & LFPR components"""
     batch_size, num_classes = pred.shape[0:2]
     multiclass = num_classes > 1
