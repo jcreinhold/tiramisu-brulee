@@ -193,7 +193,7 @@ def predict_image(args: ArgType = None) -> builtins.int:
         raise ValueError("input args must be None or a list of strings to parse")
     modality_paths = parse_unknown_to_dict(unknown)
     with tempfile.NamedTemporaryFile("w", delete=False) as f:
-        dict_to_csv(modality_paths, f)
+        dict_to_csv(modality_paths, f)  # type: ignore[arg-type]
         args.predict_csv = f.name
     _predict(args, parser, False)
     os.remove(args.predict_csv)
@@ -257,7 +257,6 @@ def _predict(
     args = path_to_str(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
-    logger.propagate = True
     seed_everything(args.seed, workers=True)
     n_models = len(args.model_path)
     if not args.only_aggregate:

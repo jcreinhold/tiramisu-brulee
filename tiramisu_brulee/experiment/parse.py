@@ -219,28 +219,31 @@ def _gpus_allowed_type(
         return int(val)
 
 
-def parse_unknown_to_dict(unknown: typing.List[builtins.str]) -> dict:
+def parse_unknown_to_dict(
+    unknown: typing.List[builtins.str], *, names_only: builtins.bool = False
+) -> typing.Dict[builtins.str, typing.Optional[builtins.str]]:
     """parse unknown arguments (usually modalities and their path) to dict"""
     nargs = len(unknown)
-    if nargs % 2 != 0:
-        raise ValueError(
-            "Every modality needs a path. Check for typos in your arguments."
-        )
-    modality_path = {}
-    for i in range(0, nargs, 2):
+    if nargs % 2 != 0 and not names_only:
+        msg = "Every modality needs a path. Check for typos in your arguments."
+        raise ValueError(msg)
+    modality_path: typing.Dict[builtins.str, typing.Optional[builtins.str]] = {}
+    step = 1 if names_only else 2
+    for i in range(0, nargs, step):
         modality = unknown[i]
-        path = unknown[i + 1]
         if not modality.startswith("--"):
-            raise ValueError(
-                f"Each modality needs `--` before the name. Received {modality}."
-            )
-        if path.startswith("-"):
-            raise ValueError(
-                f"Each path must not contain `-` before the name. Received {path}."
-            )
+            msg = f"Each modality needs `--` before the name. Received {modality}."
+            raise ValueError(msg)
         modality = modality.lstrip("-")
-        modality_path[modality] = path
-    if "out" not in modality_path:
+        if not names_only:
+            path = unknown[i + 1]
+            if path.startswith("-"):
+                msg = f"Paths cannot contain `-` before the name. Received {path}."
+                raise ValueError(msg)
+            modality_path[modality] = path
+        else:
+            modality_path[modality] = None
+    if "out" not in modality_path and not names_only:
         msg = "Output path required but not supplied.\n"
         msg += f"Parsed modalities:\n{pprint.pformat(modality_path)}"
         raise ValueError(msg)

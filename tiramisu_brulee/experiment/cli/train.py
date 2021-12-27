@@ -170,7 +170,6 @@ def train(
     args = none_string_to_none(args)
     setup_log(args.verbosity)
     logger = logging.getLogger(__name__)
-    logger.propagate = True
     seed_everything(args.seed, workers=True)
     args = path_to_str(args)
     n_models_to_train = _compute_num_models_to_train(args)
