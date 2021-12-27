@@ -225,9 +225,9 @@ class TransitionUp2d(TransitionUp):
     @staticmethod
     def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
         _, _, max_height, max_width = target.shape
-        _, _, h, w = tensor.size()
-        h = (h - max_height) // 2
-        w = (w - max_width) // 2
+        _, _, _h, _w = tensor.size()
+        h = torch.div(_h - max_height, 2, rounding_mode="trunc")
+        w = torch.div(_w - max_width, 2, rounding_mode="trunc")
         hs = slice(h, h + max_height)
         ws = slice(w, w + max_width)
         return tensor[:, :, hs, ws]
@@ -241,10 +241,10 @@ class TransitionUp3d(TransitionUp):
     @staticmethod
     def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
         _, _, max_height, max_width, max_depth = target.shape
-        _, _, h, w, d = tensor.size()
-        h = (h - max_height) // 2
-        w = (w - max_width) // 2
-        d = (d - max_depth) // 2
+        _, _, _h, _w, _d = tensor.size()
+        h = torch.div(_h - max_height, 2, rounding_mode="trunc")
+        w = torch.div(_w - max_width, 2, rounding_mode="trunc")
+        d = torch.div(_d - max_depth, 2, rounding_mode="trunc")
         hs = slice(h, h + max_height)
         ws = slice(w, w + max_width)
         ds = slice(d, d + max_depth)
