@@ -99,7 +99,9 @@ def arg_parser() -> ArgParser:
         action="store_true",
         help="do constant folding for ONNX (see torch.onnx.export for details)",
     )
-    parser.add_argument("--quantize", action="store_true", help="dynamic quantization")
+    quantization = parser.add_mutually_exclusive_group()
+    quantization.add_argument("--quantize", action="store_true", help="dynamic quantization")
+    quantization.add_argument("--float16", action="store_true", help="use float16")
     parser.add_argument(
         "--prune",
         action="store_true",
@@ -186,22 +188,25 @@ def to_onnx(args: ArgType = None) -> builtins.int:
                 dynamic_axes={"input": axes, "output": axes},
             )
             logger.info("Exporting model to ONNX" + nth_model)
-            with warnings.catch_warnings():
-                if args.verbosity >= 3:
-                    model.to_onnx(**to_onnx_kwds)
-                else:
+            if args.verbosity >= 3:
+                model.to_onnx(**to_onnx_kwds)
+            else:
+                with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     with io.BytesIO() as buffer:
                         with stderr_redirected(buffer):
                             model.to_onnx(**to_onnx_kwds)
             if args.quantize:
-                logger.info("Quantizing model" + nth_model)
+                logger.info("Quantizing model (uint8)" + nth_model)
                 ortq.quantize_dynamic(
                     file_path,
                     file_path,
                     activation_type=ortq.QuantType.QUInt8,
                     weight_type=ortq.QuantType.QUInt8,
                 )
+            elif args.float16:
+                logger.info("Converting model to half-precision (float16)" + nth_model)
+                to_float16(file_path)
             if args.simplify:
                 logger.info("Simplifying model" + nth_model)
                 simplify(file_path, input_shape)
@@ -234,6 +239,17 @@ def simplify(
         warnings.warn("Simplified ONNX model could not be validated.")
         return
     onnx.save_model(model_simp, onnx_model_path)
+
+
+def to_float16(onnx_model_path: PathLike) -> None:
+    try:
+        from onnxmltools.utils import save_model
+        from onnxmltools.utils.float16_converter import convert_float_to_float16_model_path
+    except (ImportError, ModuleNotFoundError):
+        warnings.warn("Cannot import onnxmltools.")
+        return
+    model = convert_float_to_float16_model_path(onnx_model_path)
+    save_model(model, onnx_model_path)
 
 
 # https://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
