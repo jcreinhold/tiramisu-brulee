@@ -20,6 +20,7 @@ import contextlib
 import io
 import logging
 import os
+import pathlib
 import sys
 import tempfile
 import typing
@@ -30,6 +31,8 @@ import onnxruntime.quantization as ortq
 import torch
 import torch.nn.utils.prune as prune
 
+from tiramisu_brulee import __title__ as tb_title
+from tiramisu_brulee import __version__ as tb_version
 from tiramisu_brulee.experiment.cli.common import pseudo3d_dims_setup
 from tiramisu_brulee.experiment.parse import parse_unknown_to_dict
 from tiramisu_brulee.experiment.seg import LesionSegLightningTiramisu
@@ -99,9 +102,9 @@ def arg_parser() -> ArgParser:
         action="store_true",
         help="do constant folding for ONNX (see torch.onnx.export for details)",
     )
-    quantization = parser.add_mutually_exclusive_group()
-    quantization.add_argument("--quantize", action="store_true", help="dynamic quantization")
-    quantization.add_argument("--float16", action="store_true", help="use float16")
+    quant = parser.add_mutually_exclusive_group()
+    quant.add_argument("--quantize", action="store_true", help="dynamic quantization")
+    quant.add_argument("--float16", action="store_true", help="use float16")
     parser.add_argument(
         "--prune",
         action="store_true",
@@ -117,6 +120,11 @@ def arg_parser() -> ArgParser:
         "--simplify",
         action="store_true",
         help="simplify onnx model with onnx-simplifier",
+    )
+    parser.add_argument(
+        "--no-metadata",
+        action="store_true",
+        help="don't add metadata",
     )
     parser.add_argument(
         "-v",
@@ -151,7 +159,7 @@ def to_onnx(args: ArgType = None) -> builtins.int:
         else:
             root, base, ext = split_filename(args.onnx_path)
             onnx_path = root / (base + f"_{i}" + ext)
-        nth_model = f" ({i}/{n_models})"
+        nth_model = f" ({i}/{n_models})" if n_models > 1 else ""
         model = LesionSegLightningTiramisu.load_from_checkpoint(
             str(model_path),
             _model_num=model_num,
@@ -210,6 +218,9 @@ def to_onnx(args: ArgType = None) -> builtins.int:
             if args.simplify:
                 logger.info("Simplifying model" + nth_model)
                 simplify(file_path, input_shape)
+            if not args.no_metadata:
+                logger.info("Adding metadata" + nth_model)
+                add_metadata(file_path, args, i - 1)
             if save_as_ort:
                 logger.info("Saving as ORT" + nth_model)
                 sess_options = ort.SessionOptions()
@@ -218,7 +229,7 @@ def to_onnx(args: ArgType = None) -> builtins.int:
                 )
                 sess_options.optimized_model_filepath = onnx_path
                 ort.InferenceSession(file_path, sess_options=sess_options)
-        logger.info("Finished converting" + nth_model)
+        logger.info(f"Finished converting. Saved at: {onnx_path}" + nth_model)
     return 0
 
 
@@ -244,12 +255,46 @@ def simplify(
 def to_float16(onnx_model_path: PathLike) -> None:
     try:
         from onnxmltools.utils import save_model
-        from onnxmltools.utils.float16_converter import convert_float_to_float16_model_path
+        from onnxmltools.utils.float16_converter import (
+            convert_float_to_float16_model_path,
+        )
     except (ImportError, ModuleNotFoundError):
         warnings.warn("Cannot import onnxmltools.")
         return
     model = convert_float_to_float16_model_path(onnx_model_path)
     save_model(model, onnx_model_path)
+
+
+def add_metadata(
+    onnx_model_path: PathLike, args: argparse.Namespace, i: builtins.int
+) -> None:
+    try:
+        import onnx
+    except (ImportError, ModuleNotFoundError):
+        warnings.warn("Cannot import onnx.")
+        return
+    producer_name = tb_title
+    producer_version = tb_version
+    model_name = pathlib.Path(args.model_path[i]).stem
+    doc_string = f"orig-name:{model_name} tb-version:{tb_version}"
+    if args.do_constant_folding:
+        doc_string += " const-folded"
+    if args.prune:
+        doc_string += f" pruned:{args.prune_amount}"
+    if args.quantize:
+        doc_string += " quantized"
+    elif args.float16:
+        doc_string += " f16"
+    if args.simplify:
+        doc_string += " simplified"
+    if args.pseudo3d_dim is not None:
+        doc_string += f" p3d:{args.pseudo3d_dim[i]}"
+        doc_string += f" p3s:{args.pseudo3d_size}"
+    model = onnx.load_model(onnx_model_path)
+    model.producer_name = producer_name
+    model.producer_version = producer_version
+    model.doc_string = doc_string
+    onnx.save_model(model, onnx_model_path)
 
 
 # https://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
