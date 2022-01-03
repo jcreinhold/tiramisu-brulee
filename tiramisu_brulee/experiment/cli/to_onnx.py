@@ -142,7 +142,7 @@ def to_onnx(args: ArgType = None) -> builtins.int:
     if args is None:
         args, unknown = parser.parse_known_args()
     elif isinstance(args, list):
-        args, unknown = parser.parse_known_args()
+        args, unknown = parser.parse_known_args(args)
     else:
         raise RuntimeError(f"Expected args to be None or a list. Got {type(args)}.")
     modalities = list(sorted(parse_unknown_to_dict(unknown, names_only=True).keys()))
