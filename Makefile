@@ -106,3 +106,4 @@ format:  ## run various code quality checks and formatters
 	isort tests
 	mypy tests
 	bandit -r tests -c pyproject.toml
+	snyk test --file=requirements_dev.txt --package-manager=pip --fail-on=all
