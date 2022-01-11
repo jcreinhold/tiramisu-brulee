@@ -16,11 +16,13 @@ __all__ = [
 ]
 
 import builtins
+import enum
 import functools
 import typing
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 ACTIVATION = functools.partial(nn.ReLU, inplace=True)
 
@@ -142,13 +144,13 @@ class DenseBlock(nn.Module):
             # concatenation is done on the channel axis (i.e., 1)
             for layer in self.layers:
                 out = layer(tensor)
-                tensor = torch.cat([tensor, out], 1)
+                tensor = torch.cat((tensor, out), 1)
                 new_features.append(out)
             return torch.cat(new_features, 1)
         else:
             for layer in self.layers:
                 out = layer(tensor)
-                tensor = torch.cat([tensor, out], 1)
+                tensor = torch.cat((tensor, out), 1)
             return tensor
 
     @property
@@ -183,72 +185,150 @@ class TransitionDown3d(ConvLayer):
     _pad = nn.ReplicationPad3d
 
 
-class TransitionUp(nn.Module):
-    _conv_trans: typing.Union[
-        typing.Type[nn.ConvTranspose2d], typing.Type[nn.ConvTranspose3d]
-    ]
-    _kernel_size: typing.Union[
-        typing.Tuple[builtins.int, builtins.int],
-        typing.Tuple[builtins.int, builtins.int, builtins.int],
-    ]
-    _stride: typing.Union[
-        typing.Tuple[builtins.int, builtins.int],
-        typing.Tuple[builtins.int, builtins.int, builtins.int],
-    ]
+class ResizeMethod(enum.IntEnum):
+    CROP: builtins.int = 0
+    INTERPOLATE: builtins.int = 1
 
-    def __init__(self, *, in_channels: builtins.int, out_channels: builtins.int):
+
+class TransitionUp(nn.Module):
+    _conv: typing.ClassVar[typing.Union[typing.Type[nn.Conv2d], typing.Type[nn.Conv3d]]]
+    _conv_trans: typing.ClassVar[
+        typing.Union[typing.Type[nn.ConvTranspose2d], typing.Type[nn.ConvTranspose3d]]
+    ]
+    _kernel_size: typing.ClassVar[
+        typing.Union[
+            typing.Tuple[builtins.int, builtins.int],
+            typing.Tuple[builtins.int, builtins.int, builtins.int],
+        ]
+    ]
+    _stride: typing.ClassVar[
+        typing.Union[
+            typing.Tuple[builtins.int, builtins.int],
+            typing.Tuple[builtins.int, builtins.int, builtins.int],
+        ]
+    ]
+    _interp_mode: typing.ClassVar[builtins.str]
+
+    @typing.no_type_check
+    def __init__(
+        self,
+        *,
+        in_channels: builtins.int,
+        out_channels: builtins.int,
+        resize_method: ResizeMethod = ResizeMethod.CROP,
+        resize_shape: typing.Optional[typing.Tuple[builtins.int, ...]] = None,
+        static: builtins.bool = False,
+        use_conv_transpose: builtins.bool = True,
+    ):
         super().__init__()
-        self.conv_trans = self._conv_trans(
+        self.resize_shape = resize_shape
+        conv_base_kwargs = dict(
             in_channels=in_channels,
             out_channels=out_channels,
-            kernel_size=self._kernel_size,  # type: ignore[arg-type]
-            stride=self._stride,  # type: ignore[arg-type]
+            kernel_size=self._kernel_size,
             bias=False,
         )
+        _conv_kwargs = conv_base_kwargs.copy()
+        _conv_kwargs["padding"] = 1
+        _conv_trans_kwargs = conv_base_kwargs.copy()
+        _conv_trans_kwargs["stride"] = self._stride
+        conv_creator = self._conv_trans if use_conv_transpose else self._conv
+        conv_kwargs = _conv_trans_kwargs if use_conv_transpose else _conv_kwargs
+        self.conv: typing.Union[
+            nn.Conv2d, nn.Conv3d, nn.ConvTranspose2d, nn.ConvTranspose3d
+        ]
+        self.resize: typing.Optional[typing.Callable[[torch.Tensor, ...], torch.Tensor]]
+        if resize_method == ResizeMethod.CROP:
+            self.conv = conv_creator(**conv_kwargs)
+            self.resize = self._crop_to_target
+            self.forward = self._forward_dynamic
+        elif resize_method == ResizeMethod.INTERPOLATE and not static:
+            self.conv = conv_creator(**conv_kwargs)
+            self.resize = self._interpolate_to_target
+            self.forward = self._forward_dynamic
+        elif resize_method == ResizeMethod.INTERPOLATE and static:
+            self.conv = conv_creator(**conv_kwargs)
+            self.resize = None
+            self.forward = self._forward_static
+        else:
+            msg = f"resize_method needs to be a ResizeMethod. Got {resize_method}"
+            raise ValueError(msg)
 
-    def forward(self, tensor: torch.Tensor, *, skip: torch.Tensor) -> torch.Tensor:
-        out: torch.Tensor = self.conv_trans(tensor)
-        out = self._crop_to_target(out, target=skip)
-        out = torch.cat([out, skip], 1)
+    @typing.no_type_check
+    def _forward_dynamic(
+        self, tensor: torch.Tensor, *, skip: torch.Tensor
+    ) -> torch.Tensor:
+        out: torch.Tensor = self.conv(tensor)
+        out = self.resize(out, target=skip)
+        out = torch.cat((out, skip), 1)
         return out
 
-    @staticmethod
-    def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
+    @typing.no_type_check
+    def _forward_static(
+        self, tensor: torch.Tensor, *, skip: torch.Tensor
+    ) -> torch.Tensor:
+        out: torch.Tensor = self.conv(tensor)
+        out = F.interpolate(
+            out, align_corners=True, mode=self._interp_mode, scale_factor=2.0
+        )
+        out = torch.cat((out, skip), 1)
+        return out
+
+    def _crop_to_target(
+        self, tensor: torch.Tensor, *, target: torch.Tensor
+    ) -> torch.Tensor:
         raise NotImplementedError
+
+    @typing.no_type_check
+    def _interpolate_to_target(
+        self, tensor: torch.Tensor, *, target: torch.Tensor
+    ) -> torch.Tensor:
+        return F.interpolate(
+            tensor, size=target.shape[2:], mode=self._interp_mode, align_corners=True
+        )
 
 
 class TransitionUp2d(TransitionUp):
+    _conv = nn.Conv2d
     _conv_trans = nn.ConvTranspose2d
     _kernel_size = (3, 3)
     _stride = (2, 2)
+    _interp_mode = "bilinear"
 
-    @staticmethod
-    def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
-        _, _, max_height, max_width = target.shape
+    @typing.no_type_check
+    def _crop_to_target(
+        self, tensor: torch.Tensor, *, target: torch.Tensor
+    ) -> torch.Tensor:
+        if self.resize_shape is None:
+            _, _, max_height, max_width = target.shape
+        else:
+            max_height, max_width = self.resize_shape
         _, _, _h, _w = tensor.size()
         h = torch.div(_h - max_height, 2, rounding_mode="trunc")
         w = torch.div(_w - max_width, 2, rounding_mode="trunc")
-        hs = slice(h, h + max_height)
-        ws = slice(w, w + max_width)
-        return tensor[:, :, hs, ws]
+        return tensor[:, :, h : h + max_height, w : w + max_width]
 
 
 class TransitionUp3d(TransitionUp):
+    _conv = nn.Conv3d
     _conv_trans = nn.ConvTranspose3d
     _kernel_size = (3, 3, 3)
     _stride = (2, 2, 2)
+    _interp_mode = "trilinear"
 
-    @staticmethod
-    def _crop_to_target(tensor: torch.Tensor, *, target: torch.Tensor) -> torch.Tensor:
-        _, _, max_height, max_width, max_depth = target.shape
+    @typing.no_type_check
+    def _crop_to_target(
+        self, tensor: torch.Tensor, *, target: torch.Tensor
+    ) -> torch.Tensor:
+        if self.resize_shape is None:
+            _, _, max_height, max_width, max_depth = target.shape
+        else:
+            max_height, max_width, max_depth = self.resize_shape
         _, _, _h, _w, _d = tensor.size()
         h = torch.div(_h - max_height, 2, rounding_mode="trunc")
         w = torch.div(_w - max_width, 2, rounding_mode="trunc")
         d = torch.div(_d - max_depth, 2, rounding_mode="trunc")
-        hs = slice(h, h + max_height)
-        ws = slice(w, w + max_width)
-        ds = slice(d, d + max_depth)
-        return tensor[:, :, hs, ws, ds]
+        return tensor[:, :, h : h + max_height, w : w + max_width, d : d + max_depth]
 
 
 class Bottleneck(nn.Sequential):

@@ -73,6 +73,8 @@ class Tiramisu(nn.Module):
         growth_rate: builtins.int = 16,
         first_conv_out_channels: builtins.int = 48,
         dropout_rate: builtins.float = 0.2,
+        input_shape: typing.Optional[typing.Tuple[builtins.int, ...]] = None,
+        static_upsample: builtins.bool = True,
     ):
         """
         Base class for Tiramisu convolutional neural network
@@ -95,9 +97,16 @@ class Tiramisu(nn.Module):
         """
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
+
         self.down_blocks = down_blocks
         self.up_blocks = up_blocks
         skip_connection_channel_counts: typing.List[builtins.int] = []
+        if input_shape is not None:
+            tensor_shape = torch.as_tensor(input_shape)
+            shapes = [input_shape]
+            static_upsample = all(x % 2 == 0 for x in input_shape) and static_upsample
+        else:
+            static_upsample = False
 
         first_padding = 2 * [fks // 2 for fks in self._first_kernel_size]
         self.first_conv = nn.Sequential(
@@ -114,7 +123,7 @@ class Tiramisu(nn.Module):
         # Downsampling path
         self.dense_down = nn.ModuleList([])
         self.trans_down = nn.ModuleList([])
-        for n_layers in down_blocks:
+        for i, n_layers in enumerate(down_blocks, 1):
             denseblock = self._denseblock(
                 in_channels=cur_channels_count,
                 growth_rate=growth_rate,
@@ -131,6 +140,9 @@ class Tiramisu(nn.Module):
                 dropout_rate=dropout_rate,
             )
             self.trans_down.append(trans_down_block)
+            if i < len(down_blocks) and input_shape is not None:
+                tensor_shape = torch.div(tensor_shape, 2, rounding_mode="floor")
+                shapes.append(tuple(tensor_shape))
 
         # Bottleneck
         self.bottleneck = self._bottleneck(
@@ -147,9 +159,12 @@ class Tiramisu(nn.Module):
         self.trans_up = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
+            resize_shape = None if input_shape is None else shapes.pop()
             trans_up_block = self._trans_up(
                 in_channels=prev_block_channels,
                 out_channels=prev_block_channels,
+                resize_shape=resize_shape,
+                static=static_upsample,
             )
             self.trans_up.append(trans_up_block)
             cur_channels_count = prev_block_channels + sccc
