@@ -127,6 +127,29 @@ def arg_parser() -> ArgParser:
         help="don't add metadata",
     )
     parser.add_argument(
+        "--no-dynamic-batch",
+        action="store_true",
+        help="don't use dynamic batches",
+    )
+    parser.add_argument(
+        "--no-dynamic-shape",
+        action="store_true",
+        help="don't use dynamic shapes",
+    )
+    parser.add_argument(
+        "--batch-size",
+        default=1,
+        type=int,
+        help="input batch size (important if no-dynamic-batch enabled)",
+    )
+    parser.add_argument(
+        "--image-shape",
+        default=None,
+        nargs="+",
+        type=int,
+        help="input image shape (important if no-dynamic-shape enabled)",
+    ),
+    parser.add_argument(
         "-v",
         "--verbosity",
         action="count",
@@ -176,11 +199,24 @@ def to_onnx(args: ArgType = None) -> builtins.int:
                 parameters_to_prune, prune.L1Unstructured, amount=args.prune_amount
             )
         n_channels = n_inputs if p3d is None else (args.pseudo3d_size * n_inputs)
-        input_shape = (1, n_channels) + (128,) * (3 if p3d is None else 2)
+        if args.image_shape is None:
+            image_shape = (128,) * (3 if p3d is None else 2)
+        else:
+            image_shape = args.image_shape
+        input_shape = (args.batch_size, n_channels) + tuple(image_shape)
+        logger.debug(f"Input shape: {input_shape}")
         input_sample = torch.randn(input_shape)
-        axes = {0: "batch_size", 2: "h", 3: "w"}
-        if p3d is None:
+        axes = dict()
+        if not args.no_dynamic_batch:
+            axes.update({0: "batch_size"})
+        if not args.no_dynamic_shape:
+            axes.update({2: "h", 3: "w"})
+        if not args.no_dynamic_shape and p3d is None:
             axes.update({4: "d"})
+        if not args.no_dynamic_batch or not args.no_dynamic_shape:
+            dynamic_axes = {"input": axes, "output": axes}
+        else:
+            dynamic_axes = None
         with tempfile.NamedTemporaryFile("w") as f:
             save_as_ort = str(onnx_path).endswith(".ort")
             file_path = f.name if save_as_ort else onnx_path
@@ -193,7 +229,8 @@ def to_onnx(args: ArgType = None) -> builtins.int:
                 do_constant_folding=args.do_constant_folding,
                 input_names=["input"],
                 output_names=["output"],
-                dynamic_axes={"input": axes, "output": axes},
+                dynamic_axes=dynamic_axes,
+                operator_export_type=torch.onnx.OperatorExportTypes.ONNX,
             )
             logger.info("Exporting model to ONNX" + nth_model)
             if args.verbosity >= 3:
