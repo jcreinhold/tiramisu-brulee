@@ -35,6 +35,7 @@ from tiramisu_brulee.model.dense import (
     Bottleneck3d,
     DenseBlock2d,
     DenseBlock3d,
+    ResizeMethod,
     TransitionDown2d,
     TransitionDown3d,
     TransitionUp2d,
@@ -43,25 +44,34 @@ from tiramisu_brulee.model.dense import (
 
 
 class Tiramisu(nn.Module):
-    _bottleneck: typing.Union[typing.Type[Bottleneck2d], typing.Type[Bottleneck3d]]
-    _conv: typing.Union[typing.Type[nn.Conv2d], typing.Type[nn.Conv3d]]
-    _denseblock: typing.Union[typing.Type[DenseBlock2d], typing.Type[DenseBlock3d]]
-    _pad: typing.Union[
-        typing.Type[nn.ReplicationPad2d], typing.Type[nn.ReplicationPad3d]
+    _bottleneck: typing.ClassVar[
+        typing.Union[typing.Type[Bottleneck2d], typing.Type[Bottleneck3d]]
     ]
-    _trans_down: typing.Union[
-        typing.Type[TransitionDown2d], typing.Type[TransitionDown3d]
+    _conv: typing.ClassVar[typing.Union[typing.Type[nn.Conv2d], typing.Type[nn.Conv3d]]]
+    _denseblock: typing.ClassVar[
+        typing.Union[typing.Type[DenseBlock2d], typing.Type[DenseBlock3d]]
     ]
-    _trans_up: typing.Union[typing.Type[TransitionUp2d], typing.Type[TransitionUp3d]]
-    _first_kernel_size: typing.Union[
-        typing.Tuple[builtins.int, builtins.int],
-        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    _trans_down: typing.ClassVar[
+        typing.Union[typing.Type[TransitionDown2d], typing.Type[TransitionDown3d]]
     ]
-    _final_kernel_size: typing.Union[
-        typing.Tuple[builtins.int, builtins.int],
-        typing.Tuple[builtins.int, builtins.int, builtins.int],
+    _trans_up: typing.ClassVar[
+        typing.Union[typing.Type[TransitionUp2d], typing.Type[TransitionUp3d]]
     ]
+    _first_kernel_size: typing.ClassVar[
+        typing.Union[
+            typing.Tuple[builtins.int, builtins.int],
+            typing.Tuple[builtins.int, builtins.int, builtins.int],
+        ]
+    ]
+    _final_kernel_size: typing.ClassVar[
+        typing.Union[
+            typing.Tuple[builtins.int, builtins.int],
+            typing.Tuple[builtins.int, builtins.int, builtins.int],
+        ]
+    ]
+    _padding_mode: typing.ClassVar[builtins.str] = "replicate"
 
+    # flake8: noqa: E501
     def __init__(
         self,
         *,
@@ -73,6 +83,9 @@ class Tiramisu(nn.Module):
         growth_rate: builtins.int = 16,
         first_conv_out_channels: builtins.int = 48,
         dropout_rate: builtins.float = 0.2,
+        resize_method: ResizeMethod = ResizeMethod.CROP,
+        input_shape: typing.Optional[typing.Tuple[builtins.int, ...]] = None,
+        static_upsample: builtins.bool = False,
     ):
         """
         Base class for Tiramisu convolutional neural network
@@ -92,21 +105,29 @@ class Tiramisu(nn.Module):
             growth_rate (builtins.int): number of channels to grow by in each layer
             first_conv_out_channels (builtins.int): number of output channels in first conv
             dropout_rate (builtins.float): dropout rate/probability
+            resize_method (ResizeMethod): method to resize the image in upsample branch
+            input_shape: optionally provide shape of the input image (for onnx)
+            static_upsample: use static upsampling when capable if input_shape provided
+                (doesn't check upsampled size matches)
         """
         super().__init__()
         assert len(down_blocks) == len(up_blocks)
+
         self.down_blocks = down_blocks
         self.up_blocks = up_blocks
         skip_connection_channel_counts: typing.List[builtins.int] = []
+        if input_shape is not None:
+            tensor_shape = torch.as_tensor(input_shape)
+            shapes = [input_shape]
 
-        first_padding = 2 * [fks // 2 for fks in self._first_kernel_size]
         self.first_conv = nn.Sequential(
-            self._pad(first_padding),  # type: ignore[arg-type]
             self._conv(
                 in_channels,
                 first_conv_out_channels,
                 self._first_kernel_size,  # type: ignore[arg-type]
                 bias=False,
+                padding="same",
+                padding_mode=self._padding_mode,
             ),
         )
         cur_channels_count: builtins.int = first_conv_out_channels
@@ -114,7 +135,7 @@ class Tiramisu(nn.Module):
         # Downsampling path
         self.dense_down = nn.ModuleList([])
         self.trans_down = nn.ModuleList([])
-        for n_layers in down_blocks:
+        for i, n_layers in enumerate(down_blocks, 1):
             denseblock = self._denseblock(
                 in_channels=cur_channels_count,
                 growth_rate=growth_rate,
@@ -131,6 +152,9 @@ class Tiramisu(nn.Module):
                 dropout_rate=dropout_rate,
             )
             self.trans_down.append(trans_down_block)
+            if i < len(down_blocks) and input_shape is not None:
+                tensor_shape = torch.div(tensor_shape, 2, rounding_mode="floor")
+                shapes.append(tuple(tensor_shape))
 
         # Bottleneck
         self.bottleneck = self._bottleneck(
@@ -147,9 +171,17 @@ class Tiramisu(nn.Module):
         self.trans_up = nn.ModuleList([])
         up_info = zip(up_blocks, skip_connection_channel_counts)
         for i, (n_layers, sccc) in enumerate(up_info, 1):
+            resize_shape = None if input_shape is None else shapes.pop()
+            if resize_shape is not None and static_upsample:
+                _static_upsample = all(x % 2 == 0 for x in resize_shape)
+            else:
+                _static_upsample = False
             trans_up_block = self._trans_up(
                 in_channels=prev_block_channels,
                 out_channels=prev_block_channels,
+                resize_method=resize_method,
+                resize_shape=resize_shape,
+                static=_static_upsample,
             )
             self.trans_up.append(trans_up_block)
             cur_channels_count = prev_block_channels + sccc
@@ -170,6 +202,8 @@ class Tiramisu(nn.Module):
             out_channels=out_channels,
             kernel_size=self._final_kernel_size,  # type: ignore[arg-type]
             bias=True,
+            padding="same",
+            padding_mode=self._padding_mode,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -2,6 +2,13 @@
 History
 =======
 
+0.2.0 (2022-01-11)
+-------------------
+
+* Add option to upsample with interpolation instead of transpose conv.
+* Remove separate padding layer and use conv. built-in padding
+* Improvements to ONNX converter
+
 0.1.37 (2021-12-16)
 -------------------
 

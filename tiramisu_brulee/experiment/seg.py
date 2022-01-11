@@ -15,6 +15,7 @@ __all__ = [
 ]
 
 import builtins
+import enum
 import functools
 import logging
 import typing
@@ -60,10 +61,29 @@ from tiramisu_brulee.loss import (
     l1_segmentation_loss,
     mse_segmentation_loss,
 )
-from tiramisu_brulee.model import Tiramisu2d, Tiramisu3d
-from tiramisu_brulee.util import init_weights
+from tiramisu_brulee.model import ResizeMethod, Tiramisu2d, Tiramisu3d
+from tiramisu_brulee.util import InitType, init_weights
 
 PredictBatch = typing.Union[PatchesImagePredictBatch, WholeImagePredictBatch]
+
+
+@enum.unique
+class LossFunction(enum.Enum):
+    COMBO: builtins.str = "combo"
+    L1: builtins.str = "l1"
+    MSE: builtins.str = "mse"
+
+    @classmethod
+    def from_string(cls, string: builtins.str) -> "LossFunction":
+        if string.lower() == "combo":
+            return cls.COMBO
+        elif string.lower() == "l1":
+            return cls.L1
+        elif string.lower() == "mse":
+            return cls.MSE
+        else:
+            msg = f"Only 'combo', 'l1', 'mse' allowed. Got {string}"
+            raise ValueError(msg)
 
 
 class LesionSegLightningBase(pl.LightningModule):
@@ -144,7 +164,10 @@ class LesionSegLightningBase(pl.LightningModule):
         self.criterion: typing.Callable
         num_classes = self.hparams.num_classes
         assert isinstance(num_classes, builtins.int)
-        if self.hparams.loss_function == "combo":
+        loss_func_str = self.hparams.loss_function
+        assert isinstance(loss_func_str, builtins.str)
+        loss_func = LossFunction.from_string(loss_func_str)
+        if loss_func == LossFunction.COMBO:
             if self.hparams.num_classes == 1:
                 self.criterion = functools.partial(
                     binary_combo_loss,
@@ -161,10 +184,10 @@ class LesionSegLightningBase(pl.LightningModule):
             else:
                 msg = f"num_classes must be greater than zero. Got {self.num_classes}."
                 raise ValueError(msg)
-        elif self.hparams.loss_function == "mse":
-            self.criterion = mse_segmentation_loss
-        elif self.hparams.loss_function == "l1":
+        elif loss_func == LossFunction.L1:
             self.criterion = l1_segmentation_loss
+        elif loss_func == LossFunction.MSE:
+            self.criterion = mse_segmentation_loss
         else:
             raise ValueError(f"{self.hparams.loss_function} not supported.")
         use_mixup = bool(self.hparams.mixup)
@@ -704,6 +727,7 @@ class LesionSegLightningBase(pl.LightningModule):
         return parent_parser
 
 
+# flake8: noqa: E501
 class LesionSegLightningTiramisu(LesionSegLightningBase):
     """3D Tiramisu-based PyTorch-Lightning module for lesion segmentation
 
@@ -785,6 +809,9 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
         mixup: builtins.bool = False,
         mixup_alpha: builtins.float = 0.4,
         num_input: builtins.int = 1,
+        resize_method: builtins.str = "crop",
+        input_shape: typing.Optional[typing.Tuple[builtins.int, ...]] = None,
+        static_upsample: builtins.bool = True,
         _model_num: ModelNum = ModelNum(1, 1),
         **kwargs,
     ):
@@ -804,8 +831,11 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
             growth_rate=growth_rate,
             first_conv_out_channels=first_conv_out_channels,
             dropout_rate=dropout_rate,
+            resize_method=ResizeMethod.from_string(resize_method),
+            input_shape=input_shape,
+            static_upsample=static_upsample,
         )
-        init_weights(network, init_type=init_type, gain=gain)
+        init_weights(network, init_type=InitType.from_string(init_type), gain=gain)
         super().__init__(
             network=network,
             n_epochs=n_epochs,
@@ -914,5 +944,14 @@ class LesionSegLightningTiramisu(LesionSegLightningBase):
             type=positive_int(),
             default=48,
             help="number of output channels in first conv",
+        )
+        parser.add_argument(
+            "-rm",
+            "--resize-method",
+            type=str,
+            default="crop",
+            choices=("crop", "interpolate"),
+            help="use transpose conv and crop or normal conv "
+            "and interpolate to correct size in upsample branch",
         )
         return parent_parser
