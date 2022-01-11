@@ -183,8 +183,12 @@ def to_onnx(args: ArgType = None) -> builtins.int:
             root, base, ext = split_filename(args.onnx_path)
             onnx_path = root / (base + f"_{i}" + ext)
         nth_model = f" ({i}/{n_models})" if n_models > 1 else ""
+        if args.image_shape is None:
+            args.image_shape = (128,) * (3 if p3d is None else 2)
         model = LesionSegLightningTiramisu.load_from_checkpoint(
             str(model_path),
+            input_shape=args.image_shape,
+            static_upsample=args.no_dynamic_shape,
             _model_num=model_num,
         )
         if args.prune:
@@ -199,11 +203,7 @@ def to_onnx(args: ArgType = None) -> builtins.int:
                 parameters_to_prune, prune.L1Unstructured, amount=args.prune_amount
             )
         n_channels = n_inputs if p3d is None else (args.pseudo3d_size * n_inputs)
-        if args.image_shape is None:
-            image_shape = (128,) * (3 if p3d is None else 2)
-        else:
-            image_shape = args.image_shape
-        input_shape = (args.batch_size, n_channels) + tuple(image_shape)
+        input_shape = (args.batch_size, n_channels) + tuple(args.image_shape)
         logger.debug(f"Input shape: {input_shape}")
         input_sample = torch.randn(input_shape)
         axes = dict()
@@ -327,6 +327,11 @@ def add_metadata(
     if args.pseudo3d_dim is not None:
         doc_string += f" p3d:{args.pseudo3d_dim[i]}"
         doc_string += f" p3s:{args.pseudo3d_size}"
+    if args.no_dynamic_batch:
+        doc_string += f" static-batch-size={args.batch_size}"
+    if args.no_dynamic_shape:
+        image_shape = str(args.image_shape).replace(" ", "")
+        doc_string += f" static-shape={image_shape}"
     model = onnx.load_model(onnx_model_path)
     model.producer_name = producer_name
     model.producer_version = producer_version
