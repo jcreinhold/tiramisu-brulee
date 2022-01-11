@@ -66,6 +66,7 @@ TiramisuBruleeInfo = collections.namedtuple("TiramisuBruleeInfo", ["version", "c
 PathLike = typing.Union[builtins.str, os.PathLike]
 
 
+# flake8: noqa: E501
 def return_none(func: typing.Callable) -> typing.Callable:
     def new_func(self, string: typing.Any) -> typing.Any:  # type: ignore[no-untyped-def]
         if string is None:
@@ -78,6 +79,7 @@ def return_none(func: typing.Callable) -> typing.Callable:
     return new_func
 
 
+# flake8: noqa: E501
 def return_str(match_string: builtins.str) -> typing.Callable:
     def decorator(func: typing.Callable) -> typing.Callable:
         def new_func(self, string: typing.Any) -> typing.Any:  # type: ignore[no-untyped-def]

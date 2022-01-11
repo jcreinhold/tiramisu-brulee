@@ -333,6 +333,7 @@ class MLFlowModelCheckpoint(ModelCheckpoint):
         super().__init__(*args, **kwargs)
         self.mlflow_logger = mlflow_logger
 
+    # flake8: noqa: E501
     def save_checkpoint(
         self,
         trainer: Trainer,
