@@ -239,7 +239,7 @@ class TransitionUp(nn.Module):
         ]
         self.resize: typing.Optional[typing.Callable[[torch.Tensor, ...], torch.Tensor]]
         if resize_method == ResizeMethod.CROP:
-            self.conv = conv_creator(**conv_kwargs)
+            self.conv = self._conv_trans(**_conv_trans_kwargs)
             self.resize = self._crop_to_target
             self.forward = self._forward_dynamic
         elif resize_method == ResizeMethod.INTERPOLATE and not static:
@@ -247,7 +247,7 @@ class TransitionUp(nn.Module):
             self.resize = self._interpolate_to_target
             self.forward = self._forward_dynamic
         elif resize_method == ResizeMethod.INTERPOLATE and static:
-            self.conv = conv_creator(**conv_kwargs)
+            self.conv = self._conv(**_conv_kwargs)
             self.resize = None
             self.forward = self._forward_static
         else:
