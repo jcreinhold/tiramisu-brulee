@@ -254,14 +254,15 @@ class TransitionUp(nn.Module):
         if resize_method == ResizeMethod.CROP:
             self.conv = self._conv_trans(**conv_trans_kwargs)
             self.resize = self._crop_to_target
-            setattr(self, "forward", self._forward_dynamic)
+            setattr(self, "forward", self._forward_dynamic_trans)
         elif resize_method == ResizeMethod.INTERPOLATE and not static:
             if use_conv_transpose:
                 self.conv = self._conv_trans(**conv_trans_kwargs)
+                setattr(self, "forward", self._forward_dynamic_trans)
             else:
                 self.conv = self._conv(**conv_kwargs)
+                setattr(self, "forward", self._forward_dynamic_conv)
             self.resize = self._interpolate_to_target
-            setattr(self, "forward", self._forward_dynamic)
         elif resize_method == ResizeMethod.INTERPOLATE and static:
             self.conv = self._conv(**conv_kwargs)
             setattr(self, "forward", self._forward_static)
@@ -269,7 +270,7 @@ class TransitionUp(nn.Module):
             msg = f"resize_method needs to be a ResizeMethod. Got {resize_method}"
             raise ValueError(msg)
 
-    def _forward_dynamic(
+    def _forward_dynamic_trans(
         self, tensor: torch.Tensor, *, skip: torch.Tensor
     ) -> torch.Tensor:
         out: torch.Tensor = self.conv(tensor)
@@ -277,11 +278,19 @@ class TransitionUp(nn.Module):
         out = torch.cat((out, skip), 1)
         return out
 
+    def _forward_dynamic_conv(
+        self, tensor: torch.Tensor, *, skip: torch.Tensor
+    ) -> torch.Tensor:
+        out: torch.Tensor = self.resize(tensor, target=skip)
+        out = self.conv(out)
+        out = torch.cat((out, skip), 1)
+        return out
+
     def _forward_static(
         self, tensor: torch.Tensor, *, skip: torch.Tensor
     ) -> torch.Tensor:
-        out: torch.Tensor = self.conv(tensor)
-        out = self._interpolate(out, scale_factor=2.0)
+        out: torch.Tensor = self._interpolate(tensor, scale_factor=2.0)
+        out = self.conv(out)
         out = torch.cat((out, skip), 1)
         return out
 
@@ -328,6 +337,7 @@ class TransitionUp3d(TransitionUp):
     _stride = (2, 2, 2)
     _interp_mode = "trilinear"
 
+    # flake8: noqa: E501
     def _crop_to_target(
         self, tensor: torch.Tensor, *, target: torch.Tensor
     ) -> torch.Tensor:

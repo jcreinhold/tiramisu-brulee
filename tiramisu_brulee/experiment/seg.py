@@ -727,6 +727,7 @@ class LesionSegLightningBase(pl.LightningModule):
         return parent_parser
 
 
+# flake8: noqa: E501
 class LesionSegLightningTiramisu(LesionSegLightningBase):
     """3D Tiramisu-based PyTorch-Lightning module for lesion segmentation
 

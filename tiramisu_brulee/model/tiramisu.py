@@ -71,6 +71,7 @@ class Tiramisu(nn.Module):
     ]
     _padding_mode: typing.ClassVar[builtins.str] = "replicate"
 
+    # flake8: noqa: E501
     def __init__(
         self,
         *,
