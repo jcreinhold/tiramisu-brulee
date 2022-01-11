@@ -20,6 +20,14 @@ tiramisu\_brulee.experiment.cli.predict module
    :undoc-members:
    :show-inheritance:
 
+tiramisu\_brulee.experiment.cli.to\_onnx module
+-----------------------------------------------
+
+.. automodule:: tiramisu_brulee.experiment.cli.to_onnx
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 tiramisu\_brulee.experiment.cli.train module
 --------------------------------------------
 
