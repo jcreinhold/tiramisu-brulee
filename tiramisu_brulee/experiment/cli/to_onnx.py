@@ -328,10 +328,10 @@ def add_metadata(
         doc_string += f" p3d:{args.pseudo3d_dim[i]}"
         doc_string += f" p3s:{args.pseudo3d_size}"
     if args.no_dynamic_batch:
-        doc_string += f" static-batch-size={args.batch_size}"
+        doc_string += f" static-batch-size:{args.batch_size}"
     if args.no_dynamic_shape:
         image_shape = str(args.image_shape).replace(" ", "")
-        doc_string += f" static-shape={image_shape}"
+        doc_string += f" static-shape:{image_shape}"
     model = onnx.load_model(onnx_model_path)
     model.producer_name = producer_name
     model.producer_version = producer_version
