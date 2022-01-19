@@ -2,6 +2,11 @@
 History
 =======
 
+0.2.2 (2022-01-19)
+-------------------
+
+* Remove transpose convolution option in when using interpolate upsampling
+
 0.2.1 (2022-01-19)
 -------------------
 
