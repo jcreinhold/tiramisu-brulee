@@ -1,4 +1,26 @@
-.PHONY: clean clean-test clean-pyc clean-build docs help
+.PHONY: \
+	black \
+	clean \
+	clean-build \
+	clean-pyc \
+	clean-test \
+	clean-test-lite \
+	coverage \
+	develop \
+	dist \
+	docs \
+	format \
+	help \
+	install \
+	isort \
+	lint \
+	mypy \
+	release \
+	security \
+	servedocs \
+	test \
+	test-all
+
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -23,8 +45,9 @@ export PRINT_HELP_PYSCRIPT
 
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
-help:
-	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
+black:  ## format python with black
+	black tiramisu_brulee
+	black tests
 
 clean: clean-build clean-pyc clean-test-lite ## remove all build, test, coverage and Python artifacts
 
@@ -56,20 +79,19 @@ clean-test-lite:  ## remove test artifacts minus tox
 	rm -fr lightning_logs/
 	rm -fr mlruns/
 
-lint: ## check style with flake8
-	flake8 tiramisu_brulee tests
-
-test: ## run tests quickly with the default Python
-	pytest
-
-test-all: ## run tests on every Python version with tox
-	tox
-
 coverage: ## check code coverage quickly with the default Python
 	coverage run --source tiramisu_brulee -m pytest
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
+
+develop: clean ## install the package to the active Python's site-packages
+	python setup.py develop
+
+dist: clean ## builds source and wheel package
+	python setup.py sdist
+	python setup.py bdist_wheel
+	ls -l dist
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/tiramisu_brulee.*rst
@@ -80,30 +102,38 @@ docs: ## generate Sphinx HTML documentation, including API docs
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
 
-servedocs: docs ## compile the docs watching for changes
-	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
+format:  black isort mypy lint security  ## run various code quality checks and formatters
 
-release: dist ## package and upload a release
-	twine upload dist/*
-
-dist: clean ## builds source and wheel package
-	python setup.py sdist
-	python setup.py bdist_wheel
-	ls -l dist
+help:
+	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
-develop: clean ## install the package to the active Python's site-packages
-	python setup.py develop
-
-format:  ## run various code quality checks and formatters
-	black tiramisu_brulee
+isort:  ## format python code with isort
 	isort tiramisu_brulee
-	mypy tiramisu_brulee
-	bandit -r tiramisu_brulee -c pyproject.toml
-	black tests
 	isort tests
+
+lint: ## check style with flake8
+	flake8 tiramisu_brulee tests
+
+mypy:  ## type-check python with mypy
+	mypy tiramisu_brulee
 	mypy tests
+
+release: dist ## package and upload a release
+	twine upload dist/*
+
+security:  ## run various security checks on the python code
+	bandit -r tiramisu_brulee -c pyproject.toml
 	bandit -r tests -c pyproject.toml
 	snyk test --file=requirements_dev.txt --package-manager=pip --fail-on=all
+
+servedocs: docs ## compile the docs watching for changes
+	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
+
+test: ## run tests quickly with the default Python
+	pytest
+
+test-all: ## run tests on every Python version with tox
+	tox

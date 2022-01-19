@@ -179,6 +179,8 @@ def train(
     pseudo3d_dims = pseudo3d_dims_setup(args.pseudo3d_dim, n_models_to_train, "train")
     individual_run_args = copy.deepcopy(vars(args))
     individual_run_args["network_dim"] = 2 if use_pseudo3d else 3
+    channels_per_image = args.pseudo3d_size if use_pseudo3d else 1
+    individual_run_args["in_channels"] = args.num_input * channels_per_image
     train_iter_data = zip(args.train_csv, args.valid_csv, pseudo3d_dims)
     trainer: typing.Optional[Trainer] = None
     for i, (train_csv, valid_csv, p3d) in enumerate(train_iter_data, 1):
@@ -186,8 +188,6 @@ def train(
         nth_model = f" ({i}/{n_models_to_train})"
         individual_run_args["train_csv"] = train_csv
         individual_run_args["valid_csv"] = valid_csv
-        channels_per_image = args.pseudo3d_size if use_pseudo3d else 1
-        individual_run_args["in_channels"] = args.num_input * channels_per_image
         individual_run_args["pseudo3d_dim"] = p3d
         dm = LesionSegDataModuleTrain.from_csv(**individual_run_args)
         model = LesionSegLightningTiramisu(**individual_run_args)
