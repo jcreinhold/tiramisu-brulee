@@ -232,7 +232,6 @@ class TransitionUp(nn.Module):
         resize_method: ResizeMethod = ResizeMethod.CROP,
         resize_shape: typing.Optional[typing.Tuple[builtins.int, ...]] = None,
         static: builtins.bool = False,
-        use_conv_transpose: builtins.bool = True,
     ):
         super().__init__()
         self.resize_shape = resize_shape
@@ -256,12 +255,8 @@ class TransitionUp(nn.Module):
             self.resize = self._crop_to_target
             setattr(self, "forward", self._forward_dynamic_trans)
         elif resize_method == ResizeMethod.INTERPOLATE and not static:
-            if use_conv_transpose:
-                self.conv = self._conv_trans(**conv_trans_kwargs)
-                setattr(self, "forward", self._forward_dynamic_trans)
-            else:
-                self.conv = self._conv(**conv_kwargs)
-                setattr(self, "forward", self._forward_dynamic_conv)
+            self.conv = self._conv(**conv_kwargs)
+            setattr(self, "forward", self._forward_dynamic_conv)
             self.resize = self._interpolate_to_target
         elif resize_method == ResizeMethod.INTERPOLATE and static:
             self.conv = self._conv(**conv_kwargs)
