@@ -2,6 +2,12 @@
 History
 =======
 
+0.2.1 (2022-01-19)
+-------------------
+
+* Cleanup Makefile
+* Add interpolation resize test
+
 0.2.0 (2022-01-11)
 -------------------
 
