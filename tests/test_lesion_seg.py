@@ -332,3 +332,25 @@ def test_pseudo3d_all_cli(
     cli_predict_args += "--patch-overlap 0 0 0".split()
     retcode = predict(cli_predict_args)
     assert retcode == 0
+
+
+def test_pseudo3d_all_interp_cli(
+    cli_train_args: typing.List[builtins.str],
+    cli_predict_args: typing.List[builtins.str],
+    train_csv: pathlib.Path,
+) -> None:
+    cli_train_args += f"--train-csv {train_csv}".split()
+    cli_train_args += f"--valid-csv {train_csv}".split()
+    cli_train_args += "--patch-size 8 8".split()
+    cli_train_args += "--pseudo3d-dim all".split()
+    cli_train_args += "--pseudo3d-size 31".split()
+    cli_train_args += "--resize-method interpolate".split()
+    cli_train_args += ["--random-validation-patches"]
+    best_model_paths = _get_and_format_best_model_paths(cli_train_args)
+    cli_predict_args += f"--model-path {best_model_paths}".split()
+    cli_predict_args += "--patch-size None None".split()
+    cli_predict_args += "--pseudo3d-dim 0".split()
+    cli_predict_args += "--pseudo3d-size 31".split()
+    cli_predict_args += "--patch-overlap 0 0 0".split()
+    retcode = predict(cli_predict_args)
+    assert retcode == 0

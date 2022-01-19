@@ -118,7 +118,7 @@ class Tiramisu(nn.Module):
         skip_connection_channel_counts: typing.List[builtins.int] = []
         if input_shape is not None:
             tensor_shape = torch.as_tensor(input_shape)
-            shapes = [input_shape]
+            shapes = [tuple(map(int, input_shape))]
 
         self.first_conv = nn.Sequential(
             self._conv(
@@ -154,7 +154,7 @@ class Tiramisu(nn.Module):
             self.trans_down.append(trans_down_block)
             if i < len(down_blocks) and input_shape is not None:
                 tensor_shape = torch.div(tensor_shape, 2, rounding_mode="floor")
-                shapes.append(tuple(tensor_shape))
+                shapes.append(tuple(map(int, tensor_shape)))
 
         # Bottleneck
         self.bottleneck = self._bottleneck(
